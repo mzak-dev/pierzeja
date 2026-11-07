@@ -128,6 +128,8 @@ pub struct BuildingModel {
 }
 
 const EPS: f64 = 0.02;
+/// Grubość attyki (jak przy dachu płaskim).
+const ATTIC_T: f64 = 0.25;
 
 /// `Math.min(b, Math.max(a, v))` — przy b < a wygrywa b (jak w prototypie).
 fn clamp(v: f64, a: f64, b: f64) -> f64 {
@@ -138,6 +140,19 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 }
 fn rad(deg: f64) -> f64 {
     deg * PI / 180.0
+}
+
+/// Obrys przesunięty o `d` na zewnątrz (ujemne = do wnętrza), narożniki „miter”
+/// z ograniczeniem długości ukosu (ostre szpice nie uciekają w nieskończoność).
+fn offset_ring(q: &[P2], d: f64) -> Vec<P2> {
+    let n = q.len();
+    (0..n)
+        .map(|i| {
+            let (n0, n1) = (fp::edge_normal(q, (i + n - 1) % n), fp::edge_normal(q, i));
+            let k = (1.0 + n0[0] * n1[0] + n0[1] * n1[1]).max(0.25);
+            [q[i][0] + (n0[0] + n1[0]) / k * d, q[i][1] + (n0[1] + n1[1]) / k * d]
+        })
+        .collect()
 }
 
 /// `toFixed(1)` z JS (połówki w górę) z przecinkiem.
@@ -162,6 +177,8 @@ struct Gen<'a> {
     /// Tryb wielokąta: głębokość umowna, liczba klatek i uwagi.
     poly_depth: Option<f64>,
     poly_stairs: Option<u32>,
+    /// Tryb wielokąta: gzymsy i attyki jako listwy z ukosowanymi narożnikami (`ring_band`).
+    poly_mode: bool,
     extra_notes: Vec<String>,
 }
 
@@ -184,6 +201,7 @@ impl<'a> Gen<'a> {
             ridge_top: 0.0,
             poly_depth: None,
             poly_stairs: None,
+            poly_mode: false,
             extra_notes: Vec::new(),
         }
     }
@@ -886,6 +904,7 @@ impl<'a> Gen<'a> {
     fn decor_strip(&mut self, v: &Volume, f: &Frame, role: Role, s0: f64, s1: f64, n: usize, bw: f64, margin: f64) {
         let p = self.p;
         let plinth = self.plinth;
+        let poly_mode = self.poly_mode;
         let mb = &mut self.mb;
         let top = v.top;
         let rows = &v.rows;
@@ -895,8 +914,8 @@ impl<'a> Gen<'a> {
             _ => 0.4,
         };
         let blank = role == Role::Side && p.side_windows < 0.3;
-        // gzymsy międzykondygnacyjne
-        if v.kind != VolKind::Pent {
+        // gzymsy międzykondygnacyjne (w trybie wielokąta: listwy obiegające obrys)
+        if v.kind != VolKind::Pent && !poly_mode {
             for (k, row) in rows.iter().enumerate().skip(1) {
                 let yb = row.b0;
                 let first = row.floor == 1;
@@ -910,7 +929,7 @@ impl<'a> Gen<'a> {
             }
         }
         // gzyms koronujący
-        if p.cornice > 0.05 {
+        if p.cornice > 0.05 && !poly_mode {
             let c = p.cornice * if role == Role::Court { 0.4 } else { 1.0 };
             let ext = if matches!(role, Role::Front | Role::Back) { c } else { 0.0 };
             let h_low = 0.12 + 0.25 * p.cornice;
@@ -1189,14 +1208,22 @@ impl<'a> Gen<'a> {
             ov = ov.min(0.25);
         }
         let slope0 = stages[0].1 / stages[0].0;
+        // attyka: mur wokół dachu, połać startuje od jej wewnętrznego lica na wysokości muru
+        // (prototyp cofał połać o 0,2 m bez attyki — zostawała szczelina do wnętrza budynku)
+        let attic = p.parapet_height > 0.2;
+        if attic {
+            self.parapet_along(v, vi, p.parapet_height, false);
+        }
+        let l_end = if attic { hl } else { hl + ov };
         // poziomy połaci (z okapem): (L, Wd, y)
-        let mut lv: Vec<(f64, f64, f64)> = vec![(hl + ov, hw + ov, hh - ov * slope0.min(0.75))];
+        let mut lv: Vec<(f64, f64, f64)> =
+            vec![if attic { (if hip > 0.0 { hl - ATTIC_T } else { hl }, hw - ATTIC_T, hh) } else { (hl + ov, hw + ov, hh - ov * slope0.min(0.75)) }];
         let (mut l, mut wd, mut y) = (hl, hw, hh);
         for &(sw, sh) in &stages {
             wd -= sw;
             l = (l - hip * sw).max(0.0);
             y += sh;
-            lv.push((if hip > 0.0 { l } else { hl + ov }, wd.max(0.0), y));
+            lv.push((if hip > 0.0 { l } else { l_end }, wd.max(0.0), y));
         }
         let ridge_y = y;
         self.ridge_top = self.ridge_top.max(ridge_y);
@@ -1439,6 +1466,7 @@ impl<'a> Gen<'a> {
         self.frontage = fronts.iter().map(|&i| fp::edge_len(pts, i)).sum();
         self.poly_depth = Some(fp::area(pts) / main_len.max(1e-9));
         self.poly_stairs = Some(entrances as u32);
+        self.poly_mode = true;
 
         for v in self.vols.clone() {
             let q = v.poly.clone().unwrap();
@@ -1455,6 +1483,7 @@ impl<'a> Gen<'a> {
                 let ent = if v.kind == VolKind::Main && i == main_front { entrances } else { 0 };
                 self.facade_on(&v, fr, role, i as f64, 0.0, len, ent);
             }
+            self.poly_bands(&v, &q, kinds, nf);
         }
         for v in self.vols.clone() {
             let q = v.poly.clone().unwrap();
@@ -1474,13 +1503,77 @@ impl<'a> Gen<'a> {
         for row in &v.rows {
             self.plain_wall(f, 0.0, len, row.b0, row.b1, &[], false);
         }
+    }
+
+    /// Gzymsy międzykondygnacyjne i koronujący wokół obrysu (jedna listwa z ukosami).
+    fn poly_bands(&mut self, v: &Volume, q: &[P2], kinds: &[EdgeKind], nf: [f64; 2]) {
         let p = self.p;
+        let n = q.len();
+        let main = v.kind == VolKind::Main;
+        let blind = |i: usize| main && kinds[i] == EdgeKind::Blind;
+        let blank = |i: usize| {
+            let e = fp::edge_normal(q, i);
+            let facing = e[0] * nf[0] + e[1] * nf[1];
+            let front = if main { kinds[i] == EdgeKind::Front } else { facing > 0.5 };
+            !front && facing.abs() <= 0.5 && p.side_windows < 0.3
+        };
+        if v.kind != VolKind::Pent {
+            for (k, row) in v.rows.iter().enumerate().skip(1) {
+                let first = row.floor == 1;
+                let on = if first { p.string_courses > 0.15 || p.rustication > 0.5 } else { p.string_courses > 0.55 || (p.string_courses > 0.3 && k % 2 == 0) };
+                if !on {
+                    continue;
+                }
+                let hgt = if first { 0.24 } else { 0.14 };
+                let pr = if first { 0.1 } else { 0.07 };
+                self.ring_band(M::Trim, q, &|i| !blind(i) && !blank(i), 0.0, pr, row.b0 - hgt / 2.0, row.b0 + hgt / 2.0);
+            }
+        }
         if p.cornice > 0.05 {
             let (c, top) = (p.cornice, v.top);
             let h_low = 0.12 + 0.25 * p.cornice;
-            self.mb.box_l(f, M::Trim, 0.0, len, top - 0.12 - h_low, top - 0.12, 0.0, c * 0.5, true);
-            self.mb.box_l(f, M::Trim, 0.0, len, top - 0.12, top + 0.05, 0.0, c, true);
+            let all = |_: usize| true;
+            self.ring_band(M::Trim, q, &all, 0.0, c * 0.5, top - 0.12 - h_low, top - 0.12);
+            self.ring_band(M::Trim, q, &all, 0.0, c, top - 0.12, top + 0.05);
         }
+        let _ = n;
+    }
+
+    /// Listwa wzdłuż obrysu: przekrój [c0, c1] (od lica, + na zewnątrz) × [y0, y1],
+    /// narożniki ukosowane (miter), na krawędziach z `on(i)`; końce odcinków zamknięte.
+    #[allow(clippy::too_many_arguments)]
+    fn ring_band(&mut self, mat: MatKey, q: &[P2], on: &dyn Fn(usize) -> bool, c0: f64, c1: f64, y0: f64, y1: f64) {
+        let n = q.len();
+        let (a, b) = (offset_ring(q, c0), offset_ring(q, c1));
+        let v3 = |p: P2, y: f64| [p[0], y, p[1]];
+        let mb = &mut self.mb;
+        for i in 0..n {
+            if !on(i) {
+                continue;
+            }
+            let j = (i + 1) % n;
+            let e = fp::edge_normal(q, i);
+            mb.quad(mat, v3(b[i], y0), v3(b[j], y0), v3(b[j], y1), v3(b[i], y1), Some([e[0], 0.0, e[1]]));
+            if c0 < -0.01 {
+                mb.quad(mat, v3(a[i], y0), v3(a[j], y0), v3(a[j], y1), v3(a[i], y1), Some([-e[0], 0.0, -e[1]]));
+            }
+            mb.quad(mat, v3(a[i], y1), v3(b[i], y1), v3(b[j], y1), v3(a[j], y1), Some([0.0, 1.0, 0.0]));
+            mb.quad(mat, v3(a[i], y0), v3(b[i], y0), v3(b[j], y0), v3(a[j], y0), Some([0.0, -1.0, 0.0]));
+            let d = [q[j][0] - q[i][0], q[j][1] - q[i][1]];
+            if !on((i + n - 1) % n) {
+                mb.quad(mat, v3(a[i], y0), v3(b[i], y0), v3(b[i], y1), v3(a[i], y1), Some([-d[0], 0.0, -d[1]]));
+            }
+            if !on(j) {
+                mb.quad(mat, v3(a[j], y0), v3(b[j], y0), v3(b[j], y1), v3(a[j], y1), Some([d[0], 0.0, d[1]]));
+            }
+        }
+    }
+
+    /// Attyka (mur + czapka) wokół obrysu, z ukosowanymi narożnikami.
+    fn attic_ring(&mut self, pts: &[P2], top: f64, hgt: f64) {
+        let all = |_: usize| true;
+        self.ring_band(M::Wall, pts, &all, -ATTIC_T, 0.0, top, top + hgt);
+        self.ring_band(M::Trim, pts, &all, -ATTIC_T - 0.03, 0.05, top + hgt, top + hgt + 0.07);
     }
 
     /// Płaska powierzchnia z dowolnego wielokąta (triangulacja uszami).
@@ -1512,21 +1605,20 @@ impl<'a> Gen<'a> {
             y += 0.24;
         }
         self.flat_cap(M::Roof, pts, y + 0.01, true);
-        let t = 0.25;
-        for i in 0..pts.len() {
-            let (f, len) = Self::edge_frame(pts, i);
-            if terrace {
-                let mat = if p.railing >= 0.66 { M::GlassRail } else { M::Railing };
-                self.mb.rect_n(&f, mat, 0.0, len, v.top, v.top + 1.05, -0.12, 1.0);
-                self.mb.box_l(&f, M::Metal, 0.0, len, v.top + 1.0, v.top + 1.06, -0.16, -0.08, false);
-            } else if p.parapet_height > 0.05 {
-                let hgt = p.parapet_height;
-                self.mb.box_l(&f, M::Wall, 0.0, len, v.top, v.top + hgt, -t, 0.0, false);
-                self.mb.box_l(&f, M::Trim, -0.03, len + 0.03, v.top + hgt, v.top + hgt + 0.07, -t - 0.03, 0.05, false);
-            }
-        }
+        let all = |_: usize| true;
         if terrace {
+            let mat = if p.railing >= 0.66 { M::GlassRail } else { M::Railing };
+            let r = offset_ring(pts, -0.12);
+            for i in 0..pts.len() {
+                let (a, b) = (r[i], r[(i + 1) % pts.len()]);
+                let e = fp::edge_normal(pts, i);
+                self.mb.quad(mat, [a[0], v.top, a[1]], [b[0], v.top, b[1]], [b[0], v.top + 1.05, b[1]], [a[0], v.top + 1.05, a[1]], Some([e[0], 0.0, e[1]]));
+            }
+            self.ring_band(M::Metal, pts, &all, -0.16, -0.08, v.top + 1.0, v.top + 1.06);
             return;
+        }
+        if p.parapet_height > 0.05 {
+            self.attic_ring(pts, v.top, p.parapet_height);
         }
         self.ridge_top = self.ridge_top.max(y + p.parapet_height);
         let r = Self::bbox(pts);
@@ -1587,8 +1679,15 @@ impl<'a> Gen<'a> {
             ov = ov.min(0.25);
         }
         let slope0 = stages[0].1 / stages[0].0;
-        let outer = if ov.abs() > 1e-6 { fp::inset(pts, -ov).unwrap_or_else(|| pts.to_vec()) } else { pts.to_vec() };
-        let mut rings: Vec<(Vec<P2>, f64)> = vec![(outer, hh - ov * slope0.min(0.75))];
+        let attic = p.parapet_height > 0.2;
+        let mut rings: Vec<(Vec<P2>, f64)> = if attic {
+            // attyka wokół dachu, połać od jej wewnętrznego lica (bez szczeliny do wnętrza)
+            self.attic_ring(pts, hh, p.parapet_height);
+            vec![(fp::inset(pts, ATTIC_T.min(md * 0.5)).unwrap_or_else(|| pts.to_vec()), hh)]
+        } else {
+            let outer = if ov.abs() > 1e-6 { fp::inset(pts, -ov).unwrap_or_else(|| pts.to_vec()) } else { pts.to_vec() };
+            vec![(outer, hh - ov * slope0.min(0.75))]
+        };
         let (mut d, mut y) = (0.0, hh);
         for &(w, h) in &stages {
             d += w;

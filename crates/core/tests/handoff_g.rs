@@ -78,13 +78,15 @@ fn g3_variation() {
 type Row = (&'static str, u32, f64, f64, &'static str, f64, f64, u32, u32, u32, u32, usize);
 const G4: &[Row] = &[
     ("dworek", 1, 4.2, 11.03, "N", 264.0, 264.0, 1, 21, 0, 3, 2261),
-    ("kamienica_eklektyczna", 5, 18.52, 20.79, "SW", 560.0, 2800.0, 1, 90, 4, 33, 16017),
+    // trójkąty: prototyp 16017; +288 za mur attyki przy dachu spadzistym (poprawka szczeliny do wnętrza)
+    ("kamienica_eklektyczna", 5, 18.52, 20.79, "SW", 560.0, 2800.0, 1, 90, 4, 33, 16305),
     ("kamienica_secesyjna", 6, 20.95, 31.91, "SW", 580.0, 3480.0, 1, 114, 10, 40, 14432),
     ("familok", 3, 9.5, 13.8, "N", 275.0, 825.0, 2, 58, 0, 10, 7120),
     ("willa_drewniana", 2, 6.4, 12.4, "N", 120.0, 240.0, 1, 31, 4, 1, 2266),
     ("willa_modernistyczna", 2, 6.6, 7.05, "N", 143.0, 286.0, 1, 27, 2, 1, 1952),
     ("kamienica_modernistyczna", 6, 19.65, 20.45, "SW", 482.0, 2890.0, 1, 91, 21, 36, 7794),
-    ("socrealizm", 6, 21.47, 24.93, "SW", 780.0, 4680.0, 3, 237, 30, 67, 32756),
+    // trójkąty: prototyp 32756; +96 za mur attyki (jw.)
+    ("socrealizm", 6, 21.47, 24.93, "SW", 780.0, 4680.0, 3, 237, 30, 67, 32852),
     ("blok_poodwilzowy", 5, 14.8, 15.1, "SW", 572.0, 2860.0, 4, 169, 64, 49, 13598),
     ("blok_plyta_5", 5, 14.7, 14.95, "SW", 792.0, 3960.0, 5, 145, 80, 55, 20530),
     ("blok_plyta_11", 11, 31.2, 33.95, "W", 460.0, 5062.0, 3, 195, 120, 70, 28054),
