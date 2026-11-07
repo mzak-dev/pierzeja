@@ -1,0 +1,10 @@
+[package]
+name = "pierzeja-core"
+version.workspace = true
+edition.workspace = true
+description = "Pierzeja: proceduralny generator budynków (Polska 1800–2015) — rdzeń bez zależności od silnika."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
