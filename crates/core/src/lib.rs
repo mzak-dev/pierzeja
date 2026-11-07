@@ -9,6 +9,7 @@ pub mod blend;
 pub mod color;
 pub mod data;
 pub mod export;
+pub mod footprint;
 pub mod generator;
 pub mod materials;
 pub mod mesh;
