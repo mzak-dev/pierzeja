@@ -7,8 +7,9 @@
 use godot::classes::base_material_3d::{CullMode, Feature, Transparency};
 use godot::classes::mesh::{ArrayType, PrimitiveType};
 use godot::classes::geometry_instance_3d::ShadowCastingSetting;
-use godot::classes::{ArrayMesh, IMeshInstance3D, MeshInstance3D, ProjectSettings, StandardMaterial3D};
+use godot::classes::{ArrayMesh, IMeshInstance3D, INode3D, MeshInstance3D, Node3D, ProjectSettings, StandardMaterial3D};
 use godot::prelude::*;
+use pierzeja_core::scene::{generate_scene, SceneSpec};
 use pierzeja_core::{self as pc, BuildingSpec, MatKey, MeshData};
 use serde_json::{json, Value};
 
@@ -156,6 +157,97 @@ impl Pierzeja {
         match std::fs::write(&real, glb) {
             Ok(()) => GString::new(),
             Err(e) => format!("{real}: {e}").as_str().into(),
+        }
+    }
+
+    /// Zespół zabudowy (`{"kind":"estate|crossroads|roundabout", ...}`): `{items: [{name, mesh}], info, error}`.
+    #[func]
+    fn build_scene(scene_json: GString, night: bool) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        match serde_json::from_str::<SceneSpec>(&scene_json.to_string()) {
+            Ok(ss) => {
+                let sc = generate_scene(&ss);
+                let mut items = VarArray::new();
+                for it in &sc.items {
+                    let mut e = VarDictionary::new();
+                    e.set("name", &GString::from(it.name.as_str()));
+                    e.set("mesh", &to_array_mesh(&it.mesh, night));
+                    items.push(&e.to_variant());
+                }
+                d.set("items", &items);
+                d.set("info", &GString::from(sc.describe().as_str()));
+                d.set("error", &GString::new());
+            }
+            Err(e) => d.set("error", &GString::from(format!("Błędny JSON sceny: {e}").as_str())),
+        }
+        d
+    }
+}
+
+// ------------------------------------------------------------------ węzeł zespołu zabudowy
+
+/// Osiedle, skrzyżowanie albo rondo z budynkami; `spec` = JSON `SceneSpec`.
+/// Siatki są dziećmi tworzonymi w locie (bez właściciela — nie trafiają do .tscn).
+#[derive(GodotClass)]
+#[class(tool, base=Node3D)]
+pub struct PierzejaScene {
+    #[export(multiline)]
+    #[var(set = set_spec)]
+    spec: GString,
+    #[export]
+    #[var(set = set_night)]
+    night: bool,
+    /// Opis ostatniej budowy albo komunikat błędu.
+    #[var(no_set)]
+    info: GString,
+    base: Base<Node3D>,
+}
+
+#[godot_api]
+impl INode3D for PierzejaScene {
+    fn init(base: Base<Node3D>) -> Self {
+        Self { spec: r#"{"kind": "crossroads", "seed": 11}"#.into(), night: false, info: GString::new(), base }
+    }
+    fn ready(&mut self) {
+        self.rebuild();
+    }
+}
+
+#[godot_api]
+impl PierzejaScene {
+    #[func]
+    fn set_spec(&mut self, spec: GString) {
+        self.spec = spec;
+        self.rebuild();
+    }
+    #[func]
+    fn set_night(&mut self, night: bool) {
+        self.night = night;
+        self.rebuild();
+    }
+    #[func]
+    fn rebuild(&mut self) {
+        let d = Pierzeja::build_scene(self.spec.clone(), self.night);
+        let err: GString = d.get("error").map(|v| v.to::<GString>()).unwrap_or_default();
+        if !err.is_empty() {
+            godot_warn!("PierzejaScene: {err}");
+            self.info = err;
+            return;
+        }
+        self.info = d.get("info").map(|v| v.to::<GString>()).unwrap_or_default();
+        let mut base = self.base_mut();
+        for mut c in base.get_children().iter_shared() {
+            c.queue_free();
+        }
+        let items: VarArray = d.get("items").map(|v| v.to()).unwrap_or_default();
+        for it in items.iter_shared() {
+            let e: VarDictionary = it.to();
+            let mut mi = MeshInstance3D::new_alloc();
+            mi.set_name(&StringName::from(&e.get("name").map(|v| v.to::<GString>()).unwrap_or_default()));
+            let mesh: Gd<ArrayMesh> = e.get("mesh").map(|v| v.to()).unwrap();
+            mi.set_mesh(&mesh);
+            mi.set_cast_shadows_setting(ShadowCastingSetting::DOUBLE_SIDED);
+            base.add_child(&mi);
         }
     }
 }
