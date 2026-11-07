@@ -4,6 +4,7 @@
 
 use crate::blend::{resolve_spec, BuildingSpec, ResolvedBuilding};
 use crate::materials::build_materials;
+use crate::footprint::{self as fp, EdgeKind, P2};
 use crate::mesh::{frame_at, shift_frame, to_world, Frame, MatKey, MeshBuilder, MeshData, V3};
 use crate::params::Params;
 use crate::random::{hash01_seeded, jround};
@@ -66,6 +67,8 @@ struct Volume {
     kind: VolKind,
     has_above: bool,
     along_x: bool,
+    /// Obrys wielokątny (tryb `footprint`); `rect` to wtedy jego prostokąt otaczający.
+    poly: Option<Vec<P2>>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -156,6 +159,10 @@ struct Gen<'a> {
     loggia_by_rule: bool,
     no_balcony_above55: bool,
     ridge_top: f64,
+    /// Tryb wielokąta: głębokość umowna, liczba klatek i uwagi.
+    poly_depth: Option<f64>,
+    poly_stairs: Option<u32>,
+    extra_notes: Vec<String>,
 }
 
 impl<'a> Gen<'a> {
@@ -175,6 +182,9 @@ impl<'a> Gen<'a> {
             loggia_by_rule: false,
             no_balcony_above55: false,
             ridge_top: 0.0,
+            poly_depth: None,
+            poly_stairs: None,
+            extra_notes: Vec::new(),
         }
     }
 
@@ -229,12 +239,12 @@ impl<'a> Gen<'a> {
             let x0 = -w / 2.0 + k as f64 * sw;
             let zf = if k % 2 == 1 { -p.stagger } else { 0.0 };
             let rect = Rect { x0, x1: x0 + sw, z0: zf - d, z1: zf };
-            self.vols.push(Volume { id, rect, rows: rows_main.clone(), y0: 0.0, top, kind: VolKind::Main, has_above: can_pent, along_x });
+            self.vols.push(Volume { id, rect, rows: rows_main.clone(), y0: 0.0, top, kind: VolKind::Main, has_above: can_pent, along_x, poly: None });
             id += 1;
             if can_pent {
                 let prect = Rect { x0, x1: x0 + sw, z0: zf - d, z1: zf - p.setback_depth };
                 let ptop = pent_rows.last().unwrap().b1;
-                self.vols.push(Volume { id, rect: prect, rows: pent_rows.clone(), y0: top, top: ptop, kind: VolKind::Pent, has_above: false, along_x });
+                self.vols.push(Volume { id, rect: prect, rows: pent_rows.clone(), y0: top, top: ptop, kind: VolKind::Pent, has_above: false, along_x, poly: None });
                 id += 1;
             }
         }
@@ -248,7 +258,7 @@ impl<'a> Gen<'a> {
         let has_r = lr >= 2.0 && w >= ww * 2.0 + 2.0;
         let rear = has_l && has_r && p.wing_rear >= 0.5;
         let lmin = ll.min(lr);
-        let wing = |id, rect, kind, along_x| Volume { id, rect, rows: rows_main.clone(), y0: 0.0, top, kind, has_above: false, along_x };
+        let wing = |id, rect, kind, along_x| Volume { id, rect, rows: rows_main.clone(), y0: 0.0, top, kind, has_above: false, along_x, poly: None };
         if has_l {
             let l = if rear { lmin } else { ll };
             self.vols.push(wing(id, Rect { x0: -w / 2.0, x1: -w / 2.0 + ww, z0: back_l - l, z1: back_l }, VolKind::WingL, false));
@@ -666,12 +676,20 @@ impl<'a> Gen<'a> {
 
     // ------------------------------------------------------------- elewacja
     fn facade(&mut self, vi: usize, face: Face, s0: f64, s1: f64) {
-        let p = self.p;
         let v = self.vols[vi].clone();
         let role = Self::role_of(&v, face);
         let f = Self::face_frame(&v.rect, face);
-        let len = s1 - s0;
         let face_ix = FACES.iter().position(|&x| x == face).unwrap() as f64;
+        let entrances = usize::from(role == Role::Front && v.kind == VolKind::Main);
+        self.facade_on(&v, f, role, face_ix, s0, s1, entrances);
+    }
+
+    /// Elewacja na odcinku [s0, s1] ściany w układzie `f`. `entrances` = liczba wejść
+    /// (1 = oś środkowa jak w prototypie, więcej = równo rozłożone klatki).
+    #[allow(clippy::too_many_arguments)]
+    fn facade_on(&mut self, v: &Volume, f: Frame, role: Role, face_ix: f64, s0: f64, s1: f64, entrances: usize) {
+        let p = self.p;
+        let len = s1 - s0;
         let salt = v.id as f64 * 31.0 + face_ix * 7.0 + jround(s0 * 10.0);
         let is_main_front = role == Role::Front && v.kind == VolKind::Main;
         let is_pent = v.kind == VolKind::Pent;
@@ -733,20 +751,27 @@ impl<'a> Gen<'a> {
             for row in rows {
                 self.plain_wall(&f, s0 + margin, s1 - margin, row.b0, row.b1, &[], false);
             }
-            self.decor_strip(&v, &f, role, s0, s1, 0, 0.0, 0.0);
+            self.decor_strip(v, &f, role, s0, s1, 0, 0.0, 0.0);
             return;
         }
 
         let bay_a0 = |i: usize| s0 + margin + i as f64 * bw;
         let shift = if p.asymmetry >= 0.5 && n > 2 { if self.h(&[salt, 5.0]) < 0.5 { -1 } else { 0 } } else { 0 };
         let center_bay = ((n / 2) as i64 + shift).min(n as i64 - 1);
-        let entrance_bay = if is_main_front && len >= 2.5 { center_bay } else { -1 };
-        let stairs = entrance_bay >= 0 && p.stair_windows >= 0.5 && rows.len() >= 3;
+        let entr: Vec<usize> = match entrances {
+            _ if len < 2.5 => vec![],
+            0 => vec![],
+            1 => vec![center_bay as usize],
+            k => (0..k.min(n)).map(|j| ((j as f64 + 0.5) * n as f64 / k.min(n) as f64) as usize).collect(),
+        };
+        let stairs = !entr.is_empty() && p.stair_windows >= 0.5 && rows.len() >= 3;
         let mut balc_bays = if matches!(role, Role::Front | Role::Back) { self.pick(n, p.balconies, salt + 1.0) } else { vec![false; n] };
         let mut oriel_bays = if role == Role::Front && !is_pent && n >= 2 { self.pick(n, p.oriels, salt + 2.0) } else { vec![false; n] };
-        if entrance_bay >= 0 && stairs {
-            balc_bays[entrance_bay as usize] = false;
-            oriel_bays[entrance_bay as usize] = false;
+        if stairs {
+            for &e in &entr {
+                balc_bays[e] = false;
+                oriel_bays[e] = false;
+            }
         }
         let ww = clamp(lerp(p.window_width, bw - 0.08, p.ribbon), 0.35, bw - if p.ribbon > 0.6 { 0.06 } else { 0.2 });
         let oriel_to = if rows.len() >= 4 { rows[rows.len() - if p.roof_pitch > 3.0 { 1 } else { 2 }].floor } else { -1 };
@@ -773,8 +798,8 @@ impl<'a> Gen<'a> {
                 let mut skip_window = false;
 
                 if ground && !is_pent {
-                    if i as i64 == entrance_bay {
-                        self.entrance(&fr, &mut holes, cx, bw, row, &v);
+                    if entr.contains(&i) {
+                        self.entrance(&fr, &mut holes, cx, bw, row, v);
                     } else if role == Role::Front && self.h(&[salt, i as f64, 21.0]) < p.ground_shop {
                         let sw = (bw - 0.3).min(ww.max(bw * 0.78));
                         holes.push(Opening::new(cx - sw / 2.0, cx + sw / 2.0, row.level + 0.05, row.b1 - 0.45, OpKind::Shop, 0.14, 0));
@@ -787,7 +812,7 @@ impl<'a> Gen<'a> {
                         skip_window = true;
                     }
                 }
-                if !ground && stairs && i as i64 == entrance_bay {
+                if !ground && stairs && entr.contains(&i) {
                     let sw = 0.95f64.min(bw - 0.4);
                     let y0 = row.level + 0.25;
                     holes.push(Opening::new(cx - sw / 2.0, cx + sw / 2.0, y0, y0 + 1.35f64.min(row_h - 0.55), OpKind::Stair, p.window_depth, row.floor));
@@ -853,7 +878,7 @@ impl<'a> Gen<'a> {
             let k = orn * (1.0 - 0.12 * (fl - 1.0));
             self.window_decor(&f, o, k.max(0.0));
         }
-        self.decor_strip(&v, &f, role, s0, s1, n, bw, margin);
+        self.decor_strip(v, &f, role, s0, s1, n, bw, margin);
     }
 
     /// Gzymsy, lizeny – dekoracje na całym pasie elewacji.
@@ -1325,6 +1350,14 @@ impl<'a> Gen<'a> {
         let y0 = if v.rows.len() > 2 { self.ground_top } else { 0.0 };
         let roof_rise = if p.roof_pitch >= 3.0 { ((r.z1 - r.z0).min(r.x1 - r.x0) / 2.0) * rad(p.roof_pitch).tan() * 0.6 } else { 1.2 };
         let y1 = v.top + roof_rise.max(1.2);
+        let rows = v.rows.clone();
+        self.turret_at(x, z, rt, y0, y1, &rows, |nx, nz| !(nz < 0.2 && (if right { nx < 0.2 } else { nx > -0.2 })));
+    }
+
+    /// Ośmioboczna wieżyczka z hełmem; okna tylko na ścianach, dla których `keep(nx, nz)`.
+    #[allow(clippy::too_many_arguments)]
+    fn turret_at(&mut self, x: f64, z: f64, rt: f64, y0: f64, y1: f64, rows: &[Row], keep: impl Fn(f64, f64) -> bool) {
+        let p = self.p;
         let mb = &mut self.mb;
         let rot = PI / 8.0;
         mb.prism(M::Wall, x, z, y0, y1, rt, 8, rot, true);
@@ -1338,7 +1371,7 @@ impl<'a> Gen<'a> {
             let t1 = PI / 8.0 + ((k + 1) as f64 / 8.0) * PI * 2.0;
             let nx = ((t0 + t1) / 2.0).cos();
             let nz = ((t0 + t1) / 2.0).sin();
-            if nz < 0.2 && (if right { nx < 0.2 } else { nx > -0.2 }) {
+            if !keep(nx, nz) {
                 continue;
             }
             let (ax, az) = (x + t0.cos() * rt, z + t0.sin() * rt);
@@ -1347,7 +1380,7 @@ impl<'a> Gen<'a> {
             let (dx, dz) = (bx - ax, bz - az);
             let dl = dx.hypot(dz);
             let ff = Frame { u: [dx / dl, 0.0, dz / dl], ..f };
-            for row in &v.rows {
+            for row in rows {
                 if row.b0 < y0 - 1e-3 {
                     continue;
                 }
@@ -1362,19 +1395,283 @@ impl<'a> Gen<'a> {
         }
     }
 
-    // ------------------------------------------------------------- przebieg
-    fn run(mut self) -> (MeshData, BuildingStats) {
-        self.layout();
-        for vi in 0..self.vols.len() {
-            for face in FACES {
-                let v = self.vols[vi].clone();
-                for (s0, s1) in self.exposed(&v, Some(vi), face, v.y0, v.top) {
-                    self.facade(vi, face, s0, s1);
+    // ------------------------------------------------------------- obrys wielokątny
+    fn bbox(pts: &[P2]) -> Rect {
+        let f = |k: usize, mx: bool| pts.iter().map(|q| q[k]).fold(if mx { f64::NEG_INFINITY } else { f64::INFINITY }, |a, b| if mx { a.max(b) } else { a.min(b) });
+        Rect { x0: f(0, false), x1: f(0, true), z0: f(1, false), z1: f(1, true) }
+    }
+
+    fn edge_frame(pts: &[P2], i: usize) -> (Frame, f64) {
+        let a = pts[i];
+        let n = fp::edge_normal(pts, i);
+        (frame_at([a[0], 0.0, a[1]], [n[0], 0.0, n[1]]), fp::edge_len(pts, i))
+    }
+
+    /// Budynek z dowolnego obrysu: elewacja na każdej krawędzi, dach z odsunięć krawędzi.
+    fn run_poly(&mut self, pts: &[P2], kinds: &[EdgeKind]) {
+        let p = self.p;
+        let f = self.floors();
+        let s = clamp(jround(p.setback_floors), 0.0, (f - 1) as f64) as i32;
+        let main_top = f - 1 - s;
+        // cofnięte piętra: obrys odsunięty o setbackDepth ze wszystkich stron
+        let pent = if s > 0 && p.setback_depth > 0.4 { fp::inset(pts, p.setback_depth).filter(|q| fp::area(q) >= 0.3 * fp::area(pts)) } else { None };
+        let rows_main = if pent.is_some() { self.rows_for(0, main_top) } else { self.rows_for(0, f - 1) };
+        let top = rows_main.last().unwrap().b1;
+        self.vols.push(Volume { id: 0, rect: Self::bbox(pts), rows: rows_main, y0: 0.0, top, kind: VolKind::Main, has_above: pent.is_some(), along_x: true, poly: Some(pts.to_vec()) });
+        if let Some(q) = pent {
+            let rows = self.rows_for(main_top + 1, f - 1);
+            let ptop = rows.last().unwrap().b1;
+            self.vols.push(Volume { id: 1, rect: Self::bbox(&q), rows, y0: top, top: ptop, kind: VolKind::Pent, has_above: false, along_x: true, poly: Some(q) });
+        }
+        // front główny (wejścia, klatki) = najdłuższa krawędź frontowa
+        let n = pts.len();
+        let fronts: Vec<usize> = (0..n).filter(|&i| kinds[i] == EdgeKind::Front).collect();
+        let main_front = fronts.iter().copied().max_by(|&a, &b| fp::edge_len(pts, a).total_cmp(&fp::edge_len(pts, b))).unwrap_or(0);
+        let mut nf = [0.0, 0.0];
+        for &i in &fronts {
+            let (e, l) = (fp::edge_normal(pts, i), fp::edge_len(pts, i));
+            nf = [nf[0] + e[0] * l, nf[1] + e[1] * l];
+        }
+        let nl = nf[0].hypot(nf[1]).max(1e-9);
+        let nf = [nf[0] / nl, nf[1] / nl];
+        let main_len = fp::edge_len(pts, main_front);
+        let entrances = if jround(p.segments) > 1.0 { jround(main_len / p.segment_width.max(5.0)).max(1.0) as usize } else { 1 };
+        self.frontage = fronts.iter().map(|&i| fp::edge_len(pts, i)).sum();
+        self.poly_depth = Some(fp::area(pts) / main_len.max(1e-9));
+        self.poly_stairs = Some(entrances as u32);
+
+        for v in self.vols.clone() {
+            let q = v.poly.clone().unwrap();
+            for i in 0..q.len() {
+                let (fr, len) = Self::edge_frame(&q, i);
+                let e = fp::edge_normal(&q, i);
+                let facing = e[0] * nf[0] + e[1] * nf[1];
+                let kind = if v.kind == VolKind::Main { kinds[i] } else if facing > 0.5 { EdgeKind::Front } else { EdgeKind::Other };
+                if kind == EdgeKind::Blind {
+                    self.blind_wall(&v, &fr, len);
+                    continue;
+                }
+                let role = if kind == EdgeKind::Front { Role::Front } else if facing < -0.5 { Role::Back } else { Role::Side };
+                let ent = if v.kind == VolKind::Main && i == main_front { entrances } else { 0 };
+                self.facade_on(&v, fr, role, i as f64, 0.0, len, ent);
+            }
+        }
+        for v in self.vols.clone() {
+            let q = v.poly.clone().unwrap();
+            if v.has_above {
+                self.flat_roof_poly(&v, &q, true);
+            } else if p.roof_pitch < 3.0 {
+                self.flat_roof_poly(&v, &q, false);
+            } else {
+                self.hip_roof_poly(&v, &q);
+            }
+        }
+        self.turret_poly(pts, kinds);
+    }
+
+    /// Ściana graniczna (styk z sąsiadem): pełny mur i gzyms koronujący.
+    fn blind_wall(&mut self, v: &Volume, f: &Frame, len: f64) {
+        for row in &v.rows {
+            self.plain_wall(f, 0.0, len, row.b0, row.b1, &[], false);
+        }
+        let p = self.p;
+        if p.cornice > 0.05 {
+            let (c, top) = (p.cornice, v.top);
+            let h_low = 0.12 + 0.25 * p.cornice;
+            self.mb.box_l(f, M::Trim, 0.0, len, top - 0.12 - h_low, top - 0.12, 0.0, c * 0.5, true);
+            self.mb.box_l(f, M::Trim, 0.0, len, top - 0.12, top + 0.05, 0.0, c, true);
+        }
+    }
+
+    /// Płaska powierzchnia z dowolnego wielokąta (triangulacja uszami).
+    fn flat_cap(&mut self, mat: MatKey, pts: &[P2], y: f64, up: bool) {
+        let want = Some([0.0, if up { 1.0 } else { -1.0 }, 0.0]);
+        for t in fp::triangulate(pts) {
+            let v = t.map(|i| [pts[i][0], y, pts[i][1]]);
+            self.mb.poly(mat, &v, want);
+        }
+    }
+
+    /// Graniastosłup z obrysu (płyta okapu).
+    fn poly_prism(&mut self, mat: MatKey, pts: &[P2], y0: f64, y1: f64) {
+        self.flat_cap(mat, pts, y1, true);
+        self.flat_cap(mat, pts, y0, false);
+        for i in 0..pts.len() {
+            let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+            let e = fp::edge_normal(pts, i);
+            self.mb.quad(mat, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]], Some([e[0], 0.0, e[1]]));
+        }
+    }
+
+    fn flat_roof_poly(&mut self, v: &Volume, pts: &[P2], terrace: bool) {
+        let p = self.p;
+        let mut y = v.top;
+        if !terrace && p.roof_overhang > 0.12 && p.parapet_height < 0.15 {
+            let outer = fp::inset(pts, -p.roof_overhang).unwrap_or_else(|| pts.to_vec());
+            self.poly_prism(M::Slab, &outer, y, y + 0.24);
+            y += 0.24;
+        }
+        self.flat_cap(M::Roof, pts, y + 0.01, true);
+        let t = 0.25;
+        for i in 0..pts.len() {
+            let (f, len) = Self::edge_frame(pts, i);
+            if terrace {
+                let mat = if p.railing >= 0.66 { M::GlassRail } else { M::Railing };
+                self.mb.rect_n(&f, mat, 0.0, len, v.top, v.top + 1.05, -0.12, 1.0);
+                self.mb.box_l(&f, M::Metal, 0.0, len, v.top + 1.0, v.top + 1.06, -0.16, -0.08, false);
+            } else if p.parapet_height > 0.05 {
+                let hgt = p.parapet_height;
+                self.mb.box_l(&f, M::Wall, 0.0, len, v.top, v.top + hgt, -t, 0.0, false);
+                self.mb.box_l(&f, M::Trim, -0.03, len + 0.03, v.top + hgt, v.top + hgt + 0.07, -t - 0.03, 0.05, false);
+            }
+        }
+        if terrace {
+            return;
+        }
+        self.ridge_top = self.ridge_top.max(y + p.parapet_height);
+        let r = Self::bbox(pts);
+        if matches!(v.kind, VolKind::Main | VolKind::Pent) {
+            let c = fp::centroid(pts);
+            let md = fp::max_inset(pts);
+            if fp::contains(pts, c) && md > 1.2 {
+                let (cx, cz) = (c[0], c[1]);
+                if p.rooftop_boxes >= 0.6 {
+                    let (bx, bz) = (3.2f64.min(md), 3.8f64.min(md * 1.2));
+                    self.mb.bx(M::Wall, [cx - bx / 2.0, y, cz - bz / 2.0], [cx + bx / 2.0, y + 2.6, cz + bz / 2.0]);
+                    self.mb.bx(M::Trim, [cx - bx / 2.0 - 0.08, y + 2.6, cz - bz / 2.0 - 0.08], [cx + bx / 2.0 + 0.08, y + 2.75, cz + bz / 2.0 + 0.08]);
+                    self.ridge_top = self.ridge_top.max(y + 2.75);
+                } else if p.rooftop_boxes >= 0.2 {
+                    self.mb.bx(M::Wall, [cx - 0.9, y, cz - 1.2], [cx + 0.9, y + 1.6, cz + 1.2]);
                 }
             }
         }
-        self.roofs();
-        self.turret();
+        if p.chimneys > 0.1 {
+            let cnt = 12.0f64.min(jround((p.chimneys * fp::area(pts)) / 70.0)) as i32;
+            for k in 0..cnt {
+                // losowanie w prostokącie otaczającym, aż punkt (z marginesem) wypadnie w obrysie
+                for t in 0..8 {
+                    let x = lerp(r.x0 + 1.0, r.x1 - 1.0, self.h(&[v.id as f64, k as f64, 61.0, t as f64]));
+                    let z = lerp(r.z0 + 1.0, r.z1 - 1.0, self.h(&[v.id as f64, k as f64, 62.0, t as f64]));
+                    if [[-0.6, -0.8], [0.6, 0.8], [-0.6, 0.8], [0.6, -0.8]].iter().all(|d| fp::contains(pts, [x + d[0], z + d[1]])) {
+                        self.mb.bx(M::Plinth, [x - 0.3, y, z - 0.5], [x + 0.3, y + 1.0, z + 0.5]);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Dach kopertowy/mansardowy z odsunięć krawędzi: każda połać to płaszczyzna nad
+    /// krawędzią obrysu; na pierwszym „zdarzeniu” (zanik krawędzi) dach kończy płaska kalenica.
+    /// ponytail: odsunięcia zamiast pełnego szkieletu prostego — przy rzutach L/U zamiast
+    /// grzbietów nad wąskim skrzydłem powstaje płaski szczyt; pełny straight skeleton, gdy to przeszkadza.
+    fn hip_roof_poly(&mut self, v: &Volume, pts: &[P2]) {
+        let p = self.p;
+        let hh = v.top;
+        let md = fp::max_inset(pts) * 0.995;
+        if md < 0.3 {
+            self.flat_roof_poly(v, pts, false);
+            return;
+        }
+        let th = rad(clamp(p.roof_pitch, 3.0, 70.0));
+        let m = p.mansard;
+        let stages: Vec<(f64, f64)> = if m > 0.05 {
+            let w1 = md * (0.12 + 0.2 * m);
+            let th_u = rad(10.0).max(th * (1.0 - 0.55 * m));
+            vec![(w1, w1 * rad(60.0 + 18.0 * m).tan()), (md - w1, (md - w1) * th_u.tan())]
+        } else {
+            vec![(md, md * th.tan())]
+        };
+        let mut ov = if p.parapet_height > 0.2 { -0.2 } else { p.roof_overhang };
+        if m > 0.05 {
+            ov = ov.min(0.25);
+        }
+        let slope0 = stages[0].1 / stages[0].0;
+        let outer = if ov.abs() > 1e-6 { fp::inset(pts, -ov).unwrap_or_else(|| pts.to_vec()) } else { pts.to_vec() };
+        let mut rings: Vec<(Vec<P2>, f64)> = vec![(outer, hh - ov * slope0.min(0.75))];
+        let (mut d, mut y) = (0.0, hh);
+        for &(w, h) in &stages {
+            d += w;
+            y += h;
+            let ring = fp::inset(pts, d.min(md)).unwrap_or_else(|| rings.last().unwrap().0.clone());
+            rings.push((ring, y));
+        }
+        for k in 0..rings.len() - 1 {
+            let ((a, ya), (b, yb)) = (&rings[k], &rings[k + 1]);
+            for i in 0..pts.len() {
+                let j = (i + 1) % pts.len();
+                let e = fp::edge_normal(pts, i);
+                self.mb.poly(M::Roof, &[[a[i][0], *ya, a[i][1]], [a[j][0], *ya, a[j][1]], [b[j][0], *yb, b[j][1]], [b[i][0], *yb, b[i][1]]], Some([e[0], 1.0, e[1]]));
+            }
+        }
+        let (cap, ytop) = rings.last().unwrap().clone();
+        self.flat_cap(M::Roof, &cap, ytop, true);
+        self.ridge_top = self.ridge_top.max(ytop);
+        if p.chimneys > 0.1 {
+            let perim: f64 = (0..pts.len()).map(|i| fp::edge_len(pts, i)).sum();
+            let cnt = jround(p.chimneys * perim / 30.0).max(1.0) as usize;
+            let c = fp::centroid(&cap);
+            for k in 0..cnt {
+                let q = cap[(k * cap.len()) / cnt];
+                let (x, z) = (lerp(c[0], q[0], 0.5), lerp(c[1], q[1], 0.5));
+                self.mb.bx(M::Plinth, [x - 0.3, ytop - 0.9, z - 0.4], [x + 0.3, ytop + 0.85, z + 0.4]);
+                self.mb.bx(M::Trim, [x - 0.36, ytop + 0.85, z - 0.46], [x + 0.36, ytop + 0.95, z + 0.46]);
+            }
+        }
+    }
+
+    /// Wieżyczka na wypukłym narożniku między elewacjami frontowymi (kamienica narożna).
+    fn turret_poly(&mut self, pts: &[P2], kinds: &[EdgeKind]) {
+        let p = self.p;
+        if p.turret < 0.5 {
+            return;
+        }
+        let n = pts.len();
+        let convex = |i: usize| {
+            let (a, b, c) = (pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n]);
+            (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) < 0.0
+        };
+        let front = |i: usize| kinds[i] == EdgeKind::Front;
+        let mut cand: Vec<usize> = (0..n).filter(|&i| convex(i) && front(i) && front((i + n - 1) % n)).collect();
+        if cand.is_empty() {
+            cand = (0..n).filter(|&i| convex(i) && (front(i) || front((i + n - 1) % n))).collect();
+        }
+        if cand.is_empty() {
+            return;
+        }
+        let i = cand[((self.h(&[97.0]) * cand.len() as f64).floor() as usize).min(cand.len() - 1)];
+        let (n0, n1) = (fp::edge_normal(pts, (i + n - 1) % n), fp::edge_normal(pts, i));
+        let rt = clamp(p.bay_width * 0.55, 1.2, 2.1);
+        let (x, z) = (pts[i][0] - (n0[0] + n1[0]) * rt * 0.45, pts[i][1] - (n0[1] + n1[1]) * rt * 0.45);
+        let v = self.vols[0].clone();
+        let y0 = if v.rows.len() > 2 { self.ground_top } else { 0.0 };
+        let roof_rise = if p.roof_pitch >= 3.0 { fp::max_inset(pts) * rad(p.roof_pitch).tan() * 0.6 } else { 1.2 };
+        let y1 = v.top + roof_rise.max(1.2);
+        self.turret_at(x, z, rt, y0, y1, &v.rows, |nx, nz| nx * n0[0] + nz * n0[1] >= 0.2 || nx * n1[0] + nz * n1[1] >= 0.2);
+    }
+
+    // ------------------------------------------------------------- przebieg
+    fn run(mut self) -> (MeshData, BuildingStats) {
+        let poly = self.r.footprint.as_ref().map(|f| (fp::normalize(f), f.points.len()));
+        match poly {
+            Some((Some((pts, kinds)), _)) => self.run_poly(&pts, &kinds),
+            other => {
+                if other.is_some() {
+                    self.extra_notes.push("Obrys nieprawidłowy (mniej niż 3 punkty, zerowe pole albo samoprzecięcie) — użyto prostokąta z parametrów.".into());
+                }
+                self.layout();
+                for vi in 0..self.vols.len() {
+                    for face in FACES {
+                        let v = self.vols[vi].clone();
+                        for (s0, s1) in self.exposed(&v, Some(vi), face, v.y0, v.top) {
+                            self.facade(vi, face, s0, s1);
+                        }
+                    }
+                }
+                self.roofs();
+                self.turret();
+            }
+        }
         let stats_base = self.stats();
         let windows = self.mb.counters.windows;
         let balconies = self.mb.counters.balconies;
@@ -1385,7 +1682,7 @@ impl<'a> Gen<'a> {
 
     fn stats(&self) -> BuildingStats {
         let p = self.p;
-        let area = |v: &Volume| (v.rect.x1 - v.rect.x0) * (v.rect.z1 - v.rect.z0);
+        let area = |v: &Volume| v.poly.as_deref().map_or((v.rect.x1 - v.rect.x0) * (v.rect.z1 - v.rect.z0), fp::area);
         let footprint: f64 = self.vols.iter().filter(|v| v.kind != VolKind::Pent).map(area).sum();
         let gfa: f64 = self.vols.iter().map(|v| area(v) * v.rows.len() as f64).sum();
         let height_walls = self.vols.iter().map(|v| v.top).fold(f64::NEG_INFINITY, f64::max);
@@ -1413,7 +1710,7 @@ impl<'a> Gen<'a> {
             _ => 64.0,
         };
         let flats = if single { 1.0 } else { jround((gfa * 0.72) / avg_flat).max(1.0) };
-        let mut notes = Vec::new();
+        let mut notes = self.extra_notes.clone();
         if height_class == "N" {
             notes.push("Budynek niski (N) wg WT 2002: do 12 m lub do 4 kondygnacji.".to_string());
         } else {
@@ -1444,8 +1741,8 @@ impl<'a> Gen<'a> {
             footprint,
             gfa,
             frontage: self.frontage,
-            depth: p.depth,
-            staircases: if single { 1 } else { jround(p.segments) as u32 },
+            depth: self.poly_depth.unwrap_or(p.depth),
+            staircases: self.poly_stairs.unwrap_or(if single { 1 } else { jround(p.segments) as u32 }),
             windows: 0,
             balconies: 0,
             flats_estimate: flats as u32,

@@ -35,6 +35,9 @@ pub struct BuildingSpec {
     pub neighbors: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub regulations: Option<bool>,
+    /// Obrys wielokątny [x, z] zamiast prostokąta z parametrów bryły (np. z OSM).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub footprint: Option<crate::footprint::Footprint>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -47,6 +50,8 @@ pub struct ResolvedBuilding {
     pub regulations: bool,
     /// Archetyp o największej łącznej wadze.
     pub dominant: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub footprint: Option<crate::footprint::Footprint>,
 }
 
 pub fn map_to_unit(p: MapPoint) -> (f64, f64) {
@@ -233,6 +238,7 @@ pub fn resolve_spec(spec: &BuildingSpec) -> ResolvedBuilding {
         seed,
         regulations: spec.regulations != Some(false),
         dominant,
+        footprint: spec.footprint.clone(),
     }
 }
 
