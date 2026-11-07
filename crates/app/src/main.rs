@@ -1,5 +1,6 @@
 //! Pierzeja — natywna aplikacja: Bevy (podgląd 3D z cieniami) + egui (archetyp
-//! albo punkt na mapie typologii, 71 parametrów w 5 wektorach, tryb ulicy, eksport).
+//! albo punkt na mapie typologii, 71 parametrów w 5 wektorach, obrys wielokątny,
+//! ulica, osiedle, skrzyżowanie i rondo, eksport GLB).
 //! Mysz: lewy/prawy — obrót, środkowy — przesunięcie, kółko — przybliżenie, F — kadruj.
 
 use bevy::asset::RenderAssetUsages;
@@ -13,6 +14,8 @@ use bevy::camera::{CameraOutputMode, Viewport};
 use bevy::render::render_resource::BlendState;
 use bevy::window::PrimaryWindow;
 use bevy_egui::{egui, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
+use pierzeja_core::footprint::{self as fp, Footprint, P2};
+use pierzeja_core::scene::{generate_scene, SceneKind, SceneSpec};
 use pierzeja_core::{self as pc, data, BuildingSpec, MatKey, MeshData, ParamKind, StreetSpec};
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
@@ -26,7 +29,21 @@ fn main() {
         .add_plugins(EguiPlugin::default())
         .insert_resource(ClearColor(Color::srgb(0.62, 0.72, 0.78)))
         .insert_resource(bevy::light::DirectionalLightShadowMap { size: 4096 })
-        .insert_resource(State::default())
+        .insert_resource({
+            // PIERZEJA_MODE=wielokat|ulica|osiedle|skrzyzowanie|rondo — tryb startowy (zrzuty, testy)
+            let mut st = State::default();
+            if let Ok(m) = std::env::var("PIERZEJA_MODE") {
+                st.mode = match m.as_str() {
+                    "wielokat" => Mode::Polygon,
+                    "ulica" => Mode::Street,
+                    "osiedle" => Mode::Estate,
+                    "skrzyzowanie" => Mode::Crossroads,
+                    "rondo" => Mode::Roundabout,
+                    _ => Mode::Building,
+                };
+            }
+            st
+        })
         .insert_resource(Orbit::default())
         .add_systems(Startup, setup)
         .add_systems(EguiPrimaryContextPass, ui)
@@ -54,9 +71,93 @@ enum Source {
     Cursor(f64, f64),
 }
 
+#[derive(PartialEq, Clone, Copy)]
+enum Mode {
+    Building,
+    Polygon,
+    Street,
+    Estate,
+    Crossroads,
+    Roundabout,
+}
+
+impl Mode {
+    const ALL: [(Mode, &'static str); 6] = [
+        (Mode::Building, "Budynek"),
+        (Mode::Polygon, "Wielokąt"),
+        (Mode::Street, "Ulica"),
+        (Mode::Estate, "Osiedle"),
+        (Mode::Crossroads, "Skrzyżowanie"),
+        (Mode::Roundabout, "Rondo"),
+    ];
+    fn building(self) -> bool {
+        matches!(self, Mode::Building | Mode::Polygon)
+    }
+    fn scene(self) -> Option<SceneKind> {
+        match self {
+            Mode::Estate => Some(SceneKind::Estate),
+            Mode::Crossroads => Some(SceneKind::Crossroads),
+            Mode::Roundabout => Some(SceneKind::Roundabout),
+            _ => None,
+        }
+    }
+}
+
+/// Rola krawędzi obrysu w edytorze: 0 zwykła, 1 front (ulica), 2 ślepa (styk z sąsiadem).
+#[derive(Clone)]
+struct Poly {
+    pts: Vec<P2>,
+    roles: Vec<u8>,
+}
+
+impl Poly {
+    fn footprint(&self) -> Footprint {
+        let by = |r: u8| (0..self.pts.len()).filter(|&i| self.roles[i] == r).collect();
+        Footprint { points: self.pts.clone(), front: by(1), blind: by(2) }
+    }
+    fn preset(name: &str) -> Poly {
+        let (pts, roles): (Vec<P2>, Vec<u8>) = match name {
+            // narożnik ze ściętym rogiem, ulice od +z i od −x
+            "Narożnik" => (vec![[-10.0, 12.0], [-13.0, 9.0], [-13.0, -10.0], [-1.0, -10.0], [-1.0, 0.0], [13.0, 0.0], [13.0, 12.0]], vec![1, 1, 2, 0, 0, 2, 1]),
+            "L" => (vec![[-12.0, 8.0], [12.0, 8.0], [12.0, -4.0], [0.0, -4.0], [0.0, -16.0], [-12.0, -16.0]], vec![1, 0, 0, 0, 0, 0]),
+            "U (podwórze)" => (
+                vec![[-14.0, 6.0], [14.0, 6.0], [14.0, -22.0], [7.0, -22.0], [7.0, -6.0], [-7.0, -6.0], [-7.0, -22.0], [-14.0, -22.0]],
+                vec![1, 2, 0, 0, 0, 0, 0, 2],
+            ),
+            "T" => (vec![[-30.0, 6.0], [30.0, 6.0], [30.0, -6.0], [6.0, -6.0], [6.0, -34.0], [-6.0, -34.0], [-6.0, -6.0], [-30.0, -6.0]], vec![1, 0, 0, 0, 0, 0, 0, 0]),
+            "Trapez" => (vec![[-11.0, 7.0], [11.0, 7.0], [8.0, -7.0], [-6.0, -7.0]], vec![1, 0, 0, 0]),
+            "Łuk" => {
+                let mut v = vec![];
+                for k in 0..=6 {
+                    let t = std::f64::consts::PI * (0.25 + 0.5 * k as f64 / 6.0);
+                    v.push([-30.0 * t.cos(), 30.0 * t.sin() - 18.0]);
+                }
+                for k in (0..=6).rev() {
+                    let t = std::f64::consts::PI * (0.25 + 0.5 * k as f64 / 6.0);
+                    v.push([-42.0 * t.cos(), 42.0 * t.sin() - 18.0]);
+                }
+                let mut r = vec![0u8; v.len()];
+                (0..6).for_each(|i| r[i] = 1);
+                (v, r)
+            }
+            "Sześciokąt" => (vec![[-5.0, 6.0], [5.0, 6.0], [8.0, 0.0], [5.0, -6.0], [-5.0, -6.0], [-8.0, 0.0]], vec![1, 0, 0, 0, 0, 0]),
+            _ => (vec![[-10.0, 6.0], [10.0, 6.0], [10.0, -6.0], [-10.0, -6.0]], vec![1, 0, 0, 0]),
+        };
+        Poly { pts, roles }
+    }
+}
+
+const PRESETS: [&str; 8] = ["Prostokąt", "Narożnik", "L", "U (podwórze)", "T", "Trapez", "Łuk", "Sześciokąt"];
+
 #[derive(Resource)]
 struct State {
-    street: bool,
+    mode: Mode,
+    poly: Poly,
+    drag: Option<usize>,
+    spacing: f64,
+    rows: u32,
+    arm: f64,
+    scene_seed: u32,
     source: Source,
     overrides: Map<String, Value>,
     seed: u32,
@@ -76,7 +177,13 @@ struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            street: false,
+            mode: Mode::Building,
+            poly: Poly::preset("Narożnik"),
+            drag: None,
+            spacing: 1.5,
+            rows: 3,
+            arm: 90.0,
+            scene_seed: 11,
             source: Source::Archetype(pc::DEFAULT_ARCHETYPE.into()),
             overrides: Map::new(),
             seed: 1,
@@ -107,7 +214,24 @@ impl State {
         if !self.overrides.is_empty() {
             s.overrides = Some(self.overrides.clone());
         }
+        if self.mode == Mode::Polygon {
+            s.footprint = Some(self.poly.footprint());
+        }
         s
+    }
+    fn street_spec(&self) -> StreetSpec {
+        StreetSpec { profile: Some(self.profile.clone()), count: Some(self.count as f64), seed: Some(self.street_seed as f64), ..Default::default() }
+    }
+    fn scene_spec(&self, kind: SceneKind) -> SceneSpec {
+        SceneSpec {
+            kind,
+            seed: Some(self.scene_seed as f64),
+            spacing: Some(self.spacing),
+            rows: Some(self.rows),
+            profile: Some(self.profile.clone()),
+            arm: Some(self.arm),
+            variation: None,
+        }
     }
 }
 
@@ -228,9 +352,15 @@ fn regenerate(
     clear.0 = if st.night { Color::srgb(0.04, 0.06, 0.11) } else { Color::srgb(0.62, 0.72, 0.78) };
 
     let night = st.night;
-    let bounds = if st.street {
-        let ss = StreetSpec { profile: Some(st.profile.clone()), count: Some(st.count as f64), seed: Some(st.street_seed as f64), ..Default::default() };
-        let street = pc::generate_street(&ss);
+    let bounds = if let Some(kind) = st.mode.scene() {
+        let sc = generate_scene(&st.scene_spec(kind));
+        for it in &sc.items {
+            spawn_mesh(&mut commands, &mut meshes, &mut materials, &it.mesh, Vec3::ZERO, night);
+        }
+        st.info = sc.describe();
+        sc.bounds
+    } else if st.mode == Mode::Street {
+        let street = pc::generate_street(&st.street_spec());
         for b in &street.buildings {
             let o = Vec3::new(b.offset[0] as f32, b.offset[1] as f32, b.offset[2] as f32);
             spawn_mesh(&mut commands, &mut meshes, &mut materials, &b.model.mesh, o, night);
@@ -264,6 +394,12 @@ fn regenerate(
         let size = max - min;
         orbit.target = Vec3::new((min.x + max.x) / 2.0, min.y + size.y * 0.42, (min.z + max.z) / 2.0);
         orbit.dist = size.length() * 0.5 / (std::f32::consts::FRAC_PI_4 * 0.5).sin() * 1.05;
+        // sceny: ujęcie z góry na środek (skrzyżowanie/rondo w punkcie 0,0), bez dalekich końców ramion
+        match st.mode {
+            Mode::Crossroads | Mode::Roundabout => (orbit.target, orbit.dist, orbit.pitch) = (Vec3::new(0.0, 6.0, 0.0), 150.0, 38f32.to_radians()),
+            Mode::Estate => (orbit.dist, orbit.pitch) = (size.x.max(size.z) * 0.95, 40f32.to_radians()),
+            _ => {}
+        }
     }
 }
 
@@ -315,9 +451,17 @@ fn out_dir() -> PathBuf {
 fn export_glb(st: &State) -> Result<PathBuf, String> {
     let dir = out_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let (name, glb) = if st.street {
-        let ss = StreetSpec { profile: Some(st.profile.clone()), count: Some(st.count as f64), seed: Some(st.street_seed as f64), ..Default::default() };
-        let street = pc::generate_street(&ss);
+    let (name, glb) = if let Some(kind) = st.mode.scene() {
+        let sc = generate_scene(&st.scene_spec(kind));
+        let nodes: Vec<pc::ExportNode> = sc
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, it)| pc::ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
+            .collect();
+        (format!("{:?}-{}", kind, st.scene_seed).to_lowercase(), pc::to_glb(&nodes))
+    } else if st.mode == Mode::Street {
+        let street = pc::generate_street(&st.street_spec());
         let mut nodes: Vec<pc::ExportNode> = street
             .buildings
             .iter()
@@ -389,6 +533,179 @@ fn typology_map(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
+fn scene_controls(ui: &mut egui::Ui, st: &mut State, kind: SceneKind) {
+    let d = data();
+    let mut ch = false;
+    match kind {
+        SceneKind::Estate => {
+            ui.label("Osiedle z wielkiej płyty: rzędy bloków, drogi dojazdowe z parkingiem, chodniki przy wejściach, przejście piesze, plac zabaw, pawilon.");
+            ch |= ui.add(egui::Slider::new(&mut st.spacing, 0.8..=3.0).text("odstęp rzędów (× H)")).on_hover_text("WT 2002 § 13: co najmniej wysokość budynku przesłaniającego; osiedla PRL zwykle 1,5–2 H").changed();
+            ch |= ui.add(egui::Slider::new(&mut st.rows, 1..=6).text("rzędy bloków")).changed();
+        }
+        _ => {
+            ui.label(if kind == SceneKind::Crossroads { "Skrzyżowanie czterowlotowe: narożniki na obrysach wielokątnych (ścięty, z wieżyczką, obły, ostry) i pierzeje na ramionach." } else { "Rondo jednopasowe (Ø 35 m): narożniki z frontem po łuku i pierzeje na ramionach." });
+            let cur = d.city(&st.profile).map_or(st.profile.clone(), |c| c.name.clone());
+            egui::ComboBox::from_label("Profil pierzei").selected_text(cur).show_ui(ui, |ui| {
+                for c in &d.city_profiles {
+                    if ui.selectable_label(st.profile == c.id, &c.name).clicked() {
+                        st.profile = c.id.clone();
+                        ch = true;
+                    }
+                }
+            });
+            ch |= ui.add(egui::Slider::new(&mut st.arm, 50.0..=200.0).text("długość ramion [m]")).changed();
+        }
+    }
+    ch |= ui.add(egui::DragValue::new(&mut st.scene_seed).prefix("ziarno ")).changed();
+    if ch {
+        st.dirty = true;
+    }
+}
+
+/// Edytor obrysu 2D (widok z góry, ulica na dole = +z). Lewy klik przy krawędzi — nowy
+/// punkt, przeciąganie — przesunięcie (siatka 0,5 m), prawy klik — usunięcie punktu,
+/// klik w kwadrat na środku krawędzi — rola: zwykła → front → ślepa.
+fn polygon_editor(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal_wrapped(|ui| {
+        ui.label("Szablon:");
+        for name in PRESETS {
+            if ui.small_button(name).clicked() {
+                st.poly = Poly::preset(name);
+                st.dirty = true;
+                st.reframe = true;
+            }
+        }
+    });
+    let (resp, painter) = ui.allocate_painter(egui::vec2(ui.available_width(), 330.0), egui::Sense::click_and_drag());
+    let r = resp.rect;
+    painter.rect_filled(r, 4.0, egui::Color32::from_rgb(28, 31, 36));
+    let pts = st.poly.pts.clone();
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for p in &pts {
+        for k in 0..2 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    // stała skala, dopóki punkt jest przeciągany (kadr nie „ucieka”)
+    let id = resp.id.with("view");
+    let view: (f64, [f64; 2]) = if st.drag.is_some() {
+        ui.ctx().data(|d| d.get_temp(id)).unwrap_or((5.0, [0.0, 0.0]))
+    } else {
+        let span = (hi[0] - lo[0]).max(hi[1] - lo[1]).max(10.0) + 16.0;
+        let v = ((r.width().min(r.height()) as f64) / span, [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0]);
+        ui.ctx().data_mut(|d| d.insert_temp(id, v));
+        v
+    };
+    let (sc, c) = view;
+    let to_px = |p: P2| egui::pos2(r.center().x + ((p[0] - c[0]) * sc) as f32, r.center().y + ((p[1] - c[1]) * sc) as f32);
+    let from_px = |q: egui::Pos2| [c[0] + (q.x - r.center().x) as f64 / sc, c[1] + (q.y - r.center().y) as f64 / sc];
+    // siatka co 5 m
+    let grid = egui::Stroke::new(1.0, egui::Color32::from_white_alpha(14));
+    let (g0, g1) = (from_px(r.left_top()), from_px(r.right_bottom()));
+    let mut x = (g0[0] / 5.0).floor() * 5.0;
+    while x < g1[0] {
+        painter.line_segment([to_px([x, g0[1]]), to_px([x, g1[1]])], grid);
+        x += 5.0;
+    }
+    let mut z = (g0[1] / 5.0).floor() * 5.0;
+    while z < g1[1] {
+        painter.line_segment([to_px([g0[0], z]), to_px([g1[0], z])], grid);
+        z += 5.0;
+    }
+    painter.text(r.center_bottom() - egui::vec2(0.0, 4.0), egui::Align2::CENTER_BOTTOM, "ulica (+z) ↓   siatka 5 m", egui::FontId::proportional(10.5), egui::Color32::from_white_alpha(110));
+    // wypełnienie (triangulacja) i krawędzie wg ról
+    let valid = fp::normalize(&st.poly.footprint()).is_some();
+    let mut mesh = egui::epaint::Mesh::default();
+    let fill = if valid { egui::Color32::from_rgba_unmultiplied(120, 150, 190, 60) } else { egui::Color32::from_rgba_unmultiplied(220, 80, 80, 60) };
+    for p in &pts {
+        mesh.colored_vertex(to_px(*p), fill);
+    }
+    for t in fp::triangulate(&pts) {
+        mesh.add_triangle(t[0] as u32, t[1] as u32, t[2] as u32);
+    }
+    painter.add(egui::Shape::mesh(mesh));
+    let n = pts.len();
+    let role_col = |r: u8| match r {
+        1 => egui::Color32::from_rgb(242, 190, 76),
+        2 => egui::Color32::from_rgb(130, 130, 130),
+        _ => egui::Color32::from_rgb(170, 200, 235),
+    };
+    for i in 0..n {
+        let (a, b) = (to_px(pts[i]), to_px(pts[(i + 1) % n]));
+        painter.line_segment([a, b], egui::Stroke::new(if st.poly.roles[i] == 1 { 3.5 } else { 2.0 }, role_col(st.poly.roles[i])));
+        let m = a + (b - a) * 0.5;
+        painter.rect_filled(egui::Rect::from_center_size(m, egui::vec2(8.0, 8.0)), 1.0, role_col(st.poly.roles[i]));
+        let len = fp::edge_len(&pts, i);
+        painter.text(m + egui::vec2(6.0, -6.0), egui::Align2::LEFT_BOTTOM, format!("{len:.1}"), egui::FontId::proportional(10.0), egui::Color32::from_white_alpha(140));
+    }
+    for p in &pts {
+        painter.circle_filled(to_px(*p), 4.5, egui::Color32::WHITE);
+    }
+    // interakcja
+    let near = |q: egui::Pos2, tol: f32| (0..n).find(|&i| to_px(pts[i]).distance(q) < tol);
+    let mid = |q: egui::Pos2| (0..n).find(|&i| (to_px(pts[i]) + (to_px(pts[(i + 1) % n]) - to_px(pts[i])) * 0.5).distance(q) < 7.0);
+    let snap = |p: P2| [(p[0] * 2.0).round() / 2.0, (p[1] * 2.0).round() / 2.0];
+    if resp.drag_started()
+        && let Some(q) = resp.interact_pointer_pos()
+    {
+        st.drag = near(q, 10.0);
+    }
+    if let (Some(i), Some(q)) = (st.drag, resp.interact_pointer_pos())
+        && resp.dragged()
+    {
+        let np = snap(from_px(q));
+        if np != st.poly.pts[i] {
+            st.poly.pts[i] = np;
+            st.dirty = true;
+        }
+    }
+    if resp.drag_stopped() {
+        st.drag = None;
+        st.reframe = true;
+    }
+    if resp.clicked()
+        && let Some(q) = resp.interact_pointer_pos()
+    {
+        if let Some(i) = mid(q) {
+            st.poly.roles[i] = (st.poly.roles[i] + 1) % 3;
+            st.dirty = true;
+        } else if near(q, 10.0).is_none() {
+            // nowy punkt na najbliższej krawędzi (rola przechodzi na obie części)
+            let best = (0..n)
+                .map(|i| {
+                    let (a, b) = (to_px(pts[i]), to_px(pts[(i + 1) % n]));
+                    let t = ((q - a).dot(b - a) / (b - a).length_sq().max(1e-6)).clamp(0.0, 1.0);
+                    (i, (a + (b - a) * t).distance(q))
+                })
+                .min_by(|x, y| x.1.total_cmp(&y.1));
+            if let Some((i, dist)) = best
+                && dist < 14.0
+            {
+                st.poly.pts.insert(i + 1, snap(from_px(q)));
+                let role = st.poly.roles[i];
+                st.poly.roles.insert(i + 1, role);
+                st.dirty = true;
+            }
+        }
+    }
+    if resp.secondary_clicked()
+        && let Some(q) = resp.interact_pointer_pos()
+        && let Some(i) = near(q, 10.0)
+        && n > 3
+    {
+        st.poly.pts.remove(i);
+        st.poly.roles.remove(i);
+        st.dirty = true;
+    }
+    let area = fp::area(&pts);
+    ui.label(if valid {
+        egui::RichText::new(format!("{n} punktów · pole {area:.0} m² · lewy klik przy krawędzi: punkt · prawy: usuń · kwadrat: rola (żółta = front, szara = ślepa)")).size(11.0)
+    } else {
+        egui::RichText::new("Obrys nieprawidłowy (samoprzecięcie albo zerowe pole) — generator użyje prostokąta.").color(egui::Color32::from_rgb(240, 110, 110))
+    });
+}
+
 fn param_row(ui: &mut egui::Ui, st: &mut State, def: &pc::ParamDef) {
     let key = def.key.as_str();
     let cur = st.resolved.get(key).cloned().unwrap_or(Value::Null);
@@ -449,23 +766,22 @@ fn ui(mut contexts: EguiContexts, mut st: ResMut<State>, mut camera: Query<&mut 
     let panel = egui::Panel::left("pierzeja").resizable(true).default_size(430.0).show(&mut root, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.heading("Pierzeja");
-            ui.horizontal(|ui| {
-                if ui.selectable_label(!st.street, "Budynek").clicked() && st.street {
-                    st.street = false;
-                    st.dirty = true;
-                    st.reframe = true;
-                }
-                if ui.selectable_label(st.street, "Ulica").clicked() && !st.street {
-                    st.street = true;
-                    st.dirty = true;
-                    st.reframe = true;
+            ui.horizontal_wrapped(|ui| {
+                for (m, label) in Mode::ALL {
+                    if ui.selectable_label(st.mode == m, label).clicked() && st.mode != m {
+                        st.mode = m;
+                        st.dirty = true;
+                        st.reframe = true;
+                    }
                 }
                 if ui.checkbox(&mut st.night, "Noc").changed() {
                     st.dirty = true;
                 }
             });
             ui.separator();
-            if st.street {
+            if let Some(kind) = st.mode.scene() {
+                scene_controls(ui, &mut st, kind);
+            } else if st.mode == Mode::Street {
                 let cur = d.city(&st.profile).map_or(st.profile.clone(), |c| c.name.clone());
                 egui::ComboBox::from_label("Profil").selected_text(cur).show_ui(ui, |ui| {
                     for c in &d.city_profiles {
@@ -497,7 +813,11 @@ fn ui(mut contexts: EguiContexts, mut st: ResMut<State>, mut camera: Query<&mut 
                         }
                     }
                 });
-                typology_map(ui, &mut st);
+                if st.mode == Mode::Polygon {
+                    polygon_editor(ui, &mut st);
+                } else {
+                    typology_map(ui, &mut st);
+                }
                 ui.horizontal(|ui| {
                     let (mut seed, mut var) = (st.seed, st.variation);
                     let ch = ui.add(egui::DragValue::new(&mut seed).prefix("ziarno ")).changed() | ui.add(egui::Slider::new(&mut var, 0.0..=1.0).text("wariacja")).changed();
@@ -514,7 +834,7 @@ fn ui(mut contexts: EguiContexts, mut st: ResMut<State>, mut camera: Query<&mut 
                         Err(e) => format!("Błąd zapisu: {e}"),
                     };
                 }
-                if !st.street && ui.button("Kopiuj spec").clicked() {
+                if st.mode.building() && ui.button("Kopiuj spec").clicked() {
                     ui.ctx().copy_text(serde_json::to_string_pretty(&st.spec()).unwrap_or_default());
                 }
                 if ui.button("Kadruj (F)").clicked() {
@@ -528,7 +848,7 @@ fn ui(mut contexts: EguiContexts, mut st: ResMut<State>, mut camera: Query<&mut 
             });
             ui.separator();
             ui.label(egui::RichText::new(&st.info).monospace().size(11.5));
-            if !st.street {
+            if st.mode.building() {
                 ui.separator();
                 for g in &d.groups {
                     egui::CollapsingHeader::new(format!("{} — {}", g.label, g.description)).default_open(g.id == "storeys").show(ui, |ui| {
