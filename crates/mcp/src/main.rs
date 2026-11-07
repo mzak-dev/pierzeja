@@ -7,6 +7,7 @@
 //! prompty, powiadomienia o postępie albo transport HTTP.
 
 use base64::Engine;
+use pierzeja_core::scene::{generate_scene, SceneSpec};
 use pierzeja_core::{data, describe_mix, describe_street, generate_from_spec, generate_street, overall_weights, to_glb, to_obj, unknown_archetypes, BuildingModel, BuildingSpec, ExportNode, StreetSpec, GROUP_IDS};
 use pierzeja_render::{render_scene, RenderItem, RenderOptions, View};
 use serde_json::{json, Map, Value};
@@ -42,7 +43,13 @@ fn spec_props() -> Map<String, Value> {
         "variation": { "type": "number", "minimum": 0, "maximum": 1, "description": "Siła losowej wariacji 0–1 (domyślnie 0)" },
         "sharpness": { "type": "number", "minimum": 0.5, "maximum": 8, "description": "Wykładnik IDW (domyślnie 3)" },
         "neighbors": { "type": "integer", "minimum": 1, "maximum": 8, "description": "Liczba archetypów w mieszance z mapy (domyślnie 3)" },
-        "regulations": { "type": "boolean", "description": "Reguły z warunków technicznych, np. loggie zamiast balkonów powyżej 25 m (domyślnie true)" }
+        "regulations": { "type": "boolean", "description": "Reguły z warunków technicznych, np. loggie zamiast balkonów powyżej 25 m (domyślnie true)" },
+        "footprint": { "type": "object", "description": "Obrys wielokątny zamiast prostokąta (np. z OSM). Punkty [x, z] w metrach, ulica po stronie +z. Krawędź i = points[i] → points[i+1].",
+            "properties": {
+                "points": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }, "minItems": 3 },
+                "front": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "description": "Krawędzie frontowe (od ulicy): wejście, witryny, pełny detal. Domyślnie krawędź zwrócona ku +z." },
+                "blind": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "description": "Ściany graniczne (styk z sąsiadem) bez okien." }
+            }, "required": ["points"] }
     }) {
         Value::Object(m) => m,
         _ => unreachable!(),
@@ -84,6 +91,12 @@ fn tools() -> Value {
         tool("morph_sequence", "Interpolacja A → B", "Szereg budynków interpolowanych od archetypu A do B na jednym obrazie; można morfować tylko wybrane wektory.", with(Map::new(), json!({
             "from": { "type": "string" }, "to": { "type": "string" }, "steps": { "type": "integer", "minimum": 2, "maximum": 9 },
             "groups": { "type": "array", "items": { "type": "string", "enum": groups } }, "seed": { "type": "integer", "minimum": 0 }, "view": view_prop(), "save_glb": { "type": "boolean" } })), &["from", "to"], false),
+        tool("generate_scene", "Generuj zespół zabudowy", "Przykładowe zespoły: osiedle bloków (odstępy między rzędami × H, drogi dojazdowe, parkingi, chodniki, plac zabaw), skrzyżowanie i rondo z budynkami narożnymi na obrysach wielokątnych i pierzejami na ramionach. Zapisuje GLB (węzeł na budynek) i zwraca podgląd PNG.", with(Map::new(), json!({
+            "kind": { "type": "string", "enum": ["estate", "crossroads", "roundabout"], "description": "estate = osiedle bloków, crossroads = skrzyżowanie, roundabout = rondo" },
+            "seed": { "type": "integer", "minimum": 0 }, "spacing": { "type": "number", "minimum": 0.8, "maximum": 3, "description": "Osiedle: odstęp rzędów jako wielokrotność wysokości (domyślnie 1,5; WT 2002 § 13: min. 1)" },
+            "rows": { "type": "integer", "minimum": 1, "maximum": 6 }, "profile": { "type": "string", "enum": profiles.clone() }, "arm": { "type": "number", "minimum": 40, "maximum": 300, "description": "Długość ramion [m]" },
+            "variation": { "type": "number", "minimum": 0, "maximum": 1 }, "format": fmt.clone(), "preview": { "type": "boolean" }, "view": view_prop(), "night": { "type": "boolean" },
+            "azimuth": { "type": "number" }, "elevation": { "type": "number" }, "name": { "type": "string" } })), &["kind"], false),
         tool("generate_street", "Generuj ulicę", "Pierzeja: szereg budynków losowanych z profilu miasta albo własnych wag, z hybrydami. Zapisuje model (węzeł na budynek) i podgląd PNG.", with(Map::new(), json!({
             "profile": { "type": "string", "enum": profiles }, "weights": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
             "count": { "type": "integer", "minimum": 1, "maximum": 40 }, "seed": { "type": "integer", "minimum": 0 }, "mixing": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -108,7 +121,7 @@ fn r2(v: f64) -> f64 {
 }
 
 fn to_spec(args: &Value) -> Result<(BuildingSpec, Vec<String>), String> {
-    let keys = ["archetype", "weights", "cursor", "groupWeights", "groupCursors", "overrides", "seed", "variation", "sharpness", "neighbors", "regulations"];
+    let keys = ["archetype", "weights", "cursor", "groupWeights", "groupCursors", "overrides", "seed", "variation", "sharpness", "neighbors", "regulations", "footprint"];
     let m: Map<String, Value> = keys.iter().filter_map(|k| args.get(*k).map(|v| (k.to_string(), v.clone()))).collect();
     let spec: BuildingSpec = serde_json::from_value(Value::Object(m)).map_err(|e| format!("Błędna specyfikacja: {e}"))?;
     let bad = unknown_archetypes(&spec);
@@ -308,6 +321,29 @@ fn call(name: &str, a: &Value) -> ToolResult {
             }
             let head = format!("Interpolacja {} → {} (wektory: {})", d.archetype(from).unwrap().name, d.archetype(to).unwrap().name, sel.join(", "));
             Ok(vec![text(format!("{head}\n{}\n\nZapisano:\n{}", lines.join("\n"), files_text(&files))), image(&png)])
+        }
+        "generate_scene" => {
+            let keys = ["kind", "seed", "spacing", "rows", "profile", "arm", "variation"];
+            let sm: Map<String, Value> = keys.iter().filter_map(|k| a.get(*k).map(|v| (k.to_string(), v.clone()))).collect();
+            let ss: SceneSpec = serde_json::from_value(Value::Object(sm)).map_err(|e| format!("Błędne parametry sceny: {e}"))?;
+            let sc = generate_scene(&ss);
+            let nodes: Vec<ExportNode> = sc
+                .items
+                .iter()
+                .enumerate()
+                .map(|(i, it)| ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
+                .collect();
+            let kind = s("kind").unwrap_or("estate");
+            let base = unique_base(&dir, s("name").unwrap_or(&format!("{kind}-{}", n("seed").unwrap_or(0.0))));
+            let files = io(write_model(&dir, &nodes, &base, s("format").unwrap_or("glb"), a))?;
+            let mut out = vec![text(format!("{}\n\nZapisano:\n{}", sc.describe(), files_text(&files)))];
+            if b("preview") != Some(false) {
+                let items: Vec<RenderItem> = sc.items.iter().map(|it| RenderItem { mesh: &it.mesh, offset: [0.0; 3] }).collect();
+                let png = render_png(&items, view_of(a, View::Aerial), 1400, 900, b("night") == Some(true), n("azimuth"), n("elevation"));
+                io(std::fs::write(dir.join(format!("{base}.png")), &png))?;
+                out.push(image(&png));
+            }
+            Ok(out)
         }
         "generate_street" => {
             if let Some(p) = s("profile")
