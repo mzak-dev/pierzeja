@@ -8,3 +8,6 @@ description = "Programowy renderer podglądów PNG (bez GPU) dla Pierzei."
 pierzeja-core.workspace = true
 png = "0.18"
 serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

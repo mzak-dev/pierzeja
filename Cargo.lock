@@ -4793,6 +4793,7 @@ dependencies = [
  "pierzeja-core",
  "png",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
