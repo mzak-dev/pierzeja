@@ -15,6 +15,7 @@ pub mod materials;
 pub mod mesh;
 pub mod params;
 pub mod random;
+pub mod scene;
 pub mod street;
 
 pub use blend::{describe_mix, map_weights, normalize_weights, overall_weights, resolve_spec, unknown_archetypes, BuildingSpec, ResolvedBuilding};

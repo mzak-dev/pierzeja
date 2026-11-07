@@ -152,6 +152,38 @@ impl MeshData {
     pub fn triangles(&self) -> usize {
         self.parts.iter().map(|p| p.indices.len() / 3).sum()
     }
+
+    /// Kopia ustawiona w świecie: lokalne +x → `d`, lokalne +z (front, ulica) → `n`
+    /// (`d` = (n.z, −n.x), czyli obrót wokół Y), potem przesunięcie o `origin`.
+    pub fn placed(&self, n: [f64; 2], origin: V3) -> MeshData {
+        let d = [n[1], -n[0]];
+        let rot = |x: f64, z: f64| [x * d[0] + z * n[0], x * d[1] + z * n[1]];
+        let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
+        let parts = self
+            .parts
+            .iter()
+            .map(|p| {
+                let mut q = p.clone();
+                for v in q.positions.chunks_exact_mut(3) {
+                    let [x, z] = rot(v[0] as f64, v[2] as f64);
+                    let w = [x + origin[0], v[1] as f64 + origin[1], z + origin[2]];
+                    for k in 0..3 {
+                        lo[k] = lo[k].min(w[k]);
+                        hi[k] = hi[k].max(w[k]);
+                    }
+                    v.copy_from_slice(&w.map(|c| c as f32));
+                }
+                for v in q.normals.chunks_exact_mut(3) {
+                    let [x, z] = rot(v[0] as f64, v[2] as f64);
+                    v[0] = x as f32;
+                    v[2] = z as f32;
+                }
+                // ponytail: UV zostają w układzie lokalnym budynku (kafel tekstury i tak w metrach)
+                q
+            })
+            .collect();
+        MeshData { parts, materials: self.materials.clone(), bounds: Bounds { min: lo, max: hi } }
+    }
 }
 
 #[derive(Default)]
