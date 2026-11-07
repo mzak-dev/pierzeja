@@ -1,0 +1,10 @@
+[package]
+name = "pierzeja-render"
+version.workspace = true
+edition.workspace = true
+description = "Programowy renderer podglądów PNG (bez GPU) dla Pierzei."
+
+[dependencies]
+pierzeja-core.workspace = true
+png = "0.18"
+serde.workspace = true
