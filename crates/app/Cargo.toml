@@ -1,0 +1,11 @@
+[package]
+name = "pierzeja-app"
+version.workspace = true
+edition.workspace = true
+description = "Natywna aplikacja Pierzei: Bevy (podgląd 3D) + egui (parametry, mapa typologii)."
+
+[dependencies]
+pierzeja-core.workspace = true
+serde_json.workspace = true
+bevy = "0.20"
+bevy_egui = "0.43"
