@@ -9,3 +9,6 @@ pierzeja-core.workspace = true
 serde_json.workspace = true
 bevy = "0.20"
 bevy_egui = "0.43"
+egui-phosphor = "0.14"
+winit = { version = "0.30", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png"] }
