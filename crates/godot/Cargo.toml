@@ -1,0 +1,14 @@
+[package]
+name = "pierzeja-godot"
+version.workspace = true
+edition.workspace = true
+description = "GDExtension: generator Pierzeja w Godot (węzeł PierzejaBuilding + API dla edytora)."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pierzeja-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+godot = "0.5"

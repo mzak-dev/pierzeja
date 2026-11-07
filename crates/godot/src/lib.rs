@@ -1,0 +1,236 @@
+//! GDExtension Pierzei: generator budynków bezpośrednio w Godot.
+//!
+//! - `Pierzeja` — statyczne API (dane, mieszanie, budowa `ArrayMesh`, eksport GLB)
+//!   dla GDScript i zakładki edytora (`addons/pierzeja`).
+//! - `PierzejaBuilding` — węzeł `@tool`: zmiana `spec` w inspektorze przebudowuje budynek.
+
+use godot::classes::base_material_3d::{CullMode, Feature, Transparency};
+use godot::classes::mesh::{ArrayType, PrimitiveType};
+use godot::classes::geometry_instance_3d::ShadowCastingSetting;
+use godot::classes::{ArrayMesh, IMeshInstance3D, MeshInstance3D, ProjectSettings, StandardMaterial3D};
+use godot::prelude::*;
+use pierzeja_core::{self as pc, BuildingSpec, MatKey, MeshData};
+use serde_json::{json, Value};
+
+struct PierzejaExtension;
+
+#[gdextension]
+unsafe impl ExtensionLibrary for PierzejaExtension {}
+
+fn gs(v: &impl serde::Serialize) -> GString {
+    GString::from(serde_json::to_string(v).unwrap_or_default().as_str())
+}
+
+fn parse_spec(spec_json: &GString) -> Result<BuildingSpec, String> {
+    let s = spec_json.to_string();
+    let spec: BuildingSpec = if s.trim().is_empty() { BuildingSpec::default() } else { serde_json::from_str(&s).map_err(|e| format!("Błędny JSON spec: {e}"))? };
+    let bad = pc::unknown_archetypes(&spec);
+    if !bad.is_empty() {
+        return Err(format!("Nieznane archetypy: {}", bad.join(", ")));
+    }
+    Ok(spec)
+}
+
+fn material(m: &pc::MaterialSpec, night: bool) -> Gd<StandardMaterial3D> {
+    let mut mat = StandardMaterial3D::new_gd();
+    let mut c = Color::from_html(m.color.as_str()).unwrap_or(Color::GRAY);
+    // pręty balustrad bez tekstury alfa: półprzezroczyste jak w rendererze programowym
+    let opacity = if m.key == MatKey::Railing { 0.62 } else { m.opacity };
+    if opacity < 0.99 {
+        c.a = opacity as f32;
+        mat.set_transparency(Transparency::ALPHA);
+    }
+    mat.set_albedo(c);
+    mat.set_roughness(m.roughness as f32);
+    mat.set_metallic(m.metalness as f32);
+    if m.double_sided {
+        mat.set_cull_mode(CullMode::DISABLED);
+    }
+    if let (Some(e), true) = (m.emissive, night) {
+        mat.set_feature(Feature::EMISSION, true);
+        mat.set_emission(Color::from_html(e).unwrap_or(Color::WHITE));
+        mat.set_emission_energy_multiplier(2.0);
+    }
+    mat.set_name(m.name);
+    mat
+}
+
+/// `MeshData` → `ArrayMesh` (powierzchnia na materiał). Godot ma przednie ściany
+/// zgodnie z ruchem wskazówek zegara, glTF/rdzeń — przeciwnie, więc odwracamy indeksy.
+pub fn to_array_mesh(mesh: &MeshData, night: bool) -> Gd<ArrayMesh> {
+    let mut am = ArrayMesh::new_gd();
+    for part in &mesh.parts {
+        let Some(key) = part.material else { continue };
+        let v3 = |a: &[f32]| a.chunks_exact(3).map(|p| Vector3::new(p[0], p[1], p[2])).collect::<PackedVector3Array>();
+        let uvs: PackedVector2Array = part.uvs.chunks_exact(2).map(|p| Vector2::new(p[0], p[1])).collect();
+        let idx: PackedInt32Array = part.indices.chunks_exact(3).flat_map(|t| [t[0] as i32, t[2] as i32, t[1] as i32]).collect();
+        let mut arrays = VarArray::new();
+        arrays.resize(ArrayType::MAX.ord() as usize, &Variant::nil());
+        arrays.set(ArrayType::VERTEX.ord() as usize, &v3(&part.positions).to_variant());
+        arrays.set(ArrayType::NORMAL.ord() as usize, &v3(&part.normals).to_variant());
+        arrays.set(ArrayType::TEX_UV.ord() as usize, &uvs.to_variant());
+        arrays.set(ArrayType::INDEX.ord() as usize, &idx.to_variant());
+        am.add_surface_from_arrays(PrimitiveType::TRIANGLES, &arrays);
+        let s = am.get_surface_count() - 1;
+        if let Some(spec) = mesh.material(key) {
+            am.surface_set_material(s, &material(spec, night));
+        }
+        am.surface_set_name(s, key.as_str());
+    }
+    am
+}
+
+// ------------------------------------------------------------------ API statyczne
+
+/// Statyczne API generatora dla GDScript: `Pierzeja.build(spec_json, night)` itd.
+#[derive(GodotClass)]
+#[class(init, base=RefCounted)]
+pub struct Pierzeja;
+
+#[godot_api]
+impl Pierzeja {
+    /// Lista archetypów (JSON): id, nazwa, krótka nazwa, lata, położenie na mapie, opis.
+    #[func]
+    fn archetypes_json() -> GString {
+        let rows: Vec<Value> = pc::data().archetypes.iter().map(|a| json!({ "id": a.id, "name": a.name, "short": a.short, "years": a.years, "map": a.map, "description": a.description })).collect();
+        gs(&rows)
+    }
+
+    /// Definicje 71 parametrów (JSON) — do budowy UI.
+    #[func]
+    fn params_json() -> GString {
+        gs(&pc::data().params)
+    }
+
+    /// Grupy parametrów (5 wektorów) i zakres lat mapy typologii (JSON).
+    #[func]
+    fn groups_json() -> GString {
+        let d = pc::data();
+        gs(&json!({ "groups": d.groups, "mapYears": d.map_years, "eras": d.eras }))
+    }
+
+    #[func]
+    fn city_profiles_json() -> GString {
+        gs(&pc::data().city_profiles)
+    }
+
+    /// Mieszanie bez geometrii: `{params, weights, year, dominant}` albo `{error}`.
+    #[func]
+    fn resolve(spec_json: GString) -> GString {
+        match parse_spec(&spec_json) {
+            Ok(spec) => {
+                let r = pc::resolve_spec(&spec);
+                gs(&json!({ "params": r.params, "weights": r.weights, "year": r.year, "dominant": r.dominant, "mix": pc::describe_mix(&pc::overall_weights(&r.weights), 4) }))
+            }
+            Err(e) => gs(&json!({ "error": e })),
+        }
+    }
+
+    /// Budowa: `{mesh: ArrayMesh, stats: String(JSON), error: String}`.
+    #[func]
+    fn build(spec_json: GString, night: bool) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        match parse_spec(&spec_json) {
+            Ok(spec) => {
+                let m = pc::generate_from_spec(&spec);
+                d.set("mesh", &to_array_mesh(&m.mesh, night));
+                d.set("stats", &gs(&m.stats));
+                d.set("error", &GString::new());
+            }
+            Err(e) => d.set("error", &GString::from(e.as_str())),
+        }
+        d
+    }
+
+    /// Zapis GLB (ścieżka `res://`, `user://` albo systemowa). Zwraca komunikat błędu albo pusty tekst.
+    #[func]
+    fn export_glb(spec_json: GString, path: GString) -> GString {
+        let spec = match parse_spec(&spec_json) {
+            Ok(s) => s,
+            Err(e) => return e.as_str().into(),
+        };
+        let m = pc::generate_from_spec(&spec);
+        let name = std::path::Path::new(&path.to_string()).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or("budynek".into());
+        let glb = pc::to_glb(&[pc::ExportNode { name, mesh: &m.mesh, offset: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }]);
+        let real = ProjectSettings::singleton().globalize_path(&path).to_string();
+        match std::fs::write(&real, glb) {
+            Ok(()) => GString::new(),
+            Err(e) => format!("{real}: {e}").as_str().into(),
+        }
+    }
+}
+
+// ------------------------------------------------------------------ węzeł budynku
+
+/// Budynek generowany na żywo w edytorze i w grze. `spec` = JSON `BuildingSpec`
+/// (np. `{"archetype":"blok_plyta_5","seed":3}` albo `{"cursor":{"year":1965,"scale":0.6}}`).
+#[derive(GodotClass)]
+#[class(tool, base=MeshInstance3D)]
+pub struct PierzejaBuilding {
+    #[export(multiline)]
+    #[var(set = set_spec)]
+    spec: GString,
+    /// Okna `glassLit` świecą (emisja).
+    #[export]
+    #[var(set = set_night)]
+    night: bool,
+    /// Metryka ostatniej budowy (JSON) albo komunikat błędu.
+    #[var(no_set)]
+    stats: GString,
+    base: Base<MeshInstance3D>,
+}
+
+#[godot_api]
+impl IMeshInstance3D for PierzejaBuilding {
+    fn init(base: Base<MeshInstance3D>) -> Self {
+        Self { spec: r#"{"archetype": "kamienica_eklektyczna", "seed": 1}"#.into(), night: false, stats: GString::new(), base }
+    }
+
+    fn ready(&mut self) {
+        if self.base().get_mesh().is_none() {
+            self.rebuild();
+        }
+    }
+
+    /// Siatka powstaje ze `spec` — nie zapisuj jej w .tscn (tylko podgląd w inspektorze).
+    fn on_validate_property(&self, property: &mut godot::register::info::PropertyInfo) {
+        if property.property_name == StringName::from("mesh") {
+            property.usage = godot::register::info::PropertyUsageFlags::EDITOR | godot::register::info::PropertyUsageFlags::READ_ONLY;
+        }
+    }
+}
+
+#[godot_api]
+impl PierzejaBuilding {
+    #[func]
+    fn set_spec(&mut self, spec: GString) {
+        self.spec = spec;
+        self.rebuild();
+    }
+
+    #[func]
+    fn set_night(&mut self, night: bool) {
+        self.night = night;
+        self.rebuild();
+    }
+
+    /// Przebudowuje siatkę z bieżącego `spec`.
+    #[func]
+    fn rebuild(&mut self) {
+        let d = Pierzeja::build(self.spec.clone(), self.night);
+        let err: GString = d.get("error").map(|v| v.to::<GString>()).unwrap_or_default();
+        if !err.is_empty() {
+            godot_warn!("PierzejaBuilding: {err}");
+            self.stats = err;
+            return;
+        }
+        self.stats = d.get("stats").map(|v| v.to::<GString>()).unwrap_or_default();
+        if let Some(m) = d.get("mesh") {
+            let mesh: Gd<ArrayMesh> = m.to();
+            let mut base = self.base_mut();
+            base.set_mesh(&mesh);
+            // ściany bez grubości: cień z obu stron, inaczej oficyny rzucają tylko obrys
+            base.set_cast_shadows_setting(ShadowCastingSetting::DOUBLE_SIDED);
+        }
+    }
+}
