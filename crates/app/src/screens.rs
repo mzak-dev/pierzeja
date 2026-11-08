@@ -3,98 +3,138 @@
 
 use crate::theme::*;
 use crate::ui::{logo, Cmd};
-use crate::{out_dir, Docs, View};
+use crate::{out_dir, Docs, Fam, View};
 use bevy_egui::egui::{self, Align2, Color32, Frame, Margin, RichText, Sense, Stroke, Vec2};
 use pierzeja_core::data;
 
-/// Rysuje ekran startowy; zwraca prostokąt grafiki, w którym kamera 3D renderuje budynek.
+/// Ekran startowy ProceduraSuite: nagłówek, trzy karty trybów (Budynki / Pojazdy / Ludzie), ostatnie pliki.
 pub fn start(root: &mut egui::Ui, docs: &Docs, cmds: &mut Vec<Cmd>) {
     let area = root.available_rect_before_wrap();
-    let size = Vec2::new(area.width().min(1000.0) - 40.0, area.height().min(780.0) - 40.0);
-    let card = egui::Rect::from_center_size(area.center(), size);
-    let hero = egui::Rect::from_min_max(card.min, egui::pos2(card.right(), card.top() + card.height() * 0.42));
+    let card = egui::Rect::from_center_size(area.center(), Vec2::new(area.width().min(1120.0) - 40.0, area.height().min(760.0) - 40.0));
     root.painter().rect_filled(area, 0, BG);
-    // grafika: statyczny render sceny, kadrowany jak CSS `object-fit: cover`
-    static HERO: std::sync::OnceLock<egui::TextureHandle> = std::sync::OnceLock::new();
-    let tex = HERO.get_or_init(|| texture(root.ctx(), "splash", include_bytes!("../assets/splash.png")));
-    let (ia, ha) = (tex.aspect_ratio(), hero.aspect_ratio());
-    let uv = if ha > ia {
-        let vh = ia / ha;
-        egui::Rect::from_min_size(egui::pos2(0.0, (1.0 - vh) * 0.55), Vec2::new(1.0, vh))
-    } else {
-        let uw = ha / ia;
-        egui::Rect::from_min_size(egui::pos2((1.0 - uw) * 0.5, 0.0), Vec2::new(uw, 1.0))
-    };
-    root.painter().add(egui::epaint::RectShape::filled(hero, egui::CornerRadius { nw: 10, ne: 10, sw: 0, se: 0 }, Color32::WHITE).with_texture(tex.id(), uv));
+    let hero = egui::Rect::from_min_max(card.min, egui::pos2(card.right(), card.top() + 190.0));
     let lower = egui::Rect::from_min_max(egui::pos2(card.left(), hero.bottom()), card.max);
     let p = root.painter();
-    p.rect_filled(lower, egui::CornerRadius { nw: 0, ne: 0, sw: 10, se: 10 }, Color32::from_rgb(0x22, 0x1e, 0x1c));
-    // przejście grafiki w tło dolnej części
-    let mut m = egui::epaint::Mesh::default();
-    let (t, b) = (Color32::TRANSPARENT, Color32::from_rgba_unmultiplied(0x22, 0x1e, 0x1c, 200));
-    let g = egui::Rect::from_min_max(egui::pos2(hero.left(), hero.bottom() - 90.0), hero.max);
-    for (pos, c) in [(g.left_top(), t), (g.right_top(), t), (g.right_bottom(), b), (g.left_bottom(), b)] {
-        m.colored_vertex(pos, c);
-    }
-    m.add_triangle(0, 1, 2);
-    m.add_triangle(0, 2, 3);
-    p.add(m);
-    // przyciemnienie lewej części grafiki pod napisami
-    let mut m = egui::epaint::Mesh::default();
-    let (dk, t) = (Color32::from_black_alpha(130), Color32::TRANSPARENT);
-    let g = egui::Rect::from_min_max(hero.min, egui::pos2(hero.left() + hero.width() * 0.6, hero.bottom()));
-    for (pos, c) in [(g.left_top(), dk), (g.right_top(), t), (g.right_bottom(), t), (g.left_bottom(), dk)] {
-        m.colored_vertex(pos, c);
-    }
-    m.add_triangle(0, 1, 2);
-    m.add_triangle(0, 2, 3);
-    p.add(m);
+    p.rect_filled(hero, egui::CornerRadius { nw: 10, ne: 10, sw: 0, se: 0 }, Color32::from_rgb(0x1f, 0x22, 0x27));
+    p.rect_filled(lower, egui::CornerRadius { nw: 0, ne: 0, sw: 10, se: 10 }, Color32::from_rgb(0x1a, 0x1a, 0x1a));
+    p.hline(card.x_range(), hero.bottom(), Stroke::new(1.0, BORDER));
     p.rect_stroke(card, 10, Stroke::new(1.0, BORDER_HI), egui::StrokeKind::Outside);
-    // nagłówek na grafice
-    let o = hero.left_top() + Vec2::new(44.0, 40.0);
-    logo(p, egui::Rect::from_min_size(o, Vec2::new(190.0, 48.0)), Color32::WHITE, 3.0);
-    p.text(o + Vec2::new(0.0, 64.0), Align2::LEFT_TOP, "PIERZEJA", egui::FontId::new(46.0, bold()), Color32::WHITE);
-    p.text(o + Vec2::new(0.0, 122.0), Align2::LEFT_TOP, "Proceduralny generator zabudowy", egui::FontId::proportional(16.0), Color32::from_rgb(0xf0, 0xf0, 0xf0));
-    let badge = format!("{} · Mapa {:.0}–{:.0}", env!("CARGO_PKG_VERSION"), data().map_years[0], data().map_years[1]);
-    let gal = p.layout_no_wrap(badge, mono(13.0), Color32::WHITE);
-    let br = egui::Rect::from_min_size(egui::pos2(hero.right() - gal.size().x - 34.0, hero.top() + 18.0), gal.size() + Vec2::new(18.0, 10.0));
-    p.rect_filled(br, 6, Color32::from_rgba_unmultiplied(0x15, 0x15, 0x15, 210));
-    p.galley(br.min + Vec2::new(9.0, 5.0), gal, Color32::WHITE);
-
-    let inner = lower.shrink2(Vec2::new(44.0, 26.0));
-    let col_w = (inner.width() - 40.0) / 2.0;
-    let bottom_h = 60.0;
-    let cols = egui::Rect::from_min_max(inner.min, egui::pos2(inner.right(), inner.bottom() - bottom_h));
-    let mut left = root.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(cols.min, Vec2::new(col_w, cols.height()))));
-    left.label(RichText::new("Nowy budynek").family(bold()).size(15.0));
-    left.add_space(6.0);
-    let d = data();
-    for (id, name) in [("familok", "Familok śląski"), ("kamienica_eklektyczna", "Kamienica"), ("kamienica_modernistyczna", "Modernizm"), ("blok_poodwilzowy", "Blok 1960"), ("dworek", "Dworek")] {
-        let Some(a) = d.archetype(id) else { continue };
-        let col = crate::rgb(a.vector.get("wallColor").and_then(|v| v.as_str()).unwrap_or("#808080"));
-        if list_row(&mut left, Some(Color32::from_rgb(col[0], col[1], col[2])), None, name, &format!("{}–{}", a.years[0], a.years[1])).on_hover_text(&a.description).clicked() {
-            cmds.push(Cmd::NewBuilding(id.into()));
+    // kontury zabudowy, pojazdu i człowieka po prawej stronie nagłówka
+    let line = Stroke::new(1.5, Color32::from_rgb(0x4a, 0x4e, 0x56));
+    let gy = hero.bottom();
+    let gx = hero.right() - 560.0;
+    for (x, w, h) in [(0.0, 90.0, 80.0), (96.0, 80.0, 120.0), (182.0, 70.0, 150.0), (258.0, 90.0, 100.0)] {
+        let r = egui::Rect::from_min_max(egui::pos2(gx + x, gy - h), egui::pos2(gx + x + w, gy));
+        p.rect_stroke(r, 0, line, egui::StrokeKind::Middle);
+        for row in 0..(h / 34.0) as i32 {
+            for col in 0..(w / 34.0) as i32 {
+                p.rect_stroke(egui::Rect::from_min_size(egui::pos2(r.left() + 12.0 + col as f32 * 30.0, r.top() + 14.0 + row as f32 * 32.0), Vec2::new(16.0, 18.0)), 0, line, egui::StrokeKind::Middle);
+            }
         }
     }
-    left.add_space(4.0);
-    let r = Frame::new().stroke(Stroke::new(1.0, BORDER_HI)).corner_radius(6).show(&mut left, |ui| list_row(ui, None, Some(ic::CHART_BAR), "Nowa ulica (pierzeja)", "Ctrl+Shift+N")).inner;
-    if r.clicked() {
-        cmds.push(Cmd::NewStreet);
+    let v0 = egui::pos2(gx + 370.0, gy - 8.0);
+    p.rect_stroke(egui::Rect::from_min_size(v0 + Vec2::new(0.0, -64.0), Vec2::new(110.0, 56.0)), 3, line, egui::StrokeKind::Middle);
+    p.rect_stroke(egui::Rect::from_min_size(v0 + Vec2::new(110.0, -40.0), Vec2::new(34.0, 32.0)), 3, line, egui::StrokeKind::Middle);
+    for cx in [22.0, 120.0] {
+        p.circle_stroke(v0 + Vec2::new(cx, -4.0), 9.0, line);
+    }
+    p.circle_stroke(egui::pos2(gx + 520.0, gy - 90.0), 10.0, line);
+    p.rect_stroke(egui::Rect::from_min_max(egui::pos2(gx + 508.0, gy - 78.0), egui::pos2(gx + 532.0, gy - 2.0)), 6, line, egui::StrokeKind::Middle);
+    // marka
+    let o = hero.left_top() + Vec2::new(44.0, 34.0);
+    logo(p, egui::Rect::from_min_size(o, Vec2::new(54.0, 34.0)), Color32::WHITE, 2.5);
+    let g1 = p.layout_no_wrap("PROCEDURA".into(), egui::FontId::new(52.0, bold()), Color32::from_rgb(0xf2, 0xf2, 0xf2));
+    let w1 = g1.size().x;
+    p.galley(o + Vec2::new(0.0, 48.0), g1, Color32::WHITE);
+    p.text(o + Vec2::new(w1 + 4.0, 48.0), Align2::LEFT_TOP, "SUITE", egui::FontId::proportional(52.0), Color32::from_rgb(0xa9, 0xa9, 0xa9));
+    p.text(o + Vec2::new(0.0, 112.0), Align2::LEFT_TOP, "Proceduralny generator budynków, pojazdów i ludzi", egui::FontId::proportional(16.0), Color32::from_rgb(0xd0, 0xd0, 0xd0));
+    let badge = format!("{} · Mapa {:.0}–{:.0}", env!("CARGO_PKG_VERSION"), data().map_years[0], data().map_years[1]);
+    let gal = p.layout_no_wrap(badge, mono(12.0), DIM);
+    let br = egui::Rect::from_min_size(egui::pos2(hero.right() - gal.size().x - 34.0, hero.top() + 18.0), gal.size() + Vec2::new(18.0, 10.0));
+    p.rect(br, 6, Color32::from_rgba_unmultiplied(0x15, 0x15, 0x15, 210), Stroke::new(1.0, BORDER), egui::StrokeKind::Inside);
+    p.galley(br.min + Vec2::new(9.0, 5.0), gal, DIM);
+
+    let inner = lower.shrink2(Vec2::new(40.0, 28.0));
+    let foot_h = 58.0;
+    let cols = egui::Rect::from_min_max(inner.min, egui::pos2(inner.right(), inner.bottom() - foot_h));
+    let right_w = 230.0;
+    let gap = 14.0;
+    let cw = (cols.width() - right_w - 28.0 - 2.0 * gap) / 3.0;
+    let d = data();
+    let td = tabor_core::data();
+    let row_hint = |ui: &mut egui::Ui, text: &str| {
+        ui.label(RichText::new(text).size(12.5).color(FAINT));
+    };
+    for (i, fam) in [Fam::Budynki, Fam::Pojazdy, Fam::Ludzie].into_iter().enumerate() {
+        let rect = egui::Rect::from_min_size(cols.min + Vec2::new(i as f32 * (cw + gap), 0.0), Vec2::new(cw, cols.height().min(320.0)));
+        let mut ui = root.new_child(egui::UiBuilder::new().max_rect(rect));
+        Frame::new().fill(PANEL).stroke(Stroke::new(1.0, BORDER)).corner_radius(8).inner_margin(Margin::same(10)).show(&mut ui, |ui| {
+            ui.set_width(cw - 22.0);
+            ui.set_min_height(rect.height() - 22.0);
+            ui.horizontal(|ui| {
+                let (r, _) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::hover());
+                ui.painter().rect_filled(r, 7, fam.color().gamma_multiply(0.18));
+                let icon = match fam {
+                    Fam::Budynki => ic::BUILDINGS,
+                    Fam::Pojazdy => ic::CAR,
+                    Fam::Ludzie => ic::USER,
+                };
+                ui.painter().text(r.center(), Align2::CENTER_CENTER, icon, egui::FontId::proportional(16.0), fam.color());
+                ui.label(RichText::new(fam.label()).family(bold()).size(16.0));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let tag = format!("Ctrl {}", i + 1);
+                    let g = ui.painter().layout_no_wrap(tag, mono(11.0), DIM);
+                    let (r, _) = ui.allocate_exact_size(g.size() + Vec2::new(12.0, 6.0), Sense::hover());
+                    ui.painter().rect_stroke(r, 4, Stroke::new(1.0, BORDER_HI), egui::StrokeKind::Inside);
+                    ui.painter().galley(r.center() - g.size() / 2.0, g, DIM);
+                });
+            });
+            ui.add_space(6.0);
+            match fam {
+                Fam::Budynki => {
+                    for (id, name) in [("familok", "Familok śląski"), ("kamienica_eklektyczna", "Kamienica"), ("kamienica_modernistyczna", "Modernizm"), ("blok_poodwilzowy", "Blok 1960")] {
+                        let Some(a) = d.archetype(id) else { continue };
+                        let col = crate::rgb(a.vector.get("wallColor").and_then(|v| v.as_str()).unwrap_or("#808080"));
+                        if list_row(ui, Some(Color32::from_rgb(col[0], col[1], col[2])), None, name, &format!("{}–{}", a.years[0], a.years[1])).on_hover_text(&a.description).clicked() {
+                            cmds.push(Cmd::NewBuilding(id.into()));
+                        }
+                    }
+                    ui.add_space(4.0);
+                    let r = Frame::new().stroke(Stroke::new(1.0, BORDER_HI)).corner_radius(6).show(ui, |ui| list_row(ui, None, Some(ic::CHART_BAR), "Nowa ulica", "Ctrl+Shift+N")).inner;
+                    if r.clicked() {
+                        cmds.push(Cmd::NewStreet);
+                    }
+                }
+                Fam::Pojazdy => {
+                    for a in td.archetypes.iter().take(5) {
+                        let col = crate::rgb(a.vector.get("paintColor").and_then(|v| v.as_str()).unwrap_or("#808080"));
+                        if list_row(ui, Some(Color32::from_rgb(col[0], col[1], col[2])), None, &a.short, &format!("{}–{}", a.years[0], a.years[1])).on_hover_text(&a.description).clicked() {
+                            cmds.push(Cmd::NewVehicle(a.id.clone()));
+                        }
+                    }
+                }
+                Fam::Ludzie => {
+                    ui.add_space(4.0);
+                    row_hint(ui, "Generator Tłum (ludzie, mundury,");
+                    row_hint(ui, "pozy) — w przygotowaniu.");
+                }
+            }
+        });
     }
 
-    let mut right = root.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(egui::pos2(cols.left() + col_w + 40.0, cols.top()), Vec2::new(col_w, cols.height()))));
+    let mut right = root.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(egui::pos2(cols.right() - right_w, cols.top()), Vec2::new(right_w, cols.height()))));
     right.label(RichText::new("Ostatnie pliki").family(bold()).size(15.0));
     right.add_space(6.0);
     right.label(RichText::new("Zapis projektów (.pzj) jeszcze nie działa — tu pojawią się ostatnio otwierane pliki.").size(12.5).color(DIM));
     right.add_space(8.0);
     right.label(RichText::new("Otwarte karty").size(12.5).color(FAINT));
     for (i, t) in docs.tabs.iter().enumerate() {
-        if list_row(&mut right, None, Some(ic::FILE), &t.doc.name, t.doc.mode.label()).clicked() {
+        if list_row(&mut right, None, Some(if t.doc.mode == crate::Mode::Vehicle { ic::CAR } else { ic::FILE }), &t.doc.name, t.doc.mode.label()).clicked() {
             cmds.push(Cmd::Tab(i));
         }
     }
 
-    let foot = egui::Rect::from_min_max(egui::pos2(inner.left(), inner.bottom() - bottom_h + 14.0), inner.max);
+    let foot = egui::Rect::from_min_max(egui::pos2(inner.left(), inner.bottom() - foot_h + 14.0), inner.max);
     root.painter().hline(inner.x_range(), foot.top() - 4.0, Stroke::new(1.0, BORDER));
     let mut f = root.new_child(egui::UiBuilder::new().max_rect(foot.shrink2(Vec2::new(0.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
     f.add_enabled(false, egui::Button::new(RichText::new(format!("{}  Otwórz…", ic::FOLDER)).family(bold()).size(14.0).color(BG)).fill(Color32::from_rgb(0xf2, 0xf2, 0xf2)).min_size(Vec2::new(0.0, 34.0)))
@@ -104,6 +144,9 @@ pub fn start(root: &mut egui::Ui, docs: &Docs, cmds: &mut Vec<Cmd>) {
         if ui.add(egui::Label::new(RichText::new(format!("Wróć do edytora {}", ic::ARROW_RIGHT)).size(13.5).color(DIM)).sense(Sense::click())).clicked() {
             cmds.push(Cmd::Editor);
         }
+        ui.add_space(12.0);
+        ui.label(RichText::new("MCP · wspólny dla 3 trybów").size(12.5).color(DIM));
+        ui.label(RichText::new("●").size(10.0).color(Color32::from_rgb(0x4c, 0xc2, 0x6a)));
     });
 }
 
