@@ -1,4 +1,4 @@
-//! Serwer MCP (stdio) generatora Pierzeja — te same 9 narzędzi co prototyp.
+//! Serwer MCP (stdio) generatora Pierzeja — 9 narzędzi budynków + 4 narzędzia `tabor_*` (pojazdy).
 //! Uruchomienie: `claude mcp add pierzeja -- <ścieżka>/pierzeja-mcp.exe`.
 //! Katalog wyjściowy: `PIERZEJA_OUT` (domyślnie `~/pierzeja-out`).
 //!
@@ -11,6 +11,7 @@ use pierzeja_core::scene::{generate_scene, SceneSpec};
 use pierzeja_core::{data, describe_mix, describe_street, generate_from_spec, generate_street, overall_weights, to_glb, to_obj, unknown_archetypes, BuildingModel, BuildingSpec, ExportNode, StreetSpec, GROUP_IDS};
 use pierzeja_render::{render_scene, RenderItem, RenderOptions, View};
 use serde_json::{json, Map, Value};
+use tabor_core::{generate as tabor_generate, to_glb as tabor_glb, TaborSpec, VehicleModel};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
@@ -54,6 +55,21 @@ fn spec_props() -> Map<String, Value> {
         Value::Object(m) => m,
         _ => unreachable!(),
     }
+}
+
+fn tabor_props() -> Map<String, Value> {
+    let ids: Vec<&str> = tabor_core::data().archetypes.iter().map(|a| a.id.as_str()).collect();
+    let mut m = spec_props();
+    for k in ["footprint", "regulations", "groupWeights", "groupCursors"] {
+        m.shift_remove(k);
+    }
+    m.insert("archetype".into(), json!({ "type": "string", "enum": ids, "description": "Jeden archetyp Tabora w 100%" }));
+    m.insert("cursor".into(), json!({ "type": "object", "properties": {
+        "year": { "type": "number", "description": "Rok designu (oś X mapy Tabora)" },
+        "scale": { "type": "number", "minimum": 0, "maximum": 1, "description": "Klasa wielkości: 0 = małe auto, 1 = ciężkie" } }, "required": ["year", "scale"] }));
+    m.insert("weights".into(), json!({ "type": "object", "additionalProperties": { "type": "number", "minimum": 0 }, "description": "Wagi archetypów Tabora, np. {\"hatchback\": 0.6, \"suv\": 0.4}" }));
+    m.insert("overrides".into(), json!({ "type": "object", "additionalProperties": { "type": ["number", "string"] }, "description": "Ręczne wartości parametrów Tabora (klucze z tabor_describe_archetype)" }));
+    m
 }
 
 fn view_prop() -> Value {
@@ -101,6 +117,13 @@ fn tools() -> Value {
             "profile": { "type": "string", "enum": profiles }, "weights": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
             "count": { "type": "integer", "minimum": 1, "maximum": 40 }, "seed": { "type": "integer", "minimum": 0 }, "mixing": { "type": "number", "minimum": 0, "maximum": 1 },
             "variation": { "type": "number", "minimum": 0, "maximum": 1 }, "format": fmt, "preview": { "type": "boolean" }, "view": view_prop(), "night": { "type": "boolean" }, "name": { "type": "string" } })), &[], false),
+        tool("tabor_list_archetypes", "Lista archetypów pojazdów", "Archetypy Tabora (osobówki, van, podwozia służb): id, nazwa, lata designu, położenie na mapie rok × klasa, opis. Id służą jako klucze wag w tabor_generate i tabor_render.", Map::new(), &[], true),
+        tool("tabor_describe_archetype", "Opis archetypu pojazdu", "Szczegóły archetypu pojazdu: opis, cechy, źródła oraz pełny wektor parametrów.", with(Map::new(), json!({ "id": { "type": "string", "description": "Id archetypu Tabora" } })), &["id"], true),
+        tool("tabor_generate", "Generuj pojazd", "Generuje pojazd ze specyfikacji, zapisuje .glb (węzły Body, Wheel_FL/FR/RL/RR, Seat_N) i .json, zwraca metrykę i podgląd PNG. Origin = środek między osiami na gruncie, przód +Z.", with(tabor_props(), json!({
+            "preview": { "type": "boolean", "description": "Dołącz podgląd PNG (domyślnie true)" }, "view": view_prop(), "name": { "type": "string", "description": "Nazwa plików (bez rozszerzenia)" } })), &[], false),
+        tool("tabor_render", "Podgląd pojazdu", "Renderuje pojazd do PNG (renderer programowy z cieniami), także nocą ze świecącymi reflektorami.", with(tabor_props(), json!({
+            "view": view_prop(), "width": { "type": "integer", "minimum": 160, "maximum": 2000 }, "height": { "type": "integer", "minimum": 120, "maximum": 2000 },
+            "night": { "type": "boolean" }, "azimuth": { "type": "number", "description": "Azymut kamery w stopniach" }, "elevation": { "type": "number", "minimum": -5, "maximum": 89 } })), &[], false),
     ])
 }
 
@@ -131,6 +154,32 @@ fn to_spec(args: &Value) -> Result<(BuildingSpec, Vec<String>), String> {
     let bad_keys: Vec<&String> = spec.mix.overrides.iter().flat_map(|o| o.keys()).filter(|k| data().param(k).is_none()).collect();
     let warnings = if bad_keys.is_empty() { vec![] } else { vec![format!("Pominięto nieznane parametry: {} (lista: get_parameter_schema).", bad_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))] };
     Ok((spec, warnings))
+}
+
+fn tabor_spec(args: &Value) -> Result<TaborSpec, String> {
+    let keys = ["archetype", "weights", "cursor", "overrides", "seed", "variation", "sharpness", "neighbors"];
+    let m: Map<String, Value> = keys.iter().filter_map(|k| args.get(*k).map(|v| (k.to_string(), v.clone()))).collect();
+    let spec: TaborSpec = serde_json::from_value(Value::Object(m)).map_err(|e| format!("Błędna specyfikacja: {e}"))?;
+    let td = tabor_core::data();
+    let bad: Vec<&str> = spec.mix.archetype.iter().map(String::as_str).chain(spec.mix.weights.iter().flat_map(|w| w.keys().map(String::as_str))).filter(|k| td.archetype(k).is_none()).collect();
+    if !bad.is_empty() {
+        return Err(format!("Nieznane archetypy Tabora: {}. Dostępne: {}.", bad.join(", "), td.archetypes.iter().map(|a| a.id.as_str()).collect::<Vec<_>>().join(", ")));
+    }
+    Ok(spec)
+}
+
+/// Nadwozie + 4 koła (jedna siatka koła, offset = piasta).
+fn tabor_items(m: &VehicleModel) -> Vec<RenderItem<'_>> {
+    let mut v = vec![RenderItem { mesh: &m.body, offset: [0.0; 3] }];
+    v.extend(m.wheels.iter().map(|(_, p)| RenderItem { mesh: &m.wheel, offset: *p }));
+    v
+}
+
+fn tabor_stats_text(m: &VehicleModel, spec: &TaborSpec) -> String {
+    let w = &tabor_core::resolve(spec).weights;
+    let mix = w.values().next().map(|g| g.iter().filter(|(_, v)| **v > 0.01).map(|(k, v)| format!("{k} {:.0}%", v * 100.0)).collect::<Vec<_>>().join(", ")).unwrap_or_default();
+    let s = &m.stats;
+    format!("Nadwozie: {} · mieszanka: {mix}\n{} × {} × {} m (dł. × szer. × wys.) · rozstaw osi {} m · koła R {} m · Miejsca {} · trójkąty {}", s.body_type, r2(s.length), r2(s.width), r2(s.height), r2(s.wheelbase), r2(s.wheel_radius), s.seats, s.triangles)
 }
 
 fn arch_ids() -> String {
@@ -379,6 +428,44 @@ fn call(name: &str, a: &Value) -> ToolResult {
             }
             Ok(out)
         }
+        "tabor_list_archetypes" => {
+            let rows: Vec<Value> = tabor_core::data().archetypes.iter().map(|x| json!({ "id": x.id, "name": x.name, "years": x.years, "map": x.map, "description": x.description })).collect();
+            Ok(vec![text(pretty(&rows))])
+        }
+        "tabor_describe_archetype" => {
+            let id = s("id").unwrap_or_default();
+            let x = tabor_core::data().archetype(id).ok_or_else(|| format!("Nieznany archetyp Tabora „{id}”."))?;
+            Ok(vec![text(pretty(x))])
+        }
+        "tabor_generate" => {
+            let spec = tabor_spec(a)?;
+            let m = tabor_generate(&spec);
+            let tag = spec.mix.archetype.clone().unwrap_or_else(|| "pojazd".into());
+            io(std::fs::create_dir_all(&dir))?;
+            let base = unique_base(&dir, s("name").unwrap_or(&format!("tabor-{tag}-{}", spec.mix.seed.unwrap_or(1.0))));
+            let glb = dir.join(format!("{base}.glb"));
+            let js = dir.join(format!("{base}.json"));
+            io(std::fs::write(&glb, tabor_glb(&m)))?;
+            io(std::fs::write(&js, pretty(&spec)))?;
+            let mut out = vec![text(format!("{}\n\nZapisano:\n{}", tabor_stats_text(&m, &spec), files_text(&[glb, js])))];
+            if b("preview") != Some(false) {
+                let png = render_png(&tabor_items(&m), view_of(a, View::Iso), 960, 640, false, None, None);
+                io(std::fs::write(dir.join(format!("{base}.png")), &png))?;
+                out.push(image(&png));
+            }
+            Ok(out)
+        }
+        "tabor_render" => {
+            let spec = tabor_spec(a)?;
+            let m = tabor_generate(&spec);
+            let night = b("night") == Some(true);
+            let png = render_png(&tabor_items(&m), view_of(a, View::Iso), n("width").unwrap_or(960.0) as u32, n("height").unwrap_or(640.0) as u32, night, n("azimuth"), n("elevation"));
+            io(std::fs::create_dir_all(&dir))?;
+            let tag = spec.mix.archetype.clone().unwrap_or_else(|| "pojazd".into());
+            let p = dir.join(format!("{}.png", unique_base(&dir, &format!("tabor-{tag}-{}-{}{}", spec.mix.seed.unwrap_or(1.0), s("view").unwrap_or("iso"), if night { "-noc" } else { "" }))));
+            io(std::fs::write(&p, &png))?;
+            Ok(vec![text(format!("{}\n\nPNG: {}", tabor_stats_text(&m, &spec), p.display())), image(&png)])
+        }
         _ => Err(format!("Nieznane narzędzie „{name}”.")),
     }
 }
@@ -393,7 +480,7 @@ fn handle(msg: &Value) -> Option<Value> {
             "protocolVersion": params.get("protocolVersion").cloned().unwrap_or(json!("2025-06-18")),
             "capabilities": { "tools": {} },
             "serverInfo": { "name": "pierzeja", "version": VERSION },
-            "instructions": format!("Proceduralny generator budynków typowych dla polskich miast 1800–2015 (dworek, kamienice, familok, wille, socrealizm, bloki z wielkiej płyty, falowiec, dom-kostka, plomby, apartamentowce, stodoła). Budynek opisują wagi 19 archetypów, osobno dla 5 wektorów (massing, storeys, roof, facade, material); wartości pomiędzy archetypami są interpolowane. Zacznij od list_archetypes, potem generate_building lub render_building. Modele zapisują się w {}.", out_dir().display()),
+            "instructions": format!("Proceduralny generator budynków typowych dla polskich miast 1800–2015 (dworek, kamienice, familok, wille, socrealizm, bloki z wielkiej płyty, falowiec, dom-kostka, plomby, apartamentowce, stodoła). Budynek opisują wagi 19 archetypów, osobno dla 5 wektorów (massing, storeys, roof, facade, material); wartości pomiędzy archetypami są interpolowane. Zacznij od list_archetypes, potem generate_building lub render_building. Modele zapisują się w {}. Pojazdy (Tabor): tabor_list_archetypes, tabor_generate, tabor_render.", out_dir().display()),
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tools() }),

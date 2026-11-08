@@ -126,6 +126,7 @@ pub fn ribbon_def(tab: RibbonTab, doc: &Doc, view: &View) -> Vec<(&'static str, 
                 ),
                 ("Ulica", vec![m(ic::ROAD_HORIZON, "Pierzeja", Mode::Street), Rb { enabled: doc.mode == Mode::Street, ..rb(ic::ARCHIVE, "Gzyms", Cmd::Item(Item::Gzyms), view.item == Some(Item::Gzyms)) }]),
                 ("Sceny", vec![m(ic::DOTS_NINE, "Osiedle", Mode::Estate), m(ic::INTERSECT, "Skrzyżowanie", Mode::Crossroads), m(ic::CIRCLE, "Rondo", Mode::Roundabout)]),
+                ("Tabor", vec![m(ic::CAR, "Pojazd", Mode::Vehicle)]),
             ]
         }
         RibbonTab::Render => vec![
@@ -297,6 +298,7 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             let d = docs.cur();
             let s = match d.mode.scene() {
                 Some(k) => serde_json::to_string_pretty(&d.scene_spec(k)),
+                None if d.mode == Mode::Vehicle => serde_json::to_string_pretty(&d.vehicle_spec()),
                 None if d.mode == Mode::Street => serde_json::to_string_pretty(&d.street_spec()),
                 None => serde_json::to_string_pretty(&d.spec()),
             };
@@ -1026,6 +1028,20 @@ fn street_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
                     let mm = prof.is_some_and(|p| (p.mixing - doc.mixing).abs() > 1e-9);
                     prop_row(ui, "Mieszanie typów", mm, Some("Szansa, że budynek jest mieszanką dwóch archetypów"), |ui| num_field(ui, &mut doc.mixing, 0.0..=1.0, 0.01, 2, "×", mm));
                     seed_row(ui, &mut doc.street_seed);
+                }
+                Mode::Vehicle => {
+                    let td = tabor_core::data();
+                    let cur = td.archetype(&doc.vehicle);
+                    prop_row(ui, "Typ", false, cur.map(|a| a.description.as_str()), |ui| {
+                        egui::ComboBox::from_id_salt("pojazd").width(124.0).truncate().selected_text(cur.map_or(doc.vehicle.clone(), |a| a.name.clone())).show_ui(ui, |ui| {
+                            for a in &td.archetypes {
+                                if ui.selectable_label(doc.vehicle == a.id, &a.name).on_hover_text(&a.description).clicked() {
+                                    doc.vehicle = a.id.clone();
+                                }
+                            }
+                        });
+                    });
+                    seed_row(ui, &mut doc.scene_seed);
                 }
                 Mode::Estate => {
                     prop_row(ui, "Odstęp rzędów", doc.spacing != 1.5, Some("WT 2002 § 13: co najmniej wysokość budynku przesłaniającego; osiedla PRL zwykle 1,5–2 H"), |ui| { let m = doc.spacing != 1.5; num_field(ui, &mut doc.spacing, 0.8..=3.0, 0.05, 2, "× H", m) });

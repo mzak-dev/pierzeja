@@ -4765,6 +4765,7 @@ dependencies = [
  "image",
  "pierzeja-core",
  "serde_json",
+ "tabor-core",
  "winit",
 ]
 
@@ -4786,6 +4787,7 @@ dependencies = [
  "pierzeja-core",
  "serde",
  "serde_json",
+ "tabor-core",
 ]
 
 [[package]]
@@ -4797,6 +4799,7 @@ dependencies = [
  "pierzeja-render",
  "serde",
  "serde_json",
+ "tabor-core",
 ]
 
 [[package]]

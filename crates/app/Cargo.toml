@@ -6,6 +6,7 @@ description = "Natywna aplikacja Pierzei: Bevy (podgląd 3D) + egui (parametry, 
 
 [dependencies]
 pierzeja-core.workspace = true
+tabor-core.workspace = true
 serde_json.workspace = true
 bevy = "0.20"
 bevy_egui = "0.43"
