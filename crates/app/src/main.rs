@@ -62,6 +62,11 @@ fn initial_state() -> (Docs, View) {
             doc.use_poly = true;
             view.item = Some(Item::Dzialka);
         }
+        "pojazd" => {
+            doc = Doc::street(Mode::Vehicle);
+            view.ribbon = RibbonTab::Ulica;
+            view.item = Some(Item::Scena);
+        }
         "ulica" | "osiedle" | "skrzyzowanie" | "rondo" => {
             doc = Doc::street(match m.as_str() {
                 "osiedle" => Mode::Estate,
@@ -116,6 +121,8 @@ pub enum Mode {
     Estate,
     Crossroads,
     Roundabout,
+    /// Pojazd z Tabora (`Doc::vehicle` = archetyp, ziarno = `scene_seed`).
+    Vehicle,
 }
 
 impl Mode {
@@ -134,6 +141,7 @@ impl Mode {
             Mode::Estate => "Osiedle",
             Mode::Crossroads => "Skrzyżowanie",
             Mode::Roundabout => "Rondo",
+            Mode::Vehicle => "Pojazd",
         }
     }
 }
@@ -211,6 +219,8 @@ pub struct Doc {
     pub rows: u32,
     pub arm: f64,
     pub scene_seed: u32,
+    // pojazd (Tabor)
+    pub vehicle: String,
 }
 
 impl Doc {
@@ -237,6 +247,7 @@ impl Doc {
             rows: 3,
             arm: 90.0,
             scene_seed: 11,
+            vehicle: tabor_core::data().default_archetype.clone(),
         }
     }
     pub fn street(mode: Mode) -> Doc {
@@ -284,6 +295,9 @@ impl Doc {
             mixing: Some(self.mixing),
             ..Default::default()
         }
+    }
+    pub fn vehicle_spec(&self) -> tabor_core::TaborSpec {
+        serde_json::from_value(json!({ "archetype": self.vehicle, "seed": self.scene_seed })).expect("TaborSpec")
     }
     pub fn scene_spec(&self, kind: SceneKind) -> SceneSpec {
         SceneSpec { kind, seed: Some(self.scene_seed as f64), spacing: Some(self.spacing), rows: Some(self.rows), profile: Some(self.profile.clone()), arm: Some(self.arm), variation: None }
@@ -656,14 +670,15 @@ fn regenerate(
         return;
     }
     let reframe = der.last.as_ref().is_none_or(|(i, d, _)| {
-        *i != docs.active || d.mode != doc.mode || d.source != doc.source || d.use_poly != doc.use_poly || (doc.mode != Mode::Building && (d.profile != doc.profile || d.count != doc.count || d.rows != doc.rows))
+        *i != docs.active || d.mode != doc.mode || d.source != doc.source || d.vehicle != doc.vehicle || d.use_poly != doc.use_poly || (doc.mode != Mode::Building && (d.profile != doc.profile || d.count != doc.count || d.rows != doc.rows))
     });
     der.last = Some((docs.active, doc.clone(), night));
     view.reframe |= reframe;
     for e in &old {
         commands.entity(e).despawn();
     }
-    let (b, c, m) = (&mut commands, &mut *meshes, &mut *materials);
+    let (b, c, m_) = (&mut commands, &mut *meshes, &mut *materials);
+    let m = &mut *m_;
     der.parcels.clear();
     der.stats = None;
     let bounds = if let Some(kind) = doc.mode.scene() {
@@ -671,6 +686,19 @@ fn regenerate(
         der.tris = sc.items.iter().map(|it| spawn_mesh(b, c, m, &it.mesh, Vec3::ZERO, night)).sum();
         der.info = sc.describe();
         sc.bounds
+    } else if doc.mode == Mode::Vehicle {
+        let m = tabor_core::generate(&doc.vehicle_spec());
+        let mut tris = spawn_mesh(b, c, m_, &m.body, Vec3::ZERO, night);
+        for (_, h) in &m.wheels {
+            tris += spawn_mesh(b, c, m_, &m.wheel, Vec3::new(h[0] as f32, h[1] as f32, h[2] as f32), night);
+        }
+        der.tris = tris;
+        let st = &m.stats;
+        der.info = format!(
+            "Pojazd\n• Nadwozie — {}\n• Wymiary — {:.2} × {:.2} × {:.2} m\n• Rozstaw osi — {:.2} m\n• Miejsca — {}",
+            st.body_type, st.length, st.width, st.height, st.wheelbase, st.seats
+        );
+        m.bounds()
     } else if doc.mode == Mode::Street {
         let street = pc::generate_street(&doc.street_spec());
         let mut tris = 0;
@@ -770,7 +798,7 @@ fn orbit(
                 orbit.dist = ((max.x - min.x - 40.0) / (0.75 * aspect)).max(size.y * 2.2) * 1.75;
                 orbit.target = Vec3::new((min.x + max.x) / 2.0, orbit.dist * 0.75 * 0.2, 0.0);
             }
-            Mode::Building => {
+            Mode::Building | Mode::Vehicle => {
                 (orbit.yaw, orbit.pitch) = (34f32.to_radians(), 17f32.to_radians());
                 orbit.dist *= 0.92;
             }
@@ -832,6 +860,8 @@ pub fn export_glb(doc: &Doc) -> Result<PathBuf, String> {
             .map(|(i, it)| pc::ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, parent: None, rotation: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
             .collect();
         pc::to_glb(&nodes)
+    } else if doc.mode == Mode::Vehicle {
+        tabor_core::to_glb(&tabor_core::generate(&doc.vehicle_spec()))
     } else if doc.mode == Mode::Street {
         let street = pc::generate_street(&doc.street_spec());
         let mut nodes: Vec<pc::ExportNode> = street
