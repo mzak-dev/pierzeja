@@ -32,7 +32,7 @@ fn polygon_buildings_are_valid_and_deterministic() {
         assert!(finite(&a.mesh), "{c}");
         assert!(a.stats.triangles > 300, "{c}: {}", a.stats.triangles);
         assert!(!a.stats.notes.iter().any(|n| n.contains("nieprawidłowy")), "{c}");
-        let glb = |m: &BuildingModel| to_glb(&[ExportNode { name: "x".into(), mesh: &m.mesh, offset: None, extras: None }]);
+        let glb = |m: &BuildingModel| to_glb(&[ExportNode { name: "x".into(), mesh: &m.mesh, offset: None, parent: None, rotation: None, extras: None }]);
         assert_eq!(glb(&a), glb(&b), "{c}");
     }
     // pole zabudowy = pole obrysu

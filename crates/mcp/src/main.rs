@@ -246,7 +246,7 @@ fn call(name: &str, a: &Value) -> ToolResult {
             let (spec, warnings) = to_spec(a)?;
             let m = generate_from_spec(&spec);
             let base = unique_base(&dir, s("name").unwrap_or(&format!("{}-{}", m.resolved.dominant, m.resolved.seed)));
-            let node = ExportNode { name: base.clone(), mesh: &m.mesh, offset: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) };
+            let node = ExportNode { name: base.clone(), mesh: &m.mesh, offset: None, parent: None, rotation: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) };
             let files = io(write_model(&dir, &[node], &base, s("format").unwrap_or("glb"), &serde_json::to_value(&spec).unwrap()))?;
             let warn = if warnings.is_empty() { String::new() } else { format!("\n\n{}", warnings.join("\n")) };
             let mut out = vec![text(format!("{}\n\nZapisano:\n{}{warn}", stats_text(&m), files_text(&files)))];
@@ -314,7 +314,7 @@ fn call(name: &str, a: &Value) -> ToolResult {
             let mut files = vec![dir.join(format!("{base}.png"))];
             io(std::fs::write(&files[0], &png))?;
             if b("save_glb") == Some(true) {
-                let nodes: Vec<ExportNode> = models.iter().map(|(m, o, t)| ExportNode { name: format!("t{}", (t * 100.0).round()), mesh: &m.mesh, offset: Some(*o), extras: None }).collect();
+                let nodes: Vec<ExportNode> = models.iter().map(|(m, o, t)| ExportNode { name: format!("t{}", (t * 100.0).round()), mesh: &m.mesh, offset: Some(*o), parent: None, rotation: None, extras: None }).collect();
                 let p = dir.join(format!("{base}.glb"));
                 io(std::fs::write(&p, to_glb(&nodes)))?;
                 files.push(p);
@@ -331,7 +331,7 @@ fn call(name: &str, a: &Value) -> ToolResult {
                 .items
                 .iter()
                 .enumerate()
-                .map(|(i, it)| ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
+                .map(|(i, it)| ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, parent: None, rotation: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
                 .collect();
             let kind = s("kind").unwrap_or("estate");
             let base = unique_base(&dir, s("name").unwrap_or(&format!("{kind}-{}", n("seed").unwrap_or(0.0))));
@@ -362,9 +362,9 @@ fn call(name: &str, a: &Value) -> ToolResult {
             let mut nodes: Vec<ExportNode> = st
                 .buildings
                 .iter()
-                .map(|b| ExportNode { name: format!("{:02}-{}", b.index + 1, b.archetype), mesh: &b.model.mesh, offset: Some(b.offset), extras: Some(json!({ "spec": b.spec, "stats": b.model.stats })) })
+                .map(|b| ExportNode { name: format!("{:02}-{}", b.index + 1, b.archetype), mesh: &b.model.mesh, offset: Some(b.offset), parent: None, rotation: None, extras: Some(json!({ "spec": b.spec, "stats": b.model.stats })) })
                 .collect();
-            nodes.push(ExportNode { name: "ulica".into(), mesh: &st.context, offset: None, extras: None });
+            nodes.push(ExportNode { name: "ulica".into(), mesh: &st.context, offset: None, parent: None, rotation: None, extras: None });
             let base = unique_base(&dir, s("name").unwrap_or(&format!("ulica-{}-{}", s("profile").or(st.profile.map(|p| p.id.as_str())).unwrap_or("wlasna"), n("seed").unwrap_or(7.0))));
             let specs: Vec<&BuildingSpec> = st.buildings.iter().map(|b| &b.spec).collect();
             let files = io(write_model(&dir, &nodes, &base, s("format").unwrap_or("glb"), &json!({ "street": a, "buildings": specs })))?;
