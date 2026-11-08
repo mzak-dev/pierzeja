@@ -1,0 +1,11 @@
+[package]
+name = "tabor-core"
+version.workspace = true
+edition.workspace = true
+description = "Tabor: proceduralny generator pojazdów (ProceduraSuite) — dane i rdzeń bez zależności od silnika."
+
+[dependencies]
+procedura-kit.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

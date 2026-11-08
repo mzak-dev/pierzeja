@@ -1,6 +1,7 @@
 //! Model danych generatora: parametry pogrupowane w wektory, archetypy, epoki.
 //! Każde narzędzie wczytuje własny `<narzędzie>-dane.json` do `Dataset`.
 
+use crate::mix::normalize_params;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -58,6 +59,9 @@ pub struct MapPoint {
 pub struct SourceRef {
     pub title: String,
     pub url: String,
+    /// `true` = wartość ze źródła ([Ź] w raporcie), `false` = szacunek ([S]); brak = nieoznaczone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,8 +75,10 @@ pub struct Archetype {
     pub features: Vec<String>,
     pub sources: Vec<SourceRef>,
     /// Tylko wartości różne od domyślnych.
+    #[serde(default)]
     pub overrides: ParamMap,
-    /// Pełny, znormalizowany wektor.
+    /// Pełny, znormalizowany wektor; gdy brak w JSON, liczy go `Dataset::load`.
+    #[serde(default)]
     pub vector: ParamMap,
 }
 
@@ -104,6 +110,18 @@ pub struct Dataset {
 }
 
 impl Dataset {
+    /// Wczytuje JSON i uzupełnia puste `vector` archetypów jako `normalize_params(defaults + overrides)`.
+    /// Panikuje na błędnym JSON (dane są wkompilowane, błąd = błąd programisty).
+    pub fn load(json: &str) -> Dataset {
+        let mut ds: Dataset = serde_json::from_str(json).expect("dane generatora (JSON)");
+        let fill: Vec<Option<ParamMap>> = ds.archetypes.iter().map(|a| a.vector.is_empty().then(|| normalize_params(&ds, &a.overrides))).collect();
+        for (a, v) in ds.archetypes.iter_mut().zip(fill) {
+            if let Some(v) = v {
+                a.vector = v;
+            }
+        }
+        ds
+    }
     pub fn archetype(&self, id: &str) -> Option<&Archetype> {
         self.archetypes.iter().find(|a| a.id == id)
     }
