@@ -97,7 +97,7 @@ fn hair_shell(style: &str) -> Option<Shell> {
     Some(match style {
         "buzz" => Shell { m: 2, ..shell(0.66, 0.50, 0.004) },
         "fade" => shell(0.64, 0.38, 0.006),
-        "krotkie_klasyczne" | "kok" | "kucyk" => Shell { m: 4, ..shell(0.70, 0.30, 0.014) },
+        "krotkie_klasyczne" | "kok" | "kucyk" => Shell { m: 4, ..shell(0.70, 0.30, 0.02) },
         "medium" | "dlugie" => shell(0.62, 0.12, 0.018),
         "bob" => Shell { flare: 0.012, ..shell(0.62, 0.0, 0.02) },
         "lysiejacy" => Shell { top: 0.62, ..shell(0.62, 0.30, 0.012) },
@@ -124,7 +124,7 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P, hs: f
     let hd = &sk[idx(sk, "Head")];
     let l = hd.tail[1] - hd.head[1];
     // głowa rośnie w dół (do szyi), żeby czubek zostawał w `height`
-    let pr = Prof { y0: hd.tail[1] - l * hs, h: l * hs, k: sc.sv * hs * 1.05 };
+    let pr = Prof { y0: hd.tail[1] - l * hs, h: l * hs, k: sc.sv * hs * 1.4 };
 
     let skull: Vec<Vec<V3>> = SKULL.iter().map(|s| pr.ring(s.0, 0.0)).collect();
     mb.loft(MatKey::Skin, &skull, false);
