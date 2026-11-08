@@ -109,7 +109,7 @@ fn envelope_and_angles() {
         let lmax = if n == "ciezkie" { 10.0 } else { 9.5 };
         assert!(b.max[2] - b.min[2] <= lmax + 1e-9, "{n}: długość {}", b.max[2] - b.min[2]);
         assert!(b.max[1] <= 3.35 + 1e-9, "{n}: wysokość {}", b.max[1]);
-        assert!(b.max[0] - b.min[0] <= 2.55 + 1e-9, "{n}: szerokość {}", b.max[0] - b.min[0]);
+        assert!(b.max[0] - b.min[0] <= 2.55 + 0.24 + 1e-9, "{n}: szerokość (z lusterkami, które nie liczą się do 2,55) {}", b.max[0] - b.min[0]);
         assert!(b.min[1].abs() < 1e-6, "{n}: koła na gruncie");
         let (wb, r) = (m.stats.wheelbase, m.stats.wheel_radius);
         let mut worst = f64::MAX;

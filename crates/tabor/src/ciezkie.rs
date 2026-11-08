@@ -167,7 +167,7 @@ pub(crate) fn extra_materials(p: &P) -> Vec<MaterialSpec> {
 pub(crate) fn seat_points(p: &P) -> Vec<V3> {
     let d = D::new(p);
     let y = 2.0 * d.r + 0.15 + 0.4;
-    let hwc = d.w / 2.0 - 0.09;
+    let hwc = d.w / 2.0 - 0.03;
     let row = |n: usize, z: f64, out: &mut Vec<V3>| {
         let pitch = ((2.0 * hwc - 0.3) / n as f64).min(1.2);
         let x0 = if n == 1 { 0.5 * pitch } else { (n - 1) as f64 / 2.0 * pitch };
@@ -325,7 +325,7 @@ fn frame(mb: &mut MeshBuilder, d: &D) {
 /// Kabina: loft ze stacji (profil boku z nadkolem, szyba pochylona wg `windshieldAngle`),
 /// potem okna, drzwi, lampy, grill, lusterka, stopnie.
 fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> usize {
-    let hwc = d.w / 2.0 - 0.09;
+    let hwc = d.w / 2.0 - 0.03;
     let (zc, zb, top, ycb) = (d.zc, d.zb, d.cab_top, d.ycb);
     let ywsb = ycb + 0.38 * (top - ycb);
     let ybel = ywsb + 0.1;
@@ -419,7 +419,7 @@ fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> usize {
 
     // lusterka (do szerokości całkowitej) i stopnie
     for side in [1.0f64, -1.0] {
-        let (xa, xb) = (hwc * side, d.w / 2.0 * side);
+        let (xa, xb) = (hwc * side, (d.w / 2.0 + 0.12) * side);
         let zm = zc - 0.3;
         let ym = ywsb + 0.25;
         mb.bx(MatKey::Plastic, [xa.min(xb), ym + 0.05, zm - 0.03], [xa.max(xb), ym + 0.08, zm + 0.03]);
