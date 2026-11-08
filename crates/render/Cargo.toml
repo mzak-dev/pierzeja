@@ -12,3 +12,4 @@ serde.workspace = true
 [dev-dependencies]
 serde_json.workspace = true
 tabor-core.workspace = true
+tlum-core.workspace = true
