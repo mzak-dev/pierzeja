@@ -4,7 +4,9 @@
 //! origin = środek między osiami na gruncie.
 
 mod body;
+mod ciezkie;
 mod wheel;
+mod zabudowa;
 
 use indexmap::IndexMap;
 use procedura_kit::color::adjust_hex;
@@ -140,10 +142,14 @@ fn seat_points(p: &P) -> Vec<V3> {
 pub fn generate(spec: &TaborSpec) -> VehicleModel {
     let r = resolve(spec);
     let p = P(&r.params);
-    let mats = materials(&p, r.seed);
+    let heavy = p.s("bodyType") == "podwozie";
+    let mut mats = materials(&p, r.seed);
+    if heavy {
+        mats.extend(ciezkie::extra_materials(&p));
+    }
 
     let mut mb = MeshBuilder::default();
-    let layout = body::build(&p, r.seed, &mut mb);
+    let layout = if heavy { ciezkie::build(&p, r.seed, &mut mb) } else { body::build(&p, r.seed, &mut mb) };
     let body = mb.build(mats.clone());
     let wheel = wheel::build(&p, mats);
 
@@ -154,7 +160,7 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
         ("Wheel_RL", [hub_x, rad, -layout.wheelbase / 2.0]),
         ("Wheel_RR", [-hub_x, rad, -layout.wheelbase / 2.0]),
     ];
-    let seats = seat_points(&p);
+    let seats = if heavy { ciezkie::seat_points(&p) } else { seat_points(&p) };
     let mut m = VehicleModel {
         body,
         wheel,
