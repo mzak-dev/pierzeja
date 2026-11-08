@@ -152,7 +152,7 @@ impl Pierzeja {
         };
         let m = pc::generate_from_spec(&spec);
         let name = std::path::Path::new(&path.to_string()).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or("budynek".into());
-        let glb = pc::to_glb(&[pc::ExportNode { name, mesh: &m.mesh, offset: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }]);
+        let glb = pc::to_glb(&[pc::ExportNode { name, mesh: &m.mesh, offset: None, parent: None, rotation: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }]);
         let real = ProjectSettings::singleton().globalize_path(&path).to_string();
         match std::fs::write(&real, glb) {
             Ok(()) => GString::new(),

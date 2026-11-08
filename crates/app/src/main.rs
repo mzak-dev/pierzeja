@@ -829,7 +829,7 @@ pub fn export_glb(doc: &Doc) -> Result<PathBuf, String> {
             .items
             .iter()
             .enumerate()
-            .map(|(i, it)| pc::ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
+            .map(|(i, it)| pc::ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, parent: None, rotation: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
             .collect();
         pc::to_glb(&nodes)
     } else if doc.mode == Mode::Street {
@@ -837,14 +837,14 @@ pub fn export_glb(doc: &Doc) -> Result<PathBuf, String> {
         let mut nodes: Vec<pc::ExportNode> = street
             .buildings
             .iter()
-            .map(|b| pc::ExportNode { name: format!("{:02}-{}", b.index + 1, b.archetype), mesh: &b.model.mesh, offset: Some(b.offset), extras: Some(json!({ "spec": b.spec })) })
+            .map(|b| pc::ExportNode { name: format!("{:02}-{}", b.index + 1, b.archetype), mesh: &b.model.mesh, offset: Some(b.offset), parent: None, rotation: None, extras: Some(json!({ "spec": b.spec })) })
             .collect();
-        nodes.push(pc::ExportNode { name: "ulica".into(), mesh: &street.context, offset: None, extras: None });
+        nodes.push(pc::ExportNode { name: "ulica".into(), mesh: &street.context, offset: None, parent: None, rotation: None, extras: None });
         pc::to_glb(&nodes)
     } else {
         let spec = doc.spec();
         let m = pc::generate_from_spec(&spec);
-        pc::to_glb(&[pc::ExportNode { name: doc.name.clone(), mesh: &m.mesh, offset: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }])
+        pc::to_glb(&[pc::ExportNode { name: doc.name.clone(), mesh: &m.mesh, offset: None, parent: None, rotation: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }])
     };
     let path = unique(&dir, &doc.name, "glb");
     std::fs::write(&path, glb).map_err(|e| e.to_string())?;

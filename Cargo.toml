@@ -10,6 +10,7 @@ edition = "2024"
 procedura-kit = { path = "crates/kit" }
 pierzeja-core = { path = "crates/core" }
 pierzeja-render = { path = "crates/render" }
+tabor-core = { path = "crates/tabor" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 indexmap = { version = "2", features = ["serde"] }

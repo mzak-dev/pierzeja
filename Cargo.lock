@@ -4807,6 +4807,7 @@ dependencies = [
  "png",
  "serde",
  "serde_json",
+ "tabor-core",
 ]
 
 [[package]]
@@ -5581,7 +5582,9 @@ dependencies = [
 name = "tabor-core"
 version = "0.1.0"
 dependencies = [
+ "indexmap",
  "procedura-kit",
+ "serde",
  "serde_json",
 ]
 

@@ -6,6 +6,6 @@ description = "Tabor: proceduralny generator pojazdów (ProceduraSuite) — dane
 
 [dependencies]
 procedura-kit.workspace = true
-
-[dev-dependencies]
+serde.workspace = true
 serde_json.workspace = true
+indexmap.workspace = true
