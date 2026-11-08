@@ -4764,6 +4764,7 @@ dependencies = [
  "egui-phosphor",
  "image",
  "pierzeja-core",
+ "procedura-kit",
  "serde_json",
  "tabor-core",
  "winit",

@@ -3,12 +3,10 @@
 use crate::theme::*;
 use crate::{Doc, Source};
 use bevy_egui::egui::{self, Color32, Stroke};
-use pierzeja_core::data;
 use pierzeja_core::footprint::{self as fp, P2};
 
 /// Mapa typologii rok × skala: punkty archetypów, kursor IDW, linie wpływu.
-pub fn typology_map(ui: &mut egui::Ui, doc: &mut Doc, weights: &[(String, f64)], height: f32) {
-    let d = data();
+pub fn typology_map(ui: &mut egui::Ui, doc: &mut Doc, d: &procedura_kit::data::Dataset, accent: Color32, weights: &[(String, f64)], height: f32) {
     let [y0, y1] = d.map_years;
     let (resp, painter) = ui.allocate_painter(egui::vec2(ui.available_width(), height), egui::Sense::click_and_drag());
     let r = resp.rect.shrink2(egui::vec2(14.0, 12.0));
@@ -24,7 +22,7 @@ pub fn typology_map(ui: &mut egui::Ui, doc: &mut Doc, weights: &[(String, f64)],
     if let Some(cp) = cursor {
         for (id, w) in weights {
             if let Some(a) = d.archetype(id) {
-                painter.line_segment([cp, to_px(a.map.year, a.map.scale)], Stroke::new(1.0 + 4.0 * *w as f32, Color32::from_rgba_unmultiplied(232, 115, 90, 150)));
+                painter.line_segment([cp, to_px(a.map.year, a.map.scale)], Stroke::new(1.0 + 4.0 * *w as f32, accent.gamma_multiply(0.6)));
             }
         }
     }
@@ -40,7 +38,7 @@ pub fn typology_map(ui: &mut egui::Ui, doc: &mut Doc, weights: &[(String, f64)],
         let p = to_px(a.map.year, a.map.scale);
         let sel = doc.source == Source::Archetype(a.id.clone());
         if sel {
-            painter.circle_filled(p, 7.0, ACCENT);
+            painter.circle_filled(p, 7.0, accent);
             painter.circle_stroke(p, 7.0, Stroke::new(1.5, Color32::from_rgb(0xff, 0xb0, 0xa0)));
         } else {
             painter.circle_filled(p, 2.6, Color32::from_rgb(0xc8, 0xc8, 0xc8));
@@ -56,7 +54,7 @@ pub fn typology_map(ui: &mut egui::Ui, doc: &mut Doc, weights: &[(String, f64)],
         painter.galley(lr.min, g, TEXT);
     }
     if let Some(cp) = cursor {
-        painter.circle_stroke(cp, 7.0, Stroke::new(2.0, ACCENT));
+        painter.circle_stroke(cp, 7.0, Stroke::new(2.0, accent));
     }
     if let Some(mut p) = resp.interact_pointer_pos().filter(|_| resp.clicked() || resp.dragged()) {
         // magnes: blisko punktu archetypu = dokładnie ten archetyp (100%)

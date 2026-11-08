@@ -56,16 +56,17 @@ fn initial_state() -> (Docs, View) {
     let mut doc = Doc::building("familok");
     let m = std::env::var("PIERZEJA_MODE").unwrap_or_default();
     match m.as_str() {
-        "start" | "" => view.screen = Screen::Start,
+        "" | "loading" => view.screen = Screen::Loading,
+        "start" => view.screen = Screen::Start,
         "mcp" => view.screen = Screen::Mcp,
         "wielokat" => {
             doc.use_poly = true;
             view.item = Some(Item::Dzialka);
         }
         "pojazd" => {
-            doc = Doc::street(Mode::Vehicle);
-            view.ribbon = RibbonTab::Ulica;
-            view.item = Some(Item::Scena);
+            doc = Doc::vehicle(&tabor_core::data().default_archetype);
+            view.ribbon = RibbonTab::Pojazd;
+            view.item = Some(Item::Veh("bryla"));
         }
         "ulica" | "osiedle" | "skrzyzowanie" | "rondo" => {
             doc = Doc::street(match m.as_str() {
@@ -121,11 +122,44 @@ pub enum Mode {
     Estate,
     Crossroads,
     Roundabout,
-    /// Pojazd z Tabora (`Doc::vehicle` = archetyp, ziarno = `scene_seed`).
+    /// Pojazd z Tabora.
     Vehicle,
 }
 
+/// Tryb edytora (ProceduraSuite): zestaw dokumentów jednego generatora.
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum Fam {
+    Budynki,
+    Pojazdy,
+    Ludzie,
+}
+
+impl Fam {
+    pub fn label(self) -> &'static str {
+        match self {
+            Fam::Budynki => "Budynki",
+            Fam::Pojazdy => "Pojazdy",
+            Fam::Ludzie => "Ludzie",
+        }
+    }
+    /// Kolor trybu (z makiety): budynki ceglasty, pojazdy żółty, ludzie turkus.
+    pub fn color(self) -> egui::Color32 {
+        match self {
+            Fam::Budynki => egui::Color32::from_rgb(0xE8, 0x73, 0x5A),
+            Fam::Pojazdy => egui::Color32::from_rgb(0xE9, 0xB4, 0x4C),
+            Fam::Ludzie => egui::Color32::from_rgb(0x4F, 0xB6, 0xC8),
+        }
+    }
+}
+
 impl Mode {
+    pub fn fam(self) -> Fam {
+        if self == Mode::Vehicle { Fam::Pojazdy } else { Fam::Budynki }
+    }
+    /// Pierzeja i sceny (nie pojedynczy budynek ani pojazd).
+    pub fn is_street(self) -> bool {
+        !matches!(self, Mode::Building | Mode::Vehicle)
+    }
     pub fn scene(self) -> Option<SceneKind> {
         match self {
             Mode::Estate => Some(SceneKind::Estate),
@@ -219,8 +253,6 @@ pub struct Doc {
     pub rows: u32,
     pub arm: f64,
     pub scene_seed: u32,
-    // pojazd (Tabor)
-    pub vehicle: String,
 }
 
 impl Doc {
@@ -247,7 +279,6 @@ impl Doc {
             rows: 3,
             arm: 90.0,
             scene_seed: 11,
-            vehicle: tabor_core::data().default_archetype.clone(),
         }
     }
     pub fn street(mode: Mode) -> Doc {
@@ -296,8 +327,14 @@ impl Doc {
             ..Default::default()
         }
     }
+    /// Pojazd Tabora: te same pola mieszania co budynek (`source`, `overrides`, `seed`, `variation`).
+    pub fn vehicle(archetype: &str) -> Doc {
+        let mut d = Doc::building(archetype);
+        d.mode = Mode::Vehicle;
+        d
+    }
     pub fn vehicle_spec(&self) -> tabor_core::TaborSpec {
-        serde_json::from_value(json!({ "archetype": self.vehicle, "seed": self.scene_seed })).expect("TaborSpec")
+        tabor_core::TaborSpec { mix: self.spec().mix, version: None }
     }
     pub fn scene_spec(&self, kind: SceneKind) -> SceneSpec {
         SceneSpec { kind, seed: Some(self.scene_seed as f64), spacing: Some(self.spacing), rows: Some(self.rows), profile: Some(self.profile.clone()), arm: Some(self.arm), variation: None }
@@ -381,6 +418,8 @@ impl Docs {
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Screen {
+    /// Animacja pierwszego ładowania (potem `Start`).
+    Loading,
     Start,
     Editor,
     Mcp,
@@ -389,6 +428,7 @@ pub enum Screen {
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum RibbonTab {
     Plik,
+    Pojazd,
     Budynek,
     Ulica,
     Render,
@@ -416,6 +456,8 @@ pub enum Item {
     Gzyms,
     Parcel,
     Scena,
+    /// Wektor Tabora: `typ` albo id grupy (`bryla`, `sylwetka`, …).
+    Veh(&'static str),
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -438,6 +480,7 @@ pub enum Preset {
     Front,
     Iso,
     Top,
+    Side,
 }
 
 #[derive(Resource)]
@@ -670,7 +713,7 @@ fn regenerate(
         return;
     }
     let reframe = der.last.as_ref().is_none_or(|(i, d, _)| {
-        *i != docs.active || d.mode != doc.mode || d.source != doc.source || d.vehicle != doc.vehicle || d.use_poly != doc.use_poly || (doc.mode != Mode::Building && (d.profile != doc.profile || d.count != doc.count || d.rows != doc.rows))
+        *i != docs.active || d.mode != doc.mode || d.source != doc.source || d.use_poly != doc.use_poly || (doc.mode != Mode::Building && (d.profile != doc.profile || d.count != doc.count || d.rows != doc.rows))
     });
     der.last = Some((docs.active, doc.clone(), night));
     view.reframe |= reframe;
@@ -693,6 +736,8 @@ fn regenerate(
             tris += spawn_mesh(b, c, m_, &m.wheel, Vec3::new(h[0] as f32, h[1] as f32, h[2] as f32), night);
         }
         der.tris = tris;
+        der.resolved = m.params.clone();
+        der.weights = tabor_core::resolve(&doc.vehicle_spec()).weights["bryla"].iter().map(|(k, v)| (k.clone(), *v)).collect();
         let st = &m.stats;
         der.info = format!(
             "Pojazd\n• Nadwozie — {}\n• Wymiary — {:.2} × {:.2} × {:.2} m\n• Rozstaw osi — {:.2} m\n• Miejsca — {}",
@@ -807,6 +852,7 @@ fn orbit(
     match view.preset.take() {
         Some(Preset::Front) => (orbit.yaw, orbit.pitch) = (0.0, 4f32.to_radians()),
         Some(Preset::Iso) => (orbit.yaw, orbit.pitch) = (45f32.to_radians(), 30f32.to_radians()),
+        Some(Preset::Side) => (orbit.yaw, orbit.pitch) = (90f32.to_radians(), 4f32.to_radians()),
         Some(Preset::Top) => (orbit.yaw, orbit.pitch) = (0.0, 85f32.to_radians()),
         None => {}
     }
