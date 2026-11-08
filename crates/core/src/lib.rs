@@ -6,17 +6,16 @@
 //! Specyfikacja algorytmu: `docs/HANDOFF.md`.
 
 pub mod blend;
-pub mod color;
 pub mod data;
-pub mod export;
 pub mod footprint;
 pub mod generator;
 pub mod materials;
-pub mod mesh;
 pub mod params;
-pub mod random;
 pub mod scene;
 pub mod street;
+
+// Moduły wspólne z ProceduraSuite (ADR 0021); stare ścieżki `pierzeja_core::mesh` itd. działają dalej.
+pub use procedura_kit::{color, export, mesh, random};
 
 pub use blend::{describe_mix, map_weights, normalize_weights, overall_weights, resolve_spec, unknown_archetypes, BuildingSpec, ResolvedBuilding};
 pub use data::{data, Archetype, CityProfile, MapPoint, ParamDef, ParamKind, WeightMap, DEFAULT_ARCHETYPE, GROUP_IDS};

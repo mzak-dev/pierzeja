@@ -7,6 +7,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+procedura-kit = { path = "crates/kit" }
 pierzeja-core = { path = "crates/core" }
 pierzeja-render = { path = "crates/render" }
 serde = { version = "1", features = ["derive"] }
