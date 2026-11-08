@@ -282,7 +282,8 @@ pub(crate) fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let stations = cab(mb, &d, p, seed);
     front(mb, &d, p);
     crate::zabudowa::module(mb, &d, p);
-    Layout { wheelbase: d.wb, track: d.track, stations }
+    // ponytail: no livery/lightbar on heavy vehicles yet (sluzba::apply needs a car hull), add with issue 10
+    Layout { wheelbase: d.wb, track: d.track, stations, lightbar: None }
 }
 
 /// Podłużnice (z kopniakiem na tyle), poprzeczki, osie z resorami, zbiornik i akumulator.
