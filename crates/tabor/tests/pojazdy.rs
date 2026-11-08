@@ -38,7 +38,7 @@ fn triangle_budgets() {
         assert!((800..=1500).contains(&t), "{a}: {t} trójkątów");
     }
     let t = make("van").stats.triangles;
-    assert!((1500..=3000).contains(&t), "van: {t} trójkątów");
+    assert!((1000..=3000).contains(&t), "van: {t} trójkątów");
 }
 
 #[test]

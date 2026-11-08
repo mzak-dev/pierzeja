@@ -4,6 +4,7 @@
 //! origin = środek między osiami na gruncie.
 
 mod body;
+mod sluzba;
 mod wheel;
 
 use indexmap::IndexMap;
@@ -41,7 +42,8 @@ pub struct Resolved {
 }
 
 pub fn resolve(spec: &TaborSpec) -> Resolved {
-    let (params, weights, seed) = resolve_map(data(), &spec.mix);
+    let (mut params, weights, seed) = resolve_map(data(), &spec.mix);
+    sluzba::defaults(&mut params);
     Resolved { params, weights, seed }
 }
 
@@ -88,6 +90,8 @@ pub struct VehicleModel {
     pub wheels: [(&'static str, V3); 4],
     /// Punkty biodrowe Miejsc; 0 = kierowca (lewa strona, +X).
     pub seats: Vec<V3>,
+    /// Belka świetlna służby w gnieździe na dachu: (siatka, przesunięcie od origin).
+    pub lightbar: Option<(MeshData, V3)>,
     pub stats: VehicleStats,
     pub params: ParamMap,
 }
@@ -144,7 +148,9 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
 
     let mut mb = MeshBuilder::default();
     let layout = body::build(&p, r.seed, &mut mb);
-    let body = mb.build(mats.clone());
+    let mut body_mats = mats.clone();
+    body_mats.extend(sluzba::materials(&p));
+    let body = mb.build(body_mats);
     let wheel = wheel::build(&p, mats);
 
     let (rad, hub_x) = (p.f("wheelDiameter") / 2.0, layout.track / 2.0);
@@ -160,11 +166,12 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
         wheel,
         wheels,
         seats,
+        lightbar: layout.lightbar,
         stats: VehicleStats { body_type: p.s("bodyType").into(), triangles: 0, length: 0.0, width: 0.0, height: 0.0, wheelbase: layout.wheelbase, track: layout.track, wheel_radius: rad, seats: 0, stations: layout.stations },
         params: r.params.clone(),
     };
     let b = m.bounds();
-    m.stats.triangles = m.body.triangles() + 4 * m.wheel.triangles();
+    m.stats.triangles = m.body.triangles() + 4 * m.wheel.triangles() + m.lightbar.as_ref().map_or(0, |l| l.0.triangles());
     m.stats.length = b.max[2] - b.min[2];
     m.stats.width = b.max[0] - b.min[0];
     m.stats.height = b.max[1] - b.min[1];
@@ -182,6 +189,12 @@ impl VehicleModel {
                 hi[k] = hi[k].max(h[k] + self.wheel.bounds.max[k]);
             }
         }
+        if let Some((l, o)) = &self.lightbar {
+            for k in 0..3 {
+                lo[k] = lo[k].min(o[k] + l.bounds.min[k]);
+                hi[k] = hi[k].max(o[k] + l.bounds.max[k]);
+            }
+        }
         Bounds { min: lo, max: hi }
     }
 }
@@ -197,6 +210,9 @@ pub fn to_glb(m: &VehicleModel) -> Vec<u8> {
     let mut nodes = vec![ExportNode { name: "Body".into(), mesh: &m.body, offset: None, parent: None, rotation: None, extras: Some(json!({ "stats": m.stats })) }];
     for (n, pos) in &m.wheels {
         nodes.push(child((*n).into(), &m.wheel, *pos));
+    }
+    if let Some((mesh, o)) = &m.lightbar {
+        nodes.push(child("Lightbar".into(), mesh, *o));
     }
     for (i, s) in m.seats.iter().enumerate() {
         nodes.push(child(format!("Seat_{i}"), &empty, *s));

@@ -3,7 +3,8 @@
 //! (maska, szyba, dach, tył), nadkola i linia okien to funkcje z, próbkowane w stacjach.
 
 use crate::{roll, P};
-use procedura_kit::mesh::{MatKey, MeshBuilder, V3};
+use crate::sluzba::{self, Hull};
+use procedura_kit::mesh::{MatKey, MeshBuilder, MeshData, V3};
 
 pub struct Layout {
     pub wheelbase: f64,
@@ -11,6 +12,8 @@ pub struct Layout {
     pub track: f64,
     /// Liczba stacji lofta.
     pub stations: usize,
+    /// Belka świetlna służby (siatka, przesunięcie od origin); `None` dla cywilnego.
+    pub lightbar: Option<(MeshData, V3)>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -50,7 +53,7 @@ fn pl(pts: &[(f64, f64)], z: f64) -> f64 {
     pts[pts.len() - 1].1
 }
 
-type Half = [V3; 7];
+pub(crate) type Half = [V3; 7];
 
 /// Pasek na ściance bocznej między segmentami półprzekroju `k0..k1`, przesunięty na zewnątrz o `e`, po obu stronach.
 fn strip(mb: &mut MeshBuilder, mat: MatKey, half: &dyn Fn(f64) -> Half, (za, zb): (f64, f64), (k0, k1): (usize, usize), e: f64) {
@@ -214,7 +217,9 @@ pub fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     });
 
     details(mb, p, seed, &Ctx { kind, hw, h, clr, ynose, ytail, yb, zf, zr, cowl, roof_r, zg, z_dw, run }, &half, &taper);
-    Layout { wheelbase: wb, track, stations: zs.len() }
+    let hull = Hull { zs: &zs, half: &half, top: &t_at, van: kind == Kind::Van, h, yb, clr, ytail, zf, zr, zg, cowl, roof_f, roof_r, z_dw };
+    let lightbar = sluzba::apply(mb, p, seed, &hull);
+    Layout { wheelbase: wb, track, stations: zs.len(), lightbar }
 }
 
 struct Ctx {
