@@ -85,6 +85,16 @@ pub enum MatKey {
     Rim,
     Headlight,
     Taillight,
+    // Ludzie (Tłum): sloty zgodne z CharacterLibrary (Skin/Top/Bottom/Shoes) + dodatki.
+    Skin,
+    Top,
+    Bottom,
+    Shoes,
+    Hair,
+    Outer,
+    HiVis,
+    Helmet,
+    Face,
 }
 
 impl MatKey {
@@ -119,6 +129,15 @@ impl MatKey {
             MatKey::Rim => "rim",
             MatKey::Headlight => "headlight",
             MatKey::Taillight => "taillight",
+            MatKey::Skin => "Skin",
+            MatKey::Top => "Top",
+            MatKey::Bottom => "Bottom",
+            MatKey::Shoes => "Shoes",
+            MatKey::Hair => "Hair",
+            MatKey::Outer => "Outer",
+            MatKey::HiVis => "HiVis",
+            MatKey::Helmet => "Helmet",
+            MatKey::Face => "Face",
         }
     }
 }
