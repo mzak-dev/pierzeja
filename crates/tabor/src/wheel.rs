@@ -50,13 +50,9 @@ pub fn build(p: &P, materials: Vec<MaterialSpec>) -> MeshData {
     mb.build(materials)
 }
 
-/// Nakrętka: pryzma kwadratowa o półboku `q` wystająca ze tarczy o 1 cm (bez dna).
+/// Nakrętka: kwadratowy kołpak o półboku `q` 1 cm nad tarczą (boczne ścianki pominięte: niewidoczne).
 fn nut(mb: &mut MeshBuilder, s: f64, x0: f64, cy: f64, cz: f64, q: f64) {
     let x1 = x0 + s * 0.012;
-    let p = |x: f64, dy: f64, dz: f64| [x, cy + dy, cz + dz];
-    mb.quad(MatKey::Rim, p(x1, -q, -q), p(x1, q, -q), p(x1, q, q), p(x1, -q, q), Some([s, 0.0, 0.0]));
-    for (dy, dz) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
-        let (ay, az) = (if dy == 0.0 { 1.0 } else { 0.0 }, if dz == 0.0 { 1.0 } else { 0.0 });
-        mb.quad(MatKey::Rim, p(x0, dy * q - ay * q, dz * q - az * q), p(x0, dy * q + ay * q, dz * q + az * q), p(x1, dy * q + ay * q, dz * q + az * q), p(x1, dy * q - ay * q, dz * q - az * q), Some([0.0, dy, dz]));
-    }
+    let p = |dy: f64, dz: f64| [x1, cy + dy, cz + dz];
+    mb.quad(MatKey::Rim, p(-q, -q), p(q, -q), p(q, q), p(-q, q), Some([s, 0.0, 0.0]));
 }
