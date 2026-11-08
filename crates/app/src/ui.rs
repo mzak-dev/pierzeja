@@ -223,6 +223,7 @@ pub fn ui(
             view.viewport = vp3d;
             editor_panels(&ctx, &mut docs, &der, &mut view, cam.as_ref(), &mut cmds);
         }
+        Screen::Loading => screens::loading(&mut root, &mut cmds),
         Screen::Start => screens::start(&mut root, &docs, &mut cmds),
         Screen::Mcp => screens::mcp(&mut root, &mut view, &mut cmds),
     }

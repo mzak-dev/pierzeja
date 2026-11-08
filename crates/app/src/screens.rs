@@ -217,3 +217,169 @@ pub fn mcp(root: &mut egui::Ui, view: &mut View, cmds: &mut Vec<Cmd>) {
         row(&mut ui, "Port HTTP", "127.0.0.1:7337", "wkrótce", FAINT);
     }
 }
+
+// ------------------------------------------------------------------ ładowanie (animacja z mocku „tryby edytora”)
+
+const LOAD_STEPS: [&str; 10] = [
+    "Inicjalizacja wgpu · Vulkan",
+    "Kompilacja shaderów · 38",
+    "Budynki · typologie Mapa 1893",
+    "Budynki · reguły WT 2002",
+    "Pojazdy · typy i podwozia · 9",
+    "Pojazdy · PN-EN 1789",
+    "Ludzie · archetypy · 9",
+    "Ludzie · szkielet 54 kości",
+    "Serwer MCP · 127.0.0.1:7337",
+    "Gotowe",
+];
+/// Czas animacji [s]: 10 kroków po 0,5 s (jak w mocku); potem ekran startowy.
+const LOAD_SECS: f32 = 5.0;
+
+fn lerp_t(p: f32, a: f32, b: f32) -> f32 {
+    ((p - a) / (b - a)).clamp(0.0, 1.0)
+}
+fn ease_out(x: f32) -> f32 {
+    1.0 - (1.0 - x).powi(3)
+}
+fn ease_back(x: f32) -> f32 {
+    let (c1, x) = (1.6f32, x - 1.0);
+    1.0 + (c1 + 1.0) * x.powi(3) + c1 * x * x
+}
+fn hex(h: u32) -> Color32 {
+    Color32::from_rgb((h >> 16) as u8, (h >> 8) as u8, h as u8)
+}
+
+/// Pierwsze ładowanie edytora: miasto wyrasta, wjeżdża pojazd służb, pojawia się człowiek; trzy paski trybów.
+pub fn loading(root: &mut egui::Ui, cmds: &mut Vec<Cmd>) {
+    let ctx = root.ctx().clone();
+    let now = ctx.input(|i| i.time);
+    let t0 = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with::<f64>(egui::Id::new("load_t0"), || now));
+    let t = (now - t0) as f32;
+    if t >= LOAD_SECS || ctx.input(|i| i.pointer.any_click() || i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::Enter)) {
+        cmds.push(Cmd::Start);
+        return;
+    }
+    ctx.request_repaint();
+    let area = root.available_rect_before_wrap();
+    let p = root.painter();
+    p.rect_filled(area, 0, BG);
+    let card = egui::Rect::from_center_size(area.center(), Vec2::new(720.0, 440.0));
+    p.rect(card, 12, hex(0x1a1a1a), Stroke::new(1.0, hex(0x2c2c2c)), egui::StrokeKind::Inside);
+
+    // nagłówek: znak rysowany kreską, nazwa, wersja
+    let o = card.min + Vec2::new(32.0, 28.0);
+    let k = 44.0 / 64.0;
+    let pt = |x: f32, y: f32| o + Vec2::new(x * k, y * k);
+    let paths: [&[(f32, f32)]; 3] = [&[(2.0, 36.0), (62.0, 36.0)], &[(6.0, 36.0), (6.0, 18.0), (16.0, 10.0), (26.0, 18.0), (26.0, 36.0)], &[(32.0, 36.0), (32.0, 24.0), (52.0, 24.0), (58.0, 30.0), (58.0, 36.0)]];
+    let seg_len = |w: &[(f32, f32)]| ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt();
+    let total: f32 = paths.iter().map(|s| s.windows(2).map(seg_len).sum::<f32>()).sum();
+    let mut left = total * ease_out(lerp_t(t / 5.0, 0.0, 0.14));
+    let stroke = Stroke::new(2.0, hex(0xf2f2f2));
+    for s in paths {
+        let mut pts = vec![pt(s[0].0, s[0].1)];
+        for w in s.windows(2) {
+            let len = seg_len(w);
+            let f = (left / len).clamp(0.0, 1.0);
+            left -= len.min(left);
+            pts.push(pt(w[0].0 + (w[1].0 - w[0].0) * f, w[0].1 + (w[1].1 - w[0].1) * f));
+            if f < 1.0 {
+                break;
+            }
+        }
+        p.add(egui::Shape::line(pts, stroke));
+    }
+    if left > 0.0 {
+        p.circle_stroke(pt(40.0, 14.0), 3.0 * k, stroke);
+    }
+    let mut x = o.x + 58.0;
+    for (word, font, col) in [("PROCEDURA", egui::FontId::new(22.0, bold()), hex(0xf2f2f2)), ("SUITE", egui::FontId::proportional(22.0), hex(0xa9a9a9))] {
+        for ch in word.chars() {
+            x = p.text(egui::pos2(x, o.y + 14.0), Align2::LEFT_CENTER, ch, font.clone(), col).right() + 3.0;
+        }
+    }
+    p.text(egui::pos2(card.right() - 32.0, o.y + 14.0), Align2::RIGHT_CENTER, format!("v{} · Mapa 1893", env!("CARGO_PKG_VERSION")), mono(12.0), hex(0x9a9a9a));
+
+    // miasto: SVG 656×200, budynki rosną od podstawy (y = 170)
+    let so = card.min + Vec2::new(32.0, 82.0);
+    let s = |x: f32, y: f32| so + Vec2::new(x, y);
+    let base = 170.0;
+    let grow = |i: usize| ease_out(lerp_t((t - 0.06 * i as f32) / 5.0, 0.14, 0.30));
+    let sy = |y: f32, g: f32| base - (base - y) * g;
+    // okna: wzór 10×13 zakotwiczony w początku układu, rysowane tylko całe komórki wewnątrz bryły
+    let windows = |x0: f32, y0: f32, w: f32, h: f32, g: f32| {
+        let mut gx = (x0 / 10.0).floor() * 10.0;
+        while gx < x0 + w {
+            let mut gy = (y0 / 13.0).floor() * 13.0;
+            while gy < y0 + h {
+                let (cx, cy) = (gx + 3.0, gy + 4.0);
+                if cx >= x0 && cx + 4.0 <= x0 + w && cy >= y0 && cy + 5.0 <= y0 + h {
+                    p.rect_filled(egui::Rect::from_min_max(s(cx, sy(cy, g)), s(cx + 4.0, sy(cy + 5.0, g))), 0, hex(0x3b3b3b));
+                }
+                gy += 13.0;
+            }
+            gx += 10.0;
+        }
+    };
+    // (indeks = opóźnienie, x, y, szerokość, wysokość, wypełnienie)
+    let rects = [(0, 24.0, 100.0, 40.0, 70.0, 0x242424), (1, 70.0, 60.0, 34.0, 110.0, 0x262626), (3, 166.0, 40.0, 30.0, 130.0, 0x242424), (4, 202.0, 110.0, 44.0, 60.0, 0x282828), (5, 252.0, 70.0, 36.0, 100.0, 0x242424), (7, 348.0, 52.0, 32.0, 118.0, 0x242424), (8, 386.0, 104.0, 40.0, 66.0, 0x282828)];
+    for (i, x0, y0, w, h, fill) in rects {
+        let g = grow(i);
+        if g > 0.0 {
+            p.rect_filled(egui::Rect::from_min_max(s(x0, sy(y0, g)), s(x0 + w, base)), 0, hex(fill));
+            windows(x0, y0, w, h, g);
+        }
+    }
+    // domek (2, z pomarańczowym obrysem) i ratusz (6): wielokąty z oknami
+    let house: &[(f32, f32)] = &[(110.0, 170.0), (110.0, 92.0), (135.0, 72.0), (160.0, 92.0), (160.0, 170.0)];
+    let hall: &[(f32, f32)] = &[(294.0, 170.0), (294.0, 96.0), (306.0, 88.0), (330.0, 88.0), (342.0, 96.0), (342.0, 170.0)];
+    for (i, pts, fill, line, win) in [(2, house, 0x3a2520, Stroke::new(2.0, hex(0xE8735A)), (120.0, 100.0, 30.0, 66.0)), (6, hall, 0x262626, Stroke::NONE, (298.0, 98.0, 40.0, 70.0))] {
+        let g = grow(i);
+        if g > 0.0 {
+            p.add(egui::Shape::convex_polygon(pts.iter().map(|&(x, y)| s(x, sy(y, g))).collect(), hex(fill), line));
+            windows(win.0, win.1, win.2, win.3, g);
+        }
+    }
+    // pojazd służb wjeżdża z lewej
+    let vp = t / 5.0;
+    let ve = ease_out(lerp_t(vp, 0.38, 0.52));
+    if ve > 0.0 {
+        let (dx, a) = (-260.0 * (1.0 - ve), (ve * 255.0) as u8);
+        let rgba = |h: u32| Color32::from_rgba_unmultiplied((h >> 16) as u8, (h >> 8) as u8, h as u8, a);
+        let (ye, body) = (Stroke::new(2.0, rgba(0xE9B44C)), rgba(0x2e2a20));
+        let v = |x: f32, y: f32| s(x + dx, y);
+        p.rect(egui::Rect::from_min_max(v(462.0, 128.0), v(540.0, 164.0)), 3, body, ye, egui::StrokeKind::Middle);
+        p.add(egui::Shape::convex_polygon([(540.0, 164.0), (540.0, 134.0), (556.0, 134.0), (568.0, 148.0), (568.0, 164.0)].map(|(x, y)| v(x, y)).to_vec(), body, ye));
+        p.rect_filled(egui::Rect::from_min_max(v(540.0, 122.0), v(556.0, 128.0)), 2, rgba(if (t / 0.5) as u32 % 2 == 0 { 0x2f63d6 } else { 0x9ab8f5 }));
+        for cx in [480.0, 552.0] {
+            p.circle(v(cx, 166.0), 7.0, rgba(0x141414), ye);
+        }
+    }
+    // człowiek „wyskakuje” (skala od podstawy z przeskokiem)
+    let pe = ease_back(lerp_t(vp, 0.58, 0.70));
+    if pe > 0.0 {
+        let q = |x: f32, y: f32| s(612.0 + (x - 612.0) * pe, 172.0 - (172.0 - y) * pe);
+        let st = Stroke::new(2.0, hex(0x4FB6C8));
+        p.circle_stroke(q(612.0, 120.0), 8.0 * pe, st);
+        let pts = [(598.0, 172.0), (598.0, 150.0), (600.0, 142.0), (605.0, 136.0), (612.0, 134.0), (619.0, 136.0), (624.0, 142.0), (626.0, 150.0), (626.0, 172.0)].map(|(x, y)| q(x, y)).to_vec();
+        p.add(egui::Shape::convex_polygon(pts, hex(0x183238), st));
+    }
+    p.line_segment([s(16.0, 172.0), s(640.0, 172.0)], Stroke::new(1.5, hex(0x3a3a3a)));
+
+    // dół: trzy tryby z paskami + status i procent
+    let sf = t / 0.5;
+    let step = (sf as usize).min(9);
+    let inner = card.shrink2(Vec2::new(32.0, 24.0));
+    let col_w = (inner.width() - 16.0) / 3.0;
+    let bar_y = inner.bottom() - 16.0 - 10.0 - 4.0;
+    for (i, (label, col, start)) in [("Budynki", 0xE8735A, 2.0f32), ("Pojazdy", 0xE9B44C, 4.0), ("Ludzie", 0x4FB6C8, 6.0)].into_iter().enumerate() {
+        let f = ((sf - start + 1.0) / 2.0).clamp(0.0, 1.0);
+        let x0 = inner.left() + i as f32 * (col_w + 8.0);
+        let lc = if f == 0.0 { hex(0x8a8a8a) } else if f < 1.0 { Color32::WHITE } else { hex(col) };
+        p.text(egui::pos2(x0, bar_y - 7.0), Align2::LEFT_BOTTOM, label, egui::FontId::proportional(12.0), lc);
+        let track = egui::Rect::from_min_size(egui::pos2(x0, bar_y), Vec2::new(col_w, 4.0));
+        p.rect_filled(track, 2, hex(0x2a2a2a));
+        p.rect_filled(egui::Rect::from_min_size(track.min, Vec2::new(col_w * f, 4.0)), 2, hex(col));
+    }
+    p.text(egui::pos2(inner.left(), inner.bottom()), Align2::LEFT_BOTTOM, LOAD_STEPS[step], mono(12.0), hex(0xc4c4c4));
+    p.text(egui::pos2(inner.right(), inner.bottom()), Align2::RIGHT_BOTTOM, format!("{}%", (step as f32 / 9.0 * 100.0).round()), mono(12.0), hex(0x9a9a9a));
+}

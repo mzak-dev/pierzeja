@@ -56,7 +56,8 @@ fn initial_state() -> (Docs, View) {
     let mut doc = Doc::building("familok");
     let m = std::env::var("PIERZEJA_MODE").unwrap_or_default();
     match m.as_str() {
-        "start" | "" => view.screen = Screen::Start,
+        "" | "loading" => view.screen = Screen::Loading,
+        "start" => view.screen = Screen::Start,
         "mcp" => view.screen = Screen::Mcp,
         "wielokat" => {
             doc.use_poly = true;
@@ -381,6 +382,8 @@ impl Docs {
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Screen {
+    /// Animacja pierwszego ładowania (potem `Start`).
+    Loading,
     Start,
     Editor,
     Mcp,
