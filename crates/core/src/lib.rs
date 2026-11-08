@@ -17,7 +17,7 @@ pub mod street;
 // Moduły wspólne z ProceduraSuite (ADR 0021); stare ścieżki `pierzeja_core::mesh` itd. działają dalej.
 pub use procedura_kit::{color, export, mesh, random};
 
-pub use blend::{describe_mix, map_weights, normalize_weights, overall_weights, resolve_spec, unknown_archetypes, BuildingSpec, ResolvedBuilding};
+pub use blend::{describe_mix, map_weights, normalize_weights, overall_weights, resolve_spec, unknown_archetypes, BuildingSpec, MixSpec, ResolvedBuilding};
 pub use data::{data, Archetype, CityProfile, MapPoint, ParamDef, ParamKind, WeightMap, DEFAULT_ARCHETYPE, GROUP_IDS};
 pub use export::{to_glb, to_obj, ExportNode};
 pub use generator::{generate_building, generate_from_spec, BuildingModel, BuildingStats};

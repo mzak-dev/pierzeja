@@ -1,5 +1,6 @@
 {
   "format": "pierzeja-dane/1",
+  "defaultArchetype": "kamienica_eklektyczna",
   "opis": "Dane referencyjne generatora Pierzeja: definicje parametrów, archetypy (nadpisania i pełne wektory), profile ulic, epoki. Wygenerowane z src/core.",
   "mapYears": [
     1800,

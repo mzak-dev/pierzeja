@@ -1,6 +1,6 @@
 //! Parametry: normalizacja wartości ogólnych i typowany widok dla generatora.
 
-use crate::data::{data, ParamDef, ParamKind, ParamMap};
+use crate::data::{data, ParamMap};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -98,66 +98,14 @@ impl Params {
     }
 }
 
-fn as_f64(v: &Value) -> f64 {
-    match v {
-        Value::Number(n) => n.as_f64().unwrap_or(f64::NAN),
-        // ponytail: parseFloat tylko dla czystych liczb w tekście („3.5”), bez „3.5m”
-        Value::String(s) => s.trim().parse().unwrap_or(f64::NAN),
-        _ => f64::NAN,
-    }
-}
-
-fn js_string(v: &Value) -> String {
-    match v {
-        Value::String(s) => s.clone(),
-        other => other.to_string(),
-    }
-}
-
-pub fn num(v: f64) -> Value {
-    serde_json::Number::from_f64(v).map(Value::Number).unwrap_or(Value::Null)
-}
-
-/// Przycina wartość do zakresu definicji (liczby całkowite zaokrągla jak `Math.round`).
-pub fn clamp_param(def: &ParamDef, value: &Value) -> Value {
-    match def.kind {
-        ParamKind::Number | ParamKind::Int => {
-            let mut v = as_f64(value);
-            if !v.is_finite() {
-                v = def.default.as_f64().unwrap_or(0.0);
-            }
-            v = def.max.unwrap_or(v).min(def.min.unwrap_or(v).max(v));
-            num(if def.kind == ParamKind::Int { crate::random::jround(v) } else { v })
-        }
-        ParamKind::Enum => {
-            let s = js_string(value);
-            let ok = def.options.as_ref().is_some_and(|o| o.iter().any(|o| o.value == s));
-            if ok { Value::String(s) } else { def.default.clone() }
-        }
-        ParamKind::Color => {
-            let s = js_string(value);
-            let ok = s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit());
-            if ok { Value::String(s.to_lowercase()) } else { def.default.clone() }
-        }
-    }
-}
+pub use procedura_kit::mix::{clamp_param, num};
 
 /// Uzupełnia brakujące wartości domyślnymi i przycina wszystko do zakresów
 /// (nieznane klucze są pomijane). Kolejność kluczy = kolejność definicji.
 pub fn normalize_params(p: &ParamMap) -> ParamMap {
-    let d = data();
-    d.params
-        .iter()
-        .map(|def| {
-            let v = match p.get(&def.key) {
-                Some(v) => clamp_param(def, v),
-                None => d.defaults.get(&def.key).cloned().unwrap_or_else(|| def.default.clone()),
-            };
-            (def.key.clone(), v)
-        })
-        .collect()
+    procedura_kit::mix::normalize_params(data(), p)
 }
 
 pub fn default_params() -> ParamMap {
-    normalize_params(&ParamMap::new())
+    procedura_kit::mix::default_params(data())
 }

@@ -1,6 +1,6 @@
 //! Pierzeja: losowanie budynków z profilu miasta i ustawienie ich wzdłuż ulicy.
 
-use crate::blend::{normalize_weights, BuildingSpec};
+use crate::blend::{normalize_weights, BuildingSpec, MixSpec};
 use crate::data::{data, CityProfile, WeightMap};
 use crate::generator::{fixed1, generate_from_spec, BuildingModel};
 use crate::materials::build_materials;
@@ -88,7 +88,7 @@ pub fn generate_street(s: &StreetSpec) -> StreetModel {
             }
         }
         let bseed = (hash01(&[seed as f64, i as f64, 3.0]) * 1e9).floor();
-        let spec = BuildingSpec { weights: Some(w), seed: Some(bseed), variation: Some(variation), ..Default::default() };
+        let spec = BuildingSpec { mix: MixSpec { weights: Some(w), seed: Some(bseed), variation: Some(variation), ..Default::default() }, ..Default::default() };
         let model = generate_from_spec(&spec);
         let p = &model.resolved.params;
         let (width, gap, setback) = (p.segments * p.segment_width, p.side_gap, p.street_setback);

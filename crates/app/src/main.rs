@@ -249,23 +249,23 @@ impl Doc {
         d
     }
     pub fn spec(&self) -> BuildingSpec {
-        let mut s = BuildingSpec { seed: Some(self.seed as f64), ..Default::default() };
+        let mut s = BuildingSpec { mix: pc::MixSpec { seed: Some(self.seed as f64), ..Default::default() }, ..Default::default() };
         match &self.source {
-            Source::Archetype(a) => s.archetype = Some(a.clone()),
-            Source::Cursor(year, scale) => s.cursor = Some(pc::MapPoint { year: *year, scale: *scale }),
-            Source::Weights(w) => s.weights = Some(w.iter().cloned().collect()),
+            Source::Archetype(a) => s.mix.archetype = Some(a.clone()),
+            Source::Cursor(year, scale) => s.mix.cursor = Some(pc::MapPoint { year: *year, scale: *scale }),
+            Source::Weights(w) => s.mix.weights = Some(w.iter().cloned().collect()),
         }
         if self.variation > 0.0 {
-            s.variation = Some(self.variation);
+            s.mix.variation = Some(self.variation);
         }
         if !self.overrides.is_empty() {
-            s.overrides = Some(self.overrides.clone());
+            s.mix.overrides = Some(self.overrides.clone());
         }
         if self.sharpness != 3.0 {
-            s.sharpness = Some(self.sharpness);
+            s.mix.sharpness = Some(self.sharpness);
         }
         if self.neighbors != 3.0 {
-            s.neighbors = Some(self.neighbors);
+            s.mix.neighbors = Some(self.neighbors);
         }
         if !self.regulations {
             s.regulations = Some(false);
@@ -690,9 +690,9 @@ fn regenerate(
                 color: rgb(&p.wall_color),
                 tris: t,
                 center: Vec3::new(bl.offset[0] as f32, 0.0, (bl.offset[2] + bl.model.mesh.bounds.max[2]) as f32),
-                weights: bl.spec.weights.as_ref().map(|w| w.iter().map(|(k, v)| (k.clone(), *v)).collect()).unwrap_or_default(),
-                seed: bl.spec.seed.unwrap_or(1.0) as u32,
-                variation: bl.spec.variation.unwrap_or(0.0),
+                weights: bl.spec.mix.weights.as_ref().map(|w| w.iter().map(|(k, v)| (k.clone(), *v)).collect()).unwrap_or_default(),
+                seed: bl.spec.mix.seed.unwrap_or(1.0) as u32,
+                variation: bl.spec.mix.variation.unwrap_or(0.0),
             });
         }
         tris += spawn_mesh(b, c, m, &street.context, Vec3::ZERO, night);

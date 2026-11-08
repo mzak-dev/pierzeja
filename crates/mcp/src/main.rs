@@ -128,7 +128,7 @@ fn to_spec(args: &Value) -> Result<(BuildingSpec, Vec<String>), String> {
     if !bad.is_empty() {
         return Err(format!("Nieznane archetypy: {}. Dostępne: {}.", bad.join(", "), arch_ids()));
     }
-    let bad_keys: Vec<&String> = spec.overrides.iter().flat_map(|o| o.keys()).filter(|k| data().param(k).is_none()).collect();
+    let bad_keys: Vec<&String> = spec.mix.overrides.iter().flat_map(|o| o.keys()).filter(|k| data().param(k).is_none()).collect();
     let warnings = if bad_keys.is_empty() { vec![] } else { vec![format!("Pominięto nieznane parametry: {} (lista: get_parameter_schema).", bad_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))] };
     Ok((spec, warnings))
 }
