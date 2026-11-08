@@ -120,7 +120,8 @@ pub(crate) fn parts(sk: &[Joint], sc: &Scale, p: &P) -> Vec<Part> {
     let fit = Fit::new(p);
     let fat = ((p.f("bmi") - 23.5) / 10.0).clamp(-0.9, 1.6);
     let sex = p.f("sex");
-    let (gd, gw, gl, gn) = (1.0 + 0.30 * fat, 1.0 + 0.22 * fat, 1.0 + 0.20 * fat, 1.0 + 0.12 * fat);
+    // styl „Synty”: pękate kończyny, szeroki tułów, duże dłonie i buty
+    let (gd, gw, gl, gn) = ((1.0 + 0.30 * fat) * 1.2, (1.0 + 0.22 * fat) * 1.15, (1.0 + 0.20 * fat) * 1.45, (1.0 + 0.12 * fat) * 1.5);
     let v = |n: &str| -> (usize, V3, V3, f64) {
         let i = idx(sk, n);
         let d = sub(sk[i].tail, sk[i].head);
@@ -151,6 +152,7 @@ pub(crate) fn parts(sk: &[Joint], sc: &Scale, p: &P) -> Vec<Part> {
     put(&mut out, "Chest", z, 8, vec![t(0.0, 0.094, 0.14 * waist, km), t(0.5, 0.108 * bust, 0.165, kw), t(1.0, 0.104 * bust, 0.18, kw)], vec![torso("Chest"); 2], false, true);
     put(&mut out, "UpperChest", z, 8, vec![t(0.0, 0.104 * bust, 0.18, kw), t(0.3, 0.097, 0.205, kw), t(0.62, 0.088, 0.195, kw), t(0.86, 0.07, 0.12, kw), t(1.0, 0.056, 0.085, kw)], vec![torso("UpperChest"); 4], false, true);
     let nk = |f: f64, r: f64| st(f, r * k * gn, r * k * gn);
+    put(&mut out, "Neck", z, 8, vec![st(-0.25, 0.066 * k * gd, 0.078 * k * gw), st(0.12, 0.054 * k * gd, 0.06 * k * gw)], vec![fit.torso], false, false);
     put(&mut out, "Neck", z, 6, vec![nk(0.0, 0.05), nk(1.15, 0.045)], vec![MatKey::Skin], false, false);
 
     for (s, sx) in [("Left", 1.0), ("Right", -1.0)] {
@@ -158,10 +160,10 @@ pub(crate) fn parts(sk: &[Joint], sc: &Scale, p: &P) -> Vec<Part> {
         let a = |f: f64, r: f64| st(f, r * k * gl * fit.bulk, r * k * gl * fit.bulk);
         let sleeve_end = if fit.forearm == MatKey::Skin { MatKey::Skin } else { fit.sleeve };
         // krótki rękaw kończy się w połowie ramienia
-        put(&mut out, &format!("{s}UpperArm"), z, 8, vec![a(0.0, 0.04), a(0.12, 0.056), a(0.5, 0.052), a(1.0, 0.045)], vec![fit.sleeve, fit.sleeve, sleeve_end], false, true);
+        put(&mut out, &format!("{s}UpperArm"), z, 6, vec![a(0.0, 0.04), a(0.12, 0.056), a(0.5, 0.052), a(1.0, 0.045)], vec![fit.sleeve, fit.sleeve, sleeve_end], false, true);
         let f = |f: f64, r: f64| st(f, r * k * gl, r * k * gl);
-        put(&mut out, &format!("{s}LowerArm"), z, 8, vec![f(0.0, 0.048), f(0.25, 0.05), f(1.0, 0.034)], vec![fit.forearm; 2], true, false);
-        let h = |f: f64, d: f64, w: f64| st(f, d * k * 1.25, w * k * 1.2);
+        put(&mut out, &format!("{s}LowerArm"), z, 6, vec![f(0.0, 0.048), f(0.25, 0.05), f(1.0, 0.034)], vec![fit.forearm; 2], true, false);
+        let h = |f: f64, d: f64, w: f64| st(f, d * k * 1.8, w * k * 1.7);
         put(&mut out, &format!("{s}Hand"), y, 6, vec![h(0.0, 0.02, 0.032), h(0.3, 0.022, 0.045), h(0.75, 0.016, 0.04), h(1.0, 0.01, 0.03)], vec![MatKey::Skin; 3], false, true);
 
         let cut = fit.cut_legs;
@@ -169,7 +171,7 @@ pub(crate) fn parts(sk: &[Joint], sc: &Scale, p: &P) -> Vec<Part> {
         let l = |f: f64, r: f64| st(f, r * k * gl, r * k * gl);
         let lw = |f: f64, r: f64, m: f64| st(f, r * k * gl * m, r * k * gl * m);
         let thigh_end = if cut { MatKey::Skin } else { MatKey::Bottom };
-        put(&mut out, &format!("{s}UpperLeg"), z, 8, vec![l(-0.08, 0.075), l(0.0, 0.09), l(0.3, 0.088), lw(0.6, 0.074, flare), l(1.0, 0.058)], vec![MatKey::Bottom, MatKey::Bottom, MatKey::Bottom, thigh_end], true, true);
+        put(&mut out, &format!("{s}UpperLeg"), z, 6, vec![l(-0.08, 0.075), l(0.0, 0.09), l(0.3, 0.088), lw(0.6, 0.074, flare), l(1.0, 0.058)], vec![MatKey::Bottom, MatKey::Bottom, MatKey::Bottom, thigh_end], true, true);
         let shin = if cut { MatKey::Skin } else { MatKey::Bottom };
         let mut sts = vec![l(0.0, 0.058), l(0.3, 0.064), l(1.0, 0.04)];
         let mut mats = vec![shin; 2];
@@ -177,7 +179,7 @@ pub(crate) fn parts(sk: &[Joint], sc: &Scale, p: &P) -> Vec<Part> {
             sts = vec![l(0.0, 0.06), l(0.3, 0.063), lw(1.0 - fit.boot, 0.052, 1.0), lw(1.0 - fit.boot + 0.001, 0.056, 1.0), l(1.0, 0.05)];
             mats = vec![shin, shin, MatKey::Shoes, MatKey::Shoes];
         }
-        put(&mut out, &format!("{s}LowerLeg"), z, 8, sts, mats, true, false);
+        put(&mut out, &format!("{s}LowerLeg"), z, 6, sts, mats, true, false);
 
         // stopa w poziomym układzie (przód +Z, ex = góra), spód dokładnie na gruncie
         let (fi, fh, _, _) = v(&format!("{s}Foot"));
@@ -186,10 +188,10 @@ pub(crate) fn parts(sk: &[Joint], sc: &Scale, p: &P) -> Vec<Part> {
         let ball = th[2] - fh[2];
         let o = [fh[0], 0.0, fh[2] - heel];
         let flen = ball + heel;
-        let ft = |zz: f64, h: f64, w: f64| St { f: (zz * k + heel) / flen, d: h * k, w: w * k, sd: h * k };
+        let ft = |zz: f64, h: f64, w: f64| St { f: (zz * k + heel) / flen, d: h * k * 1.15, w: w * k * 1.45, sd: h * k * 1.15 };
         out.push(Part { bone: fi, origin: o, dir: [0.0, 0.0, 1.0], hint: y, len: flen, n: 6, st: vec![ft(-0.055, 0.042, 0.033), ft(0.0, 0.052, 0.036), ft(0.085, 0.033, 0.045), ft(ball / k, 0.025, 0.047)], mats: vec![MatKey::Shoes; 3], cap0: true, cap1: false });
         let tl = 0.07 * k;
-        out.push(Part { bone: ti, origin: [th[0], 0.0, th[2]], dir: [0.0, 0.0, 1.0], hint: y, len: tl, n: 6, st: vec![ft_at(0.0, 0.025 * k, 0.047 * k), ft_at(1.0, 0.013 * k, 0.036 * k)], mats: vec![MatKey::Shoes], cap0: false, cap1: true });
+        out.push(Part { bone: ti, origin: [th[0], 0.0, th[2]], dir: [0.0, 0.0, 1.0], hint: y, len: tl, n: 6, st: vec![ft_at(0.0, 0.025 * k * 1.3, 0.047 * k * 1.45), ft_at(1.0, 0.013 * k * 1.3, 0.036 * k * 1.45)], mats: vec![MatKey::Shoes], cap0: false, cap1: true });
     }
     out
 }
