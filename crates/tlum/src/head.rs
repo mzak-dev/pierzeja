@@ -11,7 +11,7 @@ use std::f64::consts::{FRAC_PI_4, FRAC_PI_8, TAU};
 
 const N: usize = 8;
 /// (ułamek wysokości, półgłębokość, półszerokość, przesunięcie środka w +Z) dla głowy 1,78 m.
-const SKULL: [(f64, f64, f64, f64); 6] = [(0.0, 0.052, 0.042, 0.018), (0.13, 0.078, 0.062, 0.006), (0.36, 0.096, 0.080, 0.0), (0.62, 0.102, 0.084, 0.0), (0.88, 0.090, 0.072, -0.002), (1.0, 0.052, 0.044, -0.004)];
+const SKULL: [(f64, f64, f64, f64); 6] = [(0.0, 0.056, 0.038, 0.026), (0.13, 0.08, 0.07, 0.008), (0.36, 0.097, 0.09, 0.0), (0.62, 0.102, 0.09, 0.0), (0.88, 0.090, 0.077, -0.002), (1.0, 0.052, 0.047, -0.004)];
 
 struct Prof {
     y0: f64,
@@ -97,7 +97,7 @@ fn hair_shell(style: &str) -> Option<Shell> {
     Some(match style {
         "buzz" => Shell { m: 2, ..shell(0.66, 0.50, 0.004) },
         "fade" => shell(0.64, 0.38, 0.006),
-        "krotkie_klasyczne" | "kok" | "kucyk" => Shell { m: 4, ..shell(0.62, 0.30, 0.014) },
+        "krotkie_klasyczne" | "kok" | "kucyk" => Shell { m: 4, ..shell(0.70, 0.30, 0.014) },
         "medium" | "dlugie" => shell(0.62, 0.12, 0.018),
         "bob" => Shell { flare: 0.012, ..shell(0.62, 0.0, 0.02) },
         "lysiejacy" => Shell { top: 0.62, ..shell(0.62, 0.30, 0.012) },
@@ -137,18 +137,29 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P, hs: f
         let want = pr.front(f0, u0, 1.0);
         mb.quad(mat, q[0], q[1], q[2], q[3], Some(sub(want, pr.front(f0, u0, 0.0))));
     };
+    // wielokąt płata we współrzędnych (u, f) na przedniej ściance
+    let poly = |mb: &mut MeshBuilder, mat: MatKey, pts: &[(f64, f64)], off: f64| {
+        let v: Vec<V3> = pts.iter().map(|&(u, f)| pr.front(f, u, off)).collect();
+        let n = sub(pr.front(pts[0].1, pts[0].0, 1.0), pr.front(pts[0].1, pts[0].0, 0.0));
+        mb.poly(mat, &v, Some(n));
+    };
     for s in [-1.0f64, 1.0] {
-        let (a, b) = (s * 0.34, s * 0.70);
-        patch(mb, MatKey::Face, a.min(b), a.max(b), 0.50, 0.555, 0.002);
-        patch(mb, MatKey::Hair, (s * 0.24).min(s * 0.80), (s * 0.24).max(s * 0.80), 0.595, 0.62, 0.002);
+        // oko: migdał; brew: równoległobok opadający ku nosowi
+        let (c, w, h, f0) = (s * 0.5, 0.25, 0.034, 0.525);
+        poly(mb, MatKey::Face, &[(c - w, f0), (c - w * 0.45, f0 + h), (c + w * 0.5, f0 + h * 1.1), (c + w, f0 + 0.004), (c + w * 0.5, f0 - h * 0.8), (c - w * 0.45, f0 - h * 0.9)], 0.002);
+        let (i, o) = (s * 0.2, s * 0.82);
+        poly(mb, MatKey::Hair, &[(i, 0.592), (o, 0.606), (o, 0.628), (i, 0.614)], 0.003);
+        // nozdrze
+        poly(mb, MatKey::Face, &[(s * 0.06, 0.322), (s * 0.15, 0.322), (s * 0.15, 0.337), (s * 0.06, 0.337)], 0.011);
     }
-    patch(mb, MatKey::Face, -0.32, 0.32, 0.21, 0.235, 0.002);
-    // nos: czworościan (czubek, grzbiet, dwa skrzydełka)
-    let (top, tip) = (pr.front(0.47, 0.0, 0.007), pr.front(0.36, 0.0, 0.026 * sc.sv));
-    let (nl, nr) = (pr.front(0.33, 0.16, 0.008), pr.front(0.33, -0.16, 0.008));
-    let inside = pr.front(0.40, 0.0, -0.03);
-    for t in [[top, nl, tip], [top, tip, nr], [tip, nl, nr]] {
-        let c = scale(add(add(t[0], t[1]), t[2]), 1.0 / 3.0);
+    // usta: łuk górnej wargi (ciemny) i wystająca dolna warga (skóra)
+    poly(mb, MatKey::Face, &[(-0.4, 0.226), (-0.14, 0.24), (0.0, 0.234), (0.14, 0.24), (0.4, 0.226), (0.14, 0.208), (-0.14, 0.208)], 0.002);
+    // nos: grzbiet, czubek i skrzydełka (5 trójkątów)
+    let (top, mid, tip) = (pr.front(0.50, 0.0, 0.006), pr.front(0.42, 0.0, 0.017 * sc.sv), pr.front(0.355, 0.0, 0.032 * sc.sv));
+    let (nl, nr) = (pr.front(0.34, 0.2, 0.012), pr.front(0.34, -0.2, 0.012));
+    let inside = pr.front(0.42, 0.0, -0.04);
+    for t in [vec![top, nl, tip, mid], vec![top, mid, tip, nr], vec![tip, nl, nr]] {
+        let c = scale(t.iter().fold([0.0; 3], |a, &q| add(a, q)), 1.0 / t.len() as f64);
         mb.poly(MatKey::Skin, &t, Some(sub(c, inside)));
     }
     match p.s("glasses") {

@@ -141,13 +141,13 @@ pub(crate) fn parts(sk: &[Joint], sc: &Scale, p: &P) -> Vec<Part> {
     let km = (kh + kw) / 2.0;
     let torso = |bone: &str| if fit.vest && bone != "Hips" { MatKey::HiVis } else { fit.torso };
 
-    put(&mut out, "Hips", z, 8, vec![t(-0.45, 0.095, 0.135, kh), t(0.0, 0.108, 0.155, kh), t(0.55, 0.098, 0.14, kh), t(1.0, 0.092, 0.128 * waist, km)], vec![fit.hips; 3], true, true);
+    put(&mut out, "Hips", z, 8, vec![t(-0.45, 0.095, 0.135, kh), t(0.0, 0.108, 0.155, kh), t(0.55, 0.098, 0.14, kh), t(1.0, 0.092, 0.128 * waist, km)], vec![fit.hips; 3], true, false);
     if fit.hips == MatKey::Bottom {
         // pasek: dwa pierścienie lekko nad spodniami
         let b = |f: f64, d: f64, w: f64, wk: f64| st(f, (d + 0.005) * k * gd, (w + 0.005) * k * gw * wk);
         put(&mut out, "Hips", z, 8, vec![b(0.6, 0.097, 0.139, kh), b(0.9, 0.094, 0.133 * waist, km)], vec![MatKey::Shoes], false, false);
     }
-    put(&mut out, "Spine", z, 8, vec![t(0.0, 0.092, 0.128 * waist, km), t(0.5, 0.09, 0.122 * waist, km), t(1.0, 0.094, 0.14 * waist, km)], vec![torso("Spine"); 2], false, true);
+    put(&mut out, "Spine", z, 8, vec![t(0.0, 0.092, 0.128 * waist, km), t(1.0, 0.094, 0.14 * waist, km)], vec![torso("Spine")], false, true);
     put(&mut out, "Chest", z, 8, vec![t(0.0, 0.094, 0.14 * waist, km), t(0.5, 0.108 * bust, 0.165, kw), t(1.0, 0.104 * bust, 0.18, kw)], vec![torso("Chest"); 2], false, true);
     put(&mut out, "UpperChest", z, 8, vec![t(0.0, 0.104 * bust, 0.18, kw), t(0.3, 0.097, 0.205, kw), t(0.62, 0.088, 0.195, kw), t(0.86, 0.07, 0.12, kw), t(1.0, 0.056, 0.085, kw)], vec![torso("UpperChest"); 4], false, true);
     let nk = |f: f64, r: f64| st(f, r * k * gn, r * k * gn);
@@ -158,7 +158,7 @@ pub(crate) fn parts(sk: &[Joint], sc: &Scale, p: &P) -> Vec<Part> {
         let a = |f: f64, r: f64| st(f, r * k * gl * fit.bulk, r * k * gl * fit.bulk);
         let sleeve_end = if fit.forearm == MatKey::Skin { MatKey::Skin } else { fit.sleeve };
         // krótki rękaw kończy się w połowie ramienia
-        put(&mut out, &format!("{s}UpperArm"), z, 8, vec![a(0.0, 0.04), a(0.12, 0.056), a(0.5, 0.052), a(1.0, 0.045)], vec![fit.sleeve, fit.sleeve, sleeve_end], true, true);
+        put(&mut out, &format!("{s}UpperArm"), z, 8, vec![a(0.0, 0.04), a(0.12, 0.056), a(0.5, 0.052), a(1.0, 0.045)], vec![fit.sleeve, fit.sleeve, sleeve_end], false, true);
         let f = |f: f64, r: f64| st(f, r * k * gl, r * k * gl);
         put(&mut out, &format!("{s}LowerArm"), z, 8, vec![f(0.0, 0.048), f(0.25, 0.05), f(1.0, 0.034)], vec![fit.forearm; 2], true, false);
         let h = |f: f64, d: f64, w: f64| st(f, d * k * 1.25, w * k * 1.2);
