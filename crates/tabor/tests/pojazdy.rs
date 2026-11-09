@@ -54,7 +54,7 @@ fn dimensions_match_params_within_5_percent() {
     for a in CARS.iter().chain(&["van"]) {
         let m = make(a);
         let b = m.bounds();
-        for (name, got, key) in [("długość", b.max[2] - b.min[2], "length"), ("szerokość", b.max[0] - b.min[0], "width"), ("wysokość", b.max[1] - b.min[1], "height")] {
+        for (name, got, key) in [("długość", b.max[2] - b.min[2], "length"), ("szerokość", m.stats.width, "width"), ("wysokość", b.max[1] - b.min[1], "height")] {
             let want = param(&m, key);
             assert!((got / want - 1.0).abs() <= 0.05, "{a}: {name} {got:.3} vs {want:.3}");
         }

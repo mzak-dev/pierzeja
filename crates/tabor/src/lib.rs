@@ -6,6 +6,7 @@
 mod body;
 mod ciezkie;
 mod sluzba;
+mod tablice;
 mod wheel;
 mod zabudowa;
 
@@ -73,7 +74,10 @@ pub struct VehicleStats {
     /// Trójkąty całego pojazdu (nadwozie + 4 koła).
     pub triangles: usize,
     pub length: f64,
+    /// Szerokość nadwozia bez lusterek (jak w danych producentów i w limicie 2,55 m).
     pub width: f64,
+    /// Szerokość z lusterkami.
+    pub width_mirrors: f64,
     pub height: f64,
     pub wheelbase: f64,
     /// Rozstaw kół (środki opon).
@@ -155,6 +159,7 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
     let mut mb = MeshBuilder::default();
     let layout = if heavy { ciezkie::build(&p, r.seed, &mut mb) } else { body::build(&p, r.seed, &mut mb) };
     let mut body_mats = mats.clone();
+    body_mats.extend(tablice::materials());
     body_mats.extend(sluzba::materials(&p));
     let body = mb.build(body_mats);
     let wheel = wheel::build(&p, mats);
@@ -173,13 +178,13 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
         wheels,
         seats,
         lightbar: layout.lightbar,
-        stats: VehicleStats { body_type: p.s("bodyType").into(), triangles: 0, length: 0.0, width: 0.0, height: 0.0, wheelbase: layout.wheelbase, track: layout.track, wheel_radius: rad, seats: 0, stations: layout.stations },
+        stats: VehicleStats { body_type: p.s("bodyType").into(), triangles: 0, length: 0.0, width: layout.body_width, width_mirrors: 0.0, height: 0.0, wheelbase: layout.wheelbase, track: layout.track, wheel_radius: rad, seats: 0, stations: layout.stations },
         params: r.params.clone(),
     };
     let b = m.bounds();
     m.stats.triangles = m.body.triangles() + 4 * m.wheel.triangles() + m.lightbar.as_ref().map_or(0, |l| l.0.triangles());
     m.stats.length = b.max[2] - b.min[2];
-    m.stats.width = b.max[0] - b.min[0];
+    m.stats.width_mirrors = b.max[0] - b.min[0];
     m.stats.height = b.max[1] - b.min[1];
     m.stats.seats = m.seats.len();
     m

@@ -4,6 +4,7 @@
 //! Konwencja jak w `body.rs`: przód +Z, lewa strona +X, origin = środek między osiami na gruncie.
 
 use crate::body::Layout;
+use crate::tablice::plate;
 use crate::{roll, P};
 use procedura_kit::mesh::{add, cross, len, norm, scale, sub, MatKey, MaterialSpec, MeshBuilder, V3};
 
@@ -280,10 +281,10 @@ pub(crate) fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let d = D::new(p);
     frame(mb, &d);
     let stations = cab(mb, &d, p, seed);
-    front(mb, &d, p);
-    crate::zabudowa::module(mb, &d, p);
+    front(mb, &d, p, seed);
+    crate::zabudowa::module(mb, &d, p, seed);
     // ponytail: no livery/lightbar on heavy vehicles yet (sluzba::apply needs a car hull), add with issue 10
-    Layout { wheelbase: d.wb, track: d.track, stations, lightbar: None }
+    Layout { wheelbase: d.wb, track: d.track, stations, body_width: d.w, lightbar: None }
 }
 
 /// Podłużnice (z kopniakiem na tyle), poprzeczki, osie z resorami, zbiornik i akumulator.
@@ -413,6 +414,14 @@ fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> usize {
         mb.quad(MatKey::Plastic, q(0.50 * hf, ly0 - 0.02, 0.0), q(0.97 * hf, ly0 - 0.02, 0.0), q(0.97 * hf, ly1 + 0.02, 0.0), q(0.50 * hf, ly1 + 0.02, 0.0), Some([0.0, 0.0, 1.0]));
         mb.quad(MatKey::Headlight, q(0.54 * hf, ly0, 0.003), q(0.93 * hf, ly0, 0.003), q(0.93 * hf, ly1, 0.003), q(0.54 * hf, ly1, 0.003), Some([0.0, 0.0, 1.0]));
     }
+    // kierunkowskazy: nad reflektorem w narożu czoła i boczne na ściance kabiny za nadkolem
+    for side in [1.0f64, -1.0] {
+        let q = |x: f64, y: f64| [x * side, y, zfc + 0.004];
+        mb.quad(MatKey::Indicator, q(0.70 * hf, ly1 + 0.04), q(0.95 * hf, ly1 + 0.04), q(0.95 * hf, ly1 + 0.1), q(0.70 * hf, ly1 + 0.1), Some([0.0, 0.0, 1.0]));
+        let (zr0, x) = (d.zaf - d.arch_a - 0.05, (hz(d.zaf - d.arch_a - 0.1) + 0.004) * side);
+        let yr = (d.archtop + 0.08).max(ycb + 0.1);
+        mb.quad(MatKey::Indicator, [x, yr, zr0 - 0.12], [x, yr, zr0], [x, yr + 0.05, zr0], [x, yr + 0.05, zr0 - 0.12], Some([side, 0.0, 0.0]));
+    }
     // daszek nad szybą
     let (zv, ho) = (z_rf, hwc * 0.8);
     mb.bx(MatKey::Plastic, [-ho, top - 0.02, zv - 0.02], [ho, top + 0.1f64.min(d.h - top), zv + 0.12]);
@@ -433,22 +442,26 @@ fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> usize {
     zs.len()
 }
 
-/// Zderzak przedni (kolor `bumperColor`), z wyciągarką w otworze, światła tylne w zabudowie.
-fn front(mb: &mut MeshBuilder, d: &D, p: &P) {
+/// Zderzak przedni (kolor `bumperColor`), z wyciągarką w otworze i tablicą (przy wyciągarce
+/// przesuniętą na prawą stronę zderzaka); światła tylne w zabudowie.
+fn front(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) {
     let hb = d.w / 2.0 - 0.1;
     let y0 = (d.clr + 0.05).max(d.app(d.zf) + 0.02);
-    let (y1, z0) = (y0 + 0.42, d.zc - 0.01);
+    // czoło zderzaka 4 mm za `zf`: tablica wystaje, a długość całkowita zostaje równa `length`
+    let (y1, z0, zfb) = (y0 + 0.42, d.zc - 0.01, d.zf - 0.004);
     if p.f("winch") > 0.5 {
         let o = 0.5;
-        mb.bx(MatKey::Bumper, [-hb, y0, z0], [-o, y1, d.zf]);
-        mb.bx(MatKey::Bumper, [o, y0, z0], [hb, y1, d.zf]);
-        mb.bx(MatKey::Bumper, [-o, y1 - 0.08, z0], [o, y1, d.zf]);
-        mb.bx(MatKey::Bumper, [-o, y0, z0], [o, y0 + 0.08, d.zf]);
+        mb.bx(MatKey::Bumper, [-hb, y0, z0], [-o, y1, zfb]);
+        mb.bx(MatKey::Bumper, [o, y0, z0], [hb, y1, zfb]);
+        mb.bx(MatKey::Bumper, [-o, y1 - 0.08, z0], [o, y1, zfb]);
+        mb.bx(MatKey::Bumper, [-o, y0, z0], [o, y0 + 0.08, zfb]);
         // bęben i hak
         let (zm, ym) = (d.zf - 0.09, (y0 + y1) / 2.0);
         cyl(mb, MatKey::Metal, [-o, ym, zm], [o, ym, zm], 0.065, 8, true);
         mb.bx(MatKey::Plastic, [-0.07, y0 - 0.0, d.zf - 0.05], [0.07, y0 + 0.08, d.zf]);
+        plate(mb, seed, 7.0, [-(o + hb) / 2.0, (y0 + y1) / 2.0, zfb], 1.0);
     } else {
-        mb.bx(MatKey::Bumper, [-hb, y0, z0], [hb, y1, d.zf]);
+        mb.bx(MatKey::Bumper, [-hb, y0, z0], [hb, y1, zfb]);
+        plate(mb, seed, 7.0, [0.0, (y0 + y1) / 2.0, zfb], 1.0);
     }
 }

@@ -34,8 +34,10 @@ fn car_budget_with_livery() {
     for b in ["hatchback", "sedan_liftback", "kombi", "suv"] {
         for s in SERVICES {
             for livery in ["stripe", "checker", "chevron"] {
+                // napisy z fontu 5×7 (przód, boki, tył) i szachownica kosztują ~300 trójkątów ponad
+                // budżet osobówki cywilnej (≤ 1500), stąd osobny limit dla służb
                 let t = make(b, s, json!({ "livery": livery })).stats.triangles;
-                assert!(t <= 1500, "{b}/{s}/{livery}: {t} trójkątów");
+                assert!(t <= 1800, "{b}/{s}/{livery}: {t} trójkątów");
             }
         }
     }
@@ -73,9 +75,9 @@ fn colours_follow_regulations() {
     let m = make("sedan_liftback", "straz", json!({}));
     assert!(rgb(&m.body.material(MatKey::Bumper).unwrap().color).iter().all(|&c| c > 190), "zderzaki PSP białe");
     let t = make("kombi", "techniczne", json!({}));
-    assert_eq!(t.lightbar.unwrap().0.material(MatKey::GlassLit).unwrap().emissive, Some("#ffb000"), "żółte lampy § 38");
+    assert_eq!(t.lightbar.unwrap().0.material(MatKey::GlassLit).unwrap().emissive, Some("#ffc94a"), "żółte lampy § 38");
     let p = make("kombi", "policja", json!({}));
-    assert_eq!(p.lightbar.unwrap().0.material(MatKey::GlassLit).unwrap().emissive, Some("#3a6dff"));
+    assert_eq!(p.lightbar.unwrap().0.material(MatKey::GlassLit).unwrap().emissive, Some("#5a8cff"));
 }
 
 #[test]
