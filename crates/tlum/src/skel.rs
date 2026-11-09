@@ -41,7 +41,8 @@ fn is_arm(name: &str) -> bool {
 
 /// Głów we wzroście wg wieku (dziecko ma większą głowę) i wzrostu (niski dorosły: głowa względnie większa).
 fn heads(age: f64, h: f64) -> f64 {
-    const T: [(f64, f64, f64); 6] = [(3.0, 5.0, 0.96), (6.0, 5.7, 1.17), (9.0, 6.2, 1.34), (12.0, 6.7, 1.52), (15.0, 7.2, 1.68), (18.0, 7.5, 1.78)];
+    // (wiek, głów we wzroście, typowy wzrost): 5 lat ok. 1/6, 8 lat ok. 1/6,5, dorosły 1/7,5
+    const T: [(f64, f64, f64); 6] = [(3.0, 5.5, 0.96), (5.0, 6.0, 1.1), (8.0, 6.5, 1.29), (12.0, 7.0, 1.52), (15.0, 7.3, 1.68), (18.0, 7.5, 1.78)];
     let i = T.iter().position(|t| age < t.0).unwrap_or(T.len());
     let (n, rh) = match i {
         0 => (T[0].1, T[0].2),
@@ -79,16 +80,19 @@ impl Scale {
         let h = p.f("height");
         let age = p.f("age");
         let sv = h / REF_H;
-        let kc = p.f("crotchHeight") / REF_CROTCH;
+        let child = ((14.0 - age) / 10.0).clamp(0.0, 1.0);
+        // dziecko: nogi krótsze względem tułowia, barki węższe; kobieta: barki węższe, biodra szersze
+        let s = p.f("sex").clamp(0.0, 1.0);
+        let fem = (1.0 - s * s * (3.0 - 2.0 * s)) * ((age - 11.0) / 6.0).clamp(0.0, 1.0);
+        let kc = p.f("crotchHeight") / REF_CROTCH * (1.0 - 0.04 * child);
         let hh = h / heads(age, h);
         let yp = h - PIVOT * hh;
-        let child = ((14.0 - age) / 10.0).clamp(0.0, 1.0);
-        let yn = yp - (HEAD_Y - NECK_Y) * sv * (1.0 - 0.3 * child);
+        let yn = yp - (HEAD_Y - NECK_Y) * sv * (1.0 - 0.45 * child);
         let y0 = HIP_Y * sv * kc;
         Scale {
             sv,
-            kw: p.f("shoulderWidth") / REF_SHOULDER,
-            kh: p.f("hipWidth") / REF_HIP,
+            kw: p.f("shoulderWidth") / REF_SHOULDER * (1.0 - 0.07 * fem - 0.05 * child),
+            kh: p.f("hipWidth") / REF_HIP * (1.0 + 0.05 * fem),
             hh,
             child,
             kc,
@@ -352,13 +356,16 @@ pub(crate) fn pose(sk: &[Joint], sc: &Scale, pose: Pose, phase: f64, posture: &s
         "kifoza" => (14.0, 13.0, 9.0, 10.0),
         _ => (0.0, 0.0, 0.0, 0.0),
     };
+    // w fotelu plecy opierają się o oparcie: pochylenie słabsze
+    let lean = if seated { 0.4 } else { 1.0 };
+    let (sp, ch, uc) = (sp * lean, ch * lean, uc * lean);
     let stoop = if matches!(pose, Pose::Stand | Pose::Walk) { kn } else { 0.0 };
     for (side, sx) in [("Left", 1.0), ("Right", -1.0)] {
         let th = phase * std::f64::consts::TAU + if sx > 0.0 { 0.0 } else { std::f64::consts::PI };
         // (udo do przodu, kolano, ramię do przodu, łokieć, ramię w dół, pięta w górę)
         let (flex, knee, swing, elbow, hang, heel) = match pose {
-            Pose::Stand => (0.0, 0.0, 0.0, 8.0, 80.0, 0.0),
-            Pose::Walk => (20.0 * th.sin(), 6.0 + 42.0 * th.cos().max(0.0), -24.0 * th.sin() * (1.0 - stoop / 20.0), 14.0 + 18.0 * (-th.sin()).max(0.0), 80.0, 14.0 * (-th.sin()).max(0.0)),
+            Pose::Stand => (0.0, 0.0, 0.0, 10.0, 77.0, 0.0),
+            Pose::Walk => (20.0 * th.sin(), 6.0 + 42.0 * th.cos().max(0.0), -24.0 * th.sin() * (1.0 - stoop / 20.0), 14.0 + 18.0 * (-th.sin()).max(0.0), 78.0, 14.0 * (-th.sin()).max(0.0)),
             Pose::Sit => (89.0, 91.0, 6.0, 60.0, 76.0, 0.0),
             _ => (90.0, 90.0, 20.0, 40.0, 70.0, 0.0),
         };
@@ -370,7 +377,7 @@ pub(crate) fn pose(sk: &[Joint], sc: &Scale, pose: Pose, phase: f64, posture: &s
         p.set(&format!("{side}LowerLeg"), eul(knee, 0.0, 0.0));
         // stopa płasko względem gruntu (kompensacja uda i kolana), w marszu tylna pięta odrywa się
         p.set(&format!("{side}Foot"), eul(flex - knee + heel, 0.0, 0.0));
-        let (mcp, pip, dip, thumb) = if pose == Pose::Drive { (62.0, 80.0, 40.0, 38.0) } else { (14.0, 22.0, 12.0, 14.0) };
+        let (mcp, pip, dip, thumb) = if pose == Pose::Drive { (40.0, 60.0, 30.0, 30.0) } else { (14.0, 22.0, 12.0, 14.0) };
         p.curl(side, mcp, pip, dip, thumb);
     }
     match pose {
@@ -421,8 +428,8 @@ pub(crate) fn pose(sk: &[Joint], sc: &Scale, pose: Pose, phase: f64, posture: &s
     for (side, sx) in [("Left", 1.0), ("Right", -1.0)] {
         match pose {
             Pose::Drive => {
-                // kierownica: chwyt „za kwadrans trzecia”, dłonie ok. 0,40 m nad i 0,45 m przed punktem H
-                let grip = add(hip, scale([sx * 0.185, 0.40, 0.45], sc.sv));
+                // kierownica: chwyt „za kwadrans trzecia”, dłonie ok. 0,34 m nad i 0,40 m przed punktem H
+                let grip = add(hip, scale([sx * 0.19, 0.34, 0.40], sc.sv));
                 p.reach(side, sx, grip, [-sx * 0.15, 0.55, 1.0], [-sx, 0.15, 0.35], [sx * 0.8, -1.0, -0.2]);
             }
             Pose::Sit | Pose::Ride => {
