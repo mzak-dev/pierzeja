@@ -4767,6 +4767,7 @@ dependencies = [
  "procedura-kit",
  "serde_json",
  "tabor-core",
+ "tlum-core",
  "winit",
 ]
 
