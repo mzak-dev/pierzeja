@@ -40,7 +40,14 @@ fn tabor(spec: &Value, dir: &str) {
     let m: VehicleModel = vehicle(&serde_json::from_value::<TaborSpec>(spec.clone()).expect("TaborSpec"));
     let b = m.bounds();
     // załoga: kierowca w pozie `drive`, reszta `sit`; biodro na punkcie Seat_N
-    let crew: Vec<HumanModel> = (0..m.seats.len()).map(|i| person(json!({ "archetype": "przechodzien_dorosly", "seed": 11 + i, "pose": if i == 0 { "drive" } else { "sit" } }))).collect();
+    // kierowca `drive`, pasażerowie `ride`; tylne rzędy kabiny brygadowej siedzą jak na krześle (`sit`)
+    let heavy = m.stats.body_type == "podwozie";
+    let pose = |i: usize| match i {
+        0 => "drive",
+        _ if heavy && m.seats[i][2] < m.seats[0][2] - 0.3 => "sit",
+        _ => "ride",
+    };
+    let crew: Vec<HumanModel> = (0..m.seats.len()).map(|i| person(json!({ "archetype": "przechodzien_dorosly", "seed": 11 + i, "pose": pose(i) }))).collect();
     let walker = person(json!({ "archetype": "przechodzien_dorosly", "seed": 5 }));
     let open = without_glass(&m.body);
 

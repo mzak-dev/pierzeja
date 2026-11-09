@@ -167,7 +167,8 @@ pub(crate) fn extra_materials(p: &P) -> Vec<MaterialSpec> {
 /// brygadowa: przód 2, z tyłu 1–2 rzędy po 2–4.
 pub(crate) fn seat_points(p: &P) -> Vec<V3> {
     let d = D::new(p);
-    let y = 2.0 * d.r + 0.15 + 0.4;
+    // punkt H w kabinie nad kołem: podłoga kabiny 4x4 ok. 1,2–1,3 m, siedzisko ok. 0,4 m wyżej
+    let y = 2.0 * d.r + 0.15 + 0.5;
     let hwc = d.w / 2.0 - 0.03;
     let row = |n: usize, z: f64, out: &mut Vec<V3>| {
         let pitch = ((2.0 * hwc - 0.3) / n as f64).min(1.2);

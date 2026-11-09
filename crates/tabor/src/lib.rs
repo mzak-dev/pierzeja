@@ -128,7 +128,9 @@ fn materials(p: &P, seed: u32) -> Vec<MaterialSpec> {
 fn seat_points(p: &P) -> Vec<V3> {
     let (n, wb, w) = (p.f("seats") as usize, p.f("wheelbase"), p.f("width"));
     let van = p.s("bodyType") == "van";
-    let y = p.f("clearance") + 0.12 + if van { 0.25 } else { 0.0 } + 0.25;
+    // punkt H: podłoga ok. 0,12 m nad prześwitem, siedzisko 0,3 m nad podłogą (poza `drive`/`ride`:
+    // pięty ok. 0,3 m pod punktem H); van: kabina 0,25 m wyżej
+    let y = p.f("clearance") + 0.12 + if van { 0.25 } else { 0.0 } + 0.30;
     let front_z = wb / 2.0 - wb * if van { 0.27 } else { 0.38 };
     let (front_cap, pitch) = (if van { 3 } else { 2 }, if van { 0.9 } else { 0.7 });
     let k = w / 1.8;
