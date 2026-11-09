@@ -5,6 +5,7 @@
 //! Ctrl+K — szukaj poleceń.
 
 mod editors;
+mod gizmos;
 mod human;
 mod screens;
 mod theme;
@@ -52,12 +53,13 @@ const SKY: Color = Color::srgb(0.80, 0.85, 0.88);
 const NIGHT_SKY: Color = Color::srgb(0.04, 0.06, 0.11);
 
 /// `PIERZEJA_MODE=start|mcp|budynek|wielokat|pojazd|czlowiek|ulica|osiedle|skrzyzowanie|rondo` — ekran startowy (zrzuty, testy);
-/// opcjonalnie `PIERZEJA_ARCHETYPE=id` (budynek/pojazd/człowiek), `PIERZEJA_POSE=stand|walk|sit|drive|rest`.
+/// opcjonalnie `PIERZEJA_ARCHETYPE=id` (budynek/pojazd/człowiek), `PIERZEJA_POSE=stand|walk|sit|drive|rest`, `PIERZEJA_GIZMO=0`.
 fn initial_state() -> (Docs, View) {
     let mut view = View::default();
     let mut doc = Doc::building("familok");
     let m = std::env::var("PIERZEJA_MODE").unwrap_or_default();
     let arch = |default: &str| std::env::var("PIERZEJA_ARCHETYPE").unwrap_or_else(|_| default.into());
+    view.gizmos = std::env::var("PIERZEJA_GIZMO").as_deref() != Ok("0");
     match m.as_str() {
         "" | "loading" => view.screen = Screen::Loading,
         "start" => view.screen = Screen::Start,
@@ -532,6 +534,11 @@ pub struct View {
     pub screenshot: bool,
     pub msg: String,
     pub maximized: bool,
+    /// Gizmo edycji w widoku 3D (klawisz G): wszystkie naraz oraz kategorie.
+    pub gizmos: bool,
+    pub gz_dims: bool,
+    pub gz_anchors: bool,
+    pub gz_skeleton: bool,
 }
 
 impl Default for View {
@@ -558,6 +565,10 @@ impl Default for View {
             screenshot: false,
             msg: String::new(),
             maximized: false,
+            gizmos: true,
+            gz_dims: true,
+            gz_anchors: true,
+            gz_skeleton: true,
         }
     }
 }
@@ -594,6 +605,8 @@ pub struct Derived {
     pub parcels: Vec<Parcel>,
     pub info: String,
     pub tris: usize,
+    /// Dane modelu pojazdu/człowieka dla gizmo edycji.
+    pub gz: gizmos::Snap,
 }
 
 fn rgb(hex: &str) -> [u8; 3] {
@@ -749,6 +762,7 @@ fn regenerate(
     let m = &mut *m_;
     der.parcels.clear();
     der.stats = None;
+    der.gz = gizmos::Snap::None;
     let bounds = if let Some(kind) = doc.mode.scene() {
         let sc = generate_scene(&doc.scene_spec(kind));
         der.tris = sc.items.iter().map(|it| spawn_mesh(b, c, m, &it.mesh, Vec3::ZERO, night)).sum();
@@ -763,6 +777,7 @@ fn regenerate(
         der.tris = tris;
         der.resolved = m.params.clone();
         der.weights = tabor_core::resolve(&doc.vehicle_spec()).weights["bryla"].iter().map(|(k, v)| (k.clone(), *v)).collect();
+        der.gz = gizmos::Snap::vehicle(&m);
         let st = &m.stats;
         der.info = format!(
             "Pojazd\n• Nadwozie — {}\n• Wymiary — {:.2} × {:.2} × {:.2} m\n• Rozstaw osi — {:.2} m\n• Miejsca — {}",
@@ -776,6 +791,7 @@ fn regenerate(
         der.resolved = m.params.clone();
         der.weights = tlum_core::resolve(&spec).weights["cialo"].iter().map(|(k, v)| (k.clone(), *v)).collect();
         der.info = human::info(&m);
+        der.gz = gizmos::Snap::human(&m);
         m.bounds()
     } else if doc.mode == Mode::Street {
         let street = pc::generate_street(&doc.street_spec());

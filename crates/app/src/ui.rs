@@ -21,6 +21,8 @@ pub enum Cmd {
     NewVehicle(String),
     NewHuman(String),
     Pose(String),
+    /// Gizmo edycji w widoku: włącz/wyłącz wszystkie (G).
+    Gizmos,
     Reseed,
     Mode(Mode),
     Night,
@@ -241,6 +243,9 @@ pub fn ui(
                     cmds.push(Cmd::Fam(f));
                 }
             }
+            if i.consume_shortcut(&K::new(M::NONE, Key::G)) {
+                cmds.push(Cmd::Gizmos);
+            }
             if i.consume_shortcut(&K::new(M::COMMAND, Key::K)) {
                 cmds.push(Cmd::Palette);
             }
@@ -317,6 +322,7 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             view.screen = Screen::Editor;
         }
         Cmd::Night => view.night = !view.night,
+        Cmd::Gizmos => view.gizmos = !view.gizmos,
         Cmd::Pose(p) => docs.cur_mut().pose = p,
         Cmd::Shadows => view.shadows = !view.shadows,
         Cmd::Preset(p) => {
@@ -581,7 +587,7 @@ fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window,
                 }
                 ui.add_space(10.0);
                 ui.label(RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).font(mono(12.0)).color(DIM));
-                icon_btn(ui, ic::QUESTION, false, "Mysz: lewy — narzędzie z paska widoku, prawy — obrót, środkowy — przesunięcie, kółko — zoom\nF — kadruj · Ctrl+Z/Ctrl+Y — cofnij/ponów · Ctrl+K — polecenia · Ctrl+Shift+N — nowa ulica");
+                icon_btn(ui, ic::QUESTION, false, "Mysz: lewy — narzędzie z paska widoku, prawy — obrót, środkowy — przesunięcie, kółko — zoom\nF — kadruj · G — gizmo edycji · Ctrl+Z/Ctrl+Y — cofnij/ponów · Ctrl+K — polecenia · Ctrl+Shift+N — nowa ulica");
                 ui.add_space(8.0);
                 // pole „Szukaj poleceń” (otwiera paletę)
                 let (r, resp) = ui.allocate_exact_size(Vec2::new(270.0, 30.0), Sense::click());
@@ -922,8 +928,8 @@ fn editor_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
                 }
             });
         }
-        // wymiar wysokości: kropka na okapie, linia do etykiety nad dachem
-        if let Some(s) = &der.stats {
+        // wymiar wysokości: kropka na okapie, linia do etykiety nad dachem (przy włączonych gizmo zastępują go wymiary z `gizmos`)
+        if let Some(s) = der.stats.as_ref().filter(|_| !view.gizmos) {
             let (min, max) = der.bounds;
             let cx = (min.x + max.x) / 2.0 - (max.x - min.x) * 0.12;
             if let (Some(a), Some(b)) = (proj(Vec3::new(cx, s.height_walls as f32, max.z)), proj(Vec3::new(cx, s.height_total as f32 + 2.5, max.z))) {
@@ -947,6 +953,9 @@ fn editor_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
         && !(mode == Mode::Street && view.sview != SView::Perspektywa)
     {
         gizmo(ctx, vp, g, cmds);
+    }
+    if view.gizmos && (mode.fam() != Fam::Budynki || mode == Mode::Building) {
+        crate::gizmos::draw(ctx, docs, der, view, &proj);
     }
     viewport_toolbar(ctx, docs, view, cmds);
 }
@@ -1036,7 +1045,10 @@ fn vehicle_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mu
             }
         });
     }
-    // wymiary: wysokość przy tyle, długość pod pojazdem
+    // wymiary: wysokość przy tyle, długość pod pojazdem (przy włączonych gizmo zastępują je wymiary z `gizmos`)
+    if view.gizmos {
+        return;
+    }
     let (min, max) = der.bounds;
     let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Background, "dims".into())).with_clip_rect(vp);
     if let (Some(a), Some(b)) = (proj(Vec3::new(max.x + 0.3, min.y, min.z - 0.1)), proj(Vec3::new(max.x + 0.3, max.y, min.z - 0.1))) {
@@ -1453,6 +1465,10 @@ fn viewport_toolbar(ctx: &egui::Context, docs: &mut Docs, view: &mut View, cmds:
                     cmds.push(Cmd::Shadows);
                 }
                 sep(ui);
+                if matches!(mode, Mode::Building | Mode::Vehicle | Mode::Human) {
+                    crate::gizmos::toolbar_button(ui, mode, view, cmds);
+                    sep(ui);
+                }
                 let doc = docs.cur_mut();
                 let (v, def) = if mode == Mode::Street { (&mut doc.street_var, 0.35) } else { (&mut doc.variation, 0.35) };
                 let mut on = *v > 0.0;
@@ -1504,6 +1520,7 @@ fn palette(ctx: &egui::Context, docs: &Docs, view: &mut View, cmds: &mut Vec<Cmd
             all.push((format!("Typ postaci: {}", a.name), Cmd::Archetype(a.id.clone())));
         }
     }
+    all.push(("Gizmo edycji (G)".into(), Cmd::Gizmos));
     if doc.mode.is_street() {
         for c in &d.city_profiles {
             all.push((format!("Profil ulicy: {}", c.name), Cmd::Profile(c.id.clone())));
