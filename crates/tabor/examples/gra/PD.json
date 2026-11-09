@@ -1,0 +1,1 @@
+{ "archetype": "podwozie_lekkie", "seed": 7, "overrides": { "wheelbase": 4.8, "length": 7.9, "seats": 1, "module": "laweta", "moduleLength": 5.2 } }
