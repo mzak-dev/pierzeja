@@ -961,7 +961,8 @@
     "lowerType": "jeansy",
     "lowerColor": "#46658F",
     "feetType": "sneakersy",
-    "feetColor": "#ECEBE6"
+    "feetColor": "#ECEBE6",
+    "sex": 0.85
    }
   },
   {
@@ -1019,7 +1020,8 @@
     "feetType": "polbuty",
     "feetColor": "#2B2B2E",
     "headType": "kaszkiet",
-    "headColor": "#5B4636"
+    "headColor": "#5B4636",
+    "sex": 0.85
    }
   },
   {
@@ -1066,7 +1068,7 @@
     "lowerType": "bojowki",
     "lowerColor": "#5B5E3C",
     "feetType": "sneakersy",
-    "feetColor": "#E6DCCB",
+    "feetColor": "#E9E9EA",
     "carryType": "plecak",
     "carryColor": "#1C1C1E"
    }
@@ -1210,7 +1212,8 @@
     "feetType": "polbuty",
     "feetColor": "#1C1C1E",
     "neckFaceType": "krawat",
-    "neckFaceColor": "#6E2233"
+    "neckFaceColor": "#6E2233",
+    "sex": 0.9
    }
   },
   {
@@ -1309,7 +1312,7 @@
     "feetType": "buty_mundurowe",
     "feetColor": "#111111",
     "headType": "czapka_policji_rd",
-    "headColor": "#1F2340"
+    "headColor": "#F2F4F2"
    }
   },
   {
