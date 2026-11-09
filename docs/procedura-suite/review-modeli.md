@@ -85,22 +85,37 @@ Priorytety: **P1** psuje realizm albo przepis i widać to z kamery gry; **P2** w
 
 ## Ludzie (Tłum)
 
-Decyzja użytkownika (2026-11-09): **urealnić** (głowa ok. 1/7,5 wzrostu, kończyny o 10–15% grubsze,
-sylwetka wg BMI, płci i wieku) oraz dodać **palce z rigiem**. Uwagi użytkownika: nogi dzieci prawie
-z boku ciała, twarze sztuczne.
+Decyzja użytkownika (2026-11-09): **urealnić** (głowa ok. 1/7,5 wzrostu, kończyny grubsze, sylwetka wg
+BMI, płci i wieku) i dodać **palce z rigiem**. Uwagi użytkownika: nogi dzieci prawie z boku ciała, twarze
+sztuczne. Trzy rundy review (po 3 recenzentów: cywile i warianty sylwetek, mundury i służby, anatomia
+z rigiem i pozami).
 
-| Usterka | P | Status |
+| Usterka (runda 1–2) | P | Status |
 |---|---|---|
-| Poza `drive` = krzesło: stopy przebijają podłogę auta | P1 | ⏳ |
-| Zarost jako brązowa maska na pół twarzy | P1 | ⏳ |
-| Brak odblasków i napisów (kamizelki, ratownik, strażak) | P1 | ⏳ |
-| Hełm PSP jak bejsbolówka; kask budowlany jak czapka | P1 | ⏳ |
-| Drogówka różni się od prewencji tylko kamizelką; prewencja bez widocznej kamizelki | P1 | ⏳ |
-| Biznes nie do odróżnienia od policjanta | P1 | ⏳ |
-| Senior: jasne szczeliny w płaszczu | P1 | ⏳ |
-| Nogi dzieci z boku ciała, jedno ciało dla wszystkich, twarze sztuczne | P1 | ⏳ |
-| Palce (rig Unity Humanoid, dopisane do rr_human) | — | ⏳ |
-| Kolor ubioru służbowego PSP | P2 | ❓ do sprawdzenia w Dz.U. 2021 poz. 1795 |
+| Nogi dzieci z boku ciała (`shoulderWidth`, `hipWidth`, `crotchHeight` to ułamki wzrostu — skel.rs ich nie mnożył) | P1 | ✅ test `child_legs_start_under_the_pelvis` |
+| Jedno ciało dla wszystkich; głowa 1/6 | P1 | ✅ tułów 8-boczny w 9 przekrojach wg płci, BMI i wieku; głowa dorosłego 1/7,1 (pomiar siatki), dziecka 8 l. 1/6,3, 5 l. 1/5,8 |
+| Twarze sztuczne | P1 | ✅ rzeźbiona głowa 8×10, wzorce dorosły / kobieta / dziecko, białka i tęczówki, nos, wargi, uszy, drobne różnice z ziarna; ocena recenzenta 3/5 z bliska, 3,5/5 z odległości kamery |
+| Poza `drive` = krzesło, stopy przez podłogę auta | P1 | ✅ oparcie 27°, udo 11°, kolano 130°, pięty 0,3 m pod punktem H, dłonie 0,34 m nad i 0,40 m przed H; nowa poza `ride` (pasażer); punkty H Miejsc w Taborze dopasowane (osobówki 0,56 m, kabiny ciężkie +0,1 m i 0,13 m w tył) — stopy ok. 0,10 m przed czołem kabiny, głowy ≥ 0,5 m pod dachem ciężkich |
+| Palce z rigiem | — | ✅ 30 kości Unity Humanoid dopisane po `RightHandGrip` (pierwsze 29 kości rr_human bez zmian, test 2 cm), człony przypięte do kości, chwyt kierownicy |
+| Zarost jako maska | P1 | ✅ cienka warstwa na żuchwie i brodzie (materiał `Stubble`) |
+| Brak odblasków i napisów | P1 | ✅ kamizelki z taśmami, POLICJA na plecach, RATOWNIK MEDYCZNY, PSP, taśmy żółto-srebrne strażaka |
+| Hełm PSP jak bejsbolówka, kask budowlany jak czapka | P1 | ✅ kopuła z grzebieniem i osłoną karku; kask z rondem |
+| Drogówka vs prewencja, biznes vs policjant | P1 | ✅ biała czapka garnizonowa, biały pas, białe rękawice; czarna kamizelka prewencji; marynarka z klapami, koszula, krawat |
+| Płaszcz seniora, spódnica jako sztywne pudła | P1 | ✅ poły przypięte do ud, leżą na udach w pozach siedzących; ⏸ P2: sztywna krawędź nad kolanem |
+| Sylwetka kobieca, otyłość widoczna tylko z profilu | P1 | ✅ |
+| Strój zimowy | P1 | ✅ grubsza puchówka, szalik, rękawiczki; ⏸ P3: przeszycia puchówki |
+| Torba ratownika wisi w powietrzu | P1 | ✅ na pasku przez ramię; ⏸ P2: przecina lewe ramię przy biodrze |
+| Kolor ubioru służbowego PSP | P2 | ✅ piaskowy potwierdzony źródłami wtórnymi (załączniki do rozporządzenia niedostępne z sesji) |
+
+Runda 3: **0 usterek P1** (służby 0, anatomia 0). Recenzent cywili zgłosił 2 P1, oba zweryfikowane:
+proporcje głów dzieci są w celu (pomiar siatki powyżej, recenzent szacował z obrazu), płaszcz w pozach
+siedzących leży na udach (ciemne fragmenty to spodnie między połami) — obniżone do P2. Budżet 1124–1406
+trójkątów (≤ 1500, test także dla najcięższej głowy).
+
+Zostało (P2–P3): szyja dorosłych nieco długa, żuchwa w profilu lekko ścięta, ciało dziecka smukłe,
+aparat oddechowy bez pasów, kołnierze robotnika/operatora z drobnym zębatym stykiem, plecak dziecka
+i butla strażaka wchodzą w oparcie w pozach siedzących, chód bez uniesienia czubka stopy.
+**GLB człowieka nie ma jeszcze skinu ani wag** — to zaplanowane issue 16.
 
 ## Runda 2 — pojazdy (2026-11-09)
 
@@ -119,6 +134,7 @@ na dachu kabiny, trzecie okno kabiny brygadowej wygląda jak drzwi, numer na dac
 
 ## Do decyzji użytkownika
 
-1. Budżet aut służb: 1800 trójkątów zamiast 1500 (napisy z przodu, z boków i z tyłu).
-2. Budżet człowieka z palcami: do 1500 (było 800–1200).
+1. Budżet aut służb: 1800 trójkątów zamiast 1500 (napisy z przodu, z boków i z tyłu); najcięższy wariant 1744. Cywilne ok. 1140.
+2. Budżet człowieka z palcami: do 1500 (było 800–1200); najcięższy archetyp 1406.
 3. Oznakowanie karetki wg Dz.U. 2025 poz. 1768: Gwiazda Życia i wzór pasów — wymaga tekstu rozporządzenia.
+4. Akceptacja modeli przed wypiekaniem do gry (issue 09).
