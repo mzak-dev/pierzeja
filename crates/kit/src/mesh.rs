@@ -102,6 +102,11 @@ pub enum MatKey {
     HiVis,
     Helmet,
     Face,
+    // Tłum: taśmy odblaskowe i napisy, białko oka, akcent (krawat, biały pas, taśma żółta), zarost.
+    Reflective,
+    Eye,
+    Detail,
+    Stubble,
 }
 
 impl MatKey {
@@ -149,6 +154,10 @@ impl MatKey {
             MatKey::HiVis => "HiVis",
             MatKey::Helmet => "Helmet",
             MatKey::Face => "Face",
+            MatKey::Reflective => "Reflective",
+            MatKey::Eye => "Eye",
+            MatKey::Detail => "Detail",
+            MatKey::Stubble => "Stubble",
         }
     }
 }

@@ -1,269 +1,500 @@
-//! Głowa: czaszka z lofta, twarz z płatów (oczy, brwi, nos, usta, okulary), włosy jako skorupa
-//! z bryłami (kok, kucyk, tafla), zarost i nakrycie głowy. Wszystko w kości `Head`, w pozie spoczynkowej.
-//!
-//! 8-boczne pierścienie mają przód na PŁASKIEJ ściance (wierzchołki ±22,5° od +Z), więc płaty
-//! twarzy leżą na jednej płaszczyźnie i nie chowają się w załamaniu.
+//! Głowa: rzeźbiona siatka (8 pierścieni × 10 kolumn, wzorzec dorosłego mężczyzny w metrach,
+//! y od podbródka), twarz z płatów położonych na powierzchni (białko + tęczówka, powieka, brwi,
+//! usta), nos i uszy jako bryły, włosy i nakrycia głowy jako skorupy nad czaszką, zarost jako
+//! cienka warstwa na żuchwie. Wszystko w kości `Head`, w pozie spoczynkowej.
 
 use crate::skel::{idx, Joint, Scale};
 use crate::P;
-use procedura_kit::mesh::{add, cross, norm, scale, sub, MatKey, MeshBuilder, V3};
-use std::f64::consts::{FRAC_PI_4, FRAC_PI_8, TAU};
+use procedura_kit::mesh::{add, len, norm, scale, sub, MatKey, MeshBuilder, V3};
 
-const N: usize = 8;
-/// (ułamek wysokości, półgłębokość, półszerokość, przesunięcie środka w +Z) dla głowy 1,78 m.
-const SKULL: [(f64, f64, f64, f64); 6] = [(0.0, 0.056, 0.038, 0.026), (0.13, 0.08, 0.07, 0.008), (0.36, 0.097, 0.09, 0.0), (0.62, 0.102, 0.09, 0.0), (0.88, 0.090, 0.077, -0.002), (1.0, 0.052, 0.047, -0.004)];
+const H0: f64 = 0.237;
+const ROWS: usize = 8;
+const COLS: usize = 10;
+/// Pół-pierścienie (kolumny C0 przód … C5 tył) dla x ≥ 0: (x, y, z). Druga połowa to lustro C4…C1.
+const TPL: [[V3; 6]; ROWS] = [
+    // R0 dolny obrys żuchwy (podbródek → kąt żuchwy → kark)
+    [[0.0, 0.0, 0.074], [0.026, 0.005, 0.069], [0.046, 0.024, 0.05], [0.054, 0.052, 0.004], [0.048, 0.05, -0.054], [0.0, 0.05, -0.07]],
+    // R1 podbródek / warga dolna
+    [[0.0, 0.03, 0.094], [0.022, 0.032, 0.088], [0.047, 0.045, 0.058], [0.06, 0.072, 0.008], [0.061, 0.075, -0.072], [0.0, 0.075, -0.09]],
+    // R2 usta
+    [[0.0, 0.058, 0.1], [0.022, 0.058, 0.092], [0.05, 0.064, 0.064], [0.066, 0.088, 0.01], [0.067, 0.1, -0.082], [0.0, 0.1, -0.1]],
+    // R3 podstawa nosa, policzki
+    [[0.0, 0.08, 0.1], [0.024, 0.084, 0.092], [0.057, 0.086, 0.066], [0.071, 0.1, 0.008], [0.072, 0.124, -0.085], [0.0, 0.124, -0.104]],
+    // R4 oczy (oczodół cofnięty)
+    [[0.0, 0.116, 0.097], [0.031, 0.117, 0.079], [0.061, 0.115, 0.06], [0.075, 0.122, 0.004], [0.075, 0.148, -0.083], [0.0, 0.152, -0.102]],
+    // R5 łuki brwiowe
+    [[0.0, 0.138, 0.097], [0.032, 0.143, 0.091], [0.063, 0.14, 0.064], [0.077, 0.146, 0.002], [0.076, 0.172, -0.078], [0.0, 0.177, -0.1]],
+    // R6 czoło
+    [[0.0, 0.182, 0.093], [0.034, 0.182, 0.087], [0.066, 0.182, 0.056], [0.078, 0.184, -0.002], [0.071, 0.198, -0.072], [0.0, 0.201, -0.09]],
+    // R7 sklepienie
+    [[0.0, 0.216, 0.068], [0.03, 0.217, 0.062], [0.055, 0.218, 0.04], [0.063, 0.219, -0.004], [0.055, 0.225, -0.052], [0.0, 0.227, -0.066]],
+];
+const APEX: V3 = [0.0, H0, -0.002];
+const CENTER: V3 = [0.0, 0.118, -0.004];
 
-struct Prof {
-    y0: f64,
-    h: f64,
-    k: f64,
+/// Indeks półkolumny (0…5) dla kolumny pełnego pierścienia i znak x.
+fn half(j: usize) -> (usize, f64) {
+    if j <= 5 { (j, 1.0) } else { (COLS - j, -1.0) }
 }
 
-fn theta(k: usize) -> f64 {
-    FRAC_PI_8 + k as f64 * FRAC_PI_4
+struct Head {
+    lat: [[V3; COLS]; ROWS],
+    bx: f64,
+    by: f64,
+    bz: f64,
+    chin: f64,
+    tris: Vec<[V3; 3]>,
 }
 
-impl Prof {
-    fn at(&self, f: f64) -> (f64, f64, f64, f64) {
-        let f = f.clamp(0.0, 1.0);
-        let i = SKULL.windows(2).position(|w| f <= w[1].0).unwrap_or(SKULL.len() - 2);
-        let (a, b) = (SKULL[i], SKULL[i + 1]);
-        let u = (f - a.0) / (b.0 - a.0);
-        let l = |x: f64, y: f64| (x + (y - x) * u) * self.k;
-        (l(a.1, b.1), l(a.2, b.2), l(a.3, b.3), self.y0 + f * self.h)
+impl Head {
+    fn to(&self, p: V3) -> V3 {
+        [p[0] * self.bx, self.chin + p[1] * self.by, p[2] * self.bz]
     }
-    /// Punkt na powierzchni (kąt `th` od +Z ku lewej stronie +X), `grow` metrów na zewnątrz.
-    fn pt(&self, f: f64, th: f64, grow: f64) -> V3 {
-        let (d, w, cz, y) = self.at(f);
-        let f = f.clamp(0.0, 1.0);
-        [(w + grow) * th.sin(), y + grow * f.powi(3), cz + (d + grow) * th.cos()]
+    fn dir(&self, v: V3) -> V3 {
+        [v[0] / self.bx, v[1] / self.by, v[2] / self.bz]
     }
-    fn ring(&self, f: f64, grow: f64) -> Vec<V3> {
-        (0..N).map(|k| self.pt(f, theta(k), grow)).collect()
+    fn poly(&self, mb: &mut MeshBuilder, mat: MatKey, pts: &[V3], want: V3) {
+        let v: Vec<V3> = pts.iter().map(|&p| self.to(p)).collect();
+        mb.poly(mat, &v, Some(self.dir(want)));
     }
-    /// Punkt na przedniej ściance: `u` ∈ [-1,1] w poprzek (prawa→lewa), `off` wzdłuż normalnej.
-    fn front(&self, f: f64, u: f64, off: f64) -> V3 {
-        let p = |f: f64| {
-            let (r, l) = (self.pt(f, theta(N - 1), 0.0), self.pt(f, theta(0), 0.0));
-            add(r, scale(sub(l, r), (u + 1.0) / 2.0))
-        };
-        let (r, l) = (self.pt(f, theta(N - 1), 0.0), self.pt(f, theta(0), 0.0));
-        let df = sub(p((f + 0.01).min(1.0)), p((f - 0.01).max(0.0)));
-        add(p(f), scale(norm(cross(sub(l, r), df)), off))
+    fn loft(&self, mb: &mut MeshBuilder, mat: MatKey, rings: &[Vec<V3>]) {
+        let r: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|&p| self.to(p)).collect()).collect();
+        mb.loft(mat, &r, false);
+    }
+    /// Najbardziej wysunięty punkt przedniej powierzchni głowy na (x, y): z.
+    fn surf(&self, x: f64, y: f64) -> f64 {
+        let mut best = f64::NEG_INFINITY;
+        for t in &self.tris {
+            let [a, b, c] = *t;
+            let d = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+            if d.abs() < 1e-12 {
+                continue;
+            }
+            let l1 = ((b[1] - c[1]) * (x - c[0]) + (c[0] - b[0]) * (y - c[1])) / d;
+            let l2 = ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (y - c[1])) / d;
+            let l3 = 1.0 - l1 - l2;
+            if l1 >= -1e-6 && l2 >= -1e-6 && l3 >= -1e-6 {
+                best = best.max(l1 * a[2] + l2 * b[2] + l3 * c[2]);
+            }
+        }
+        if best.is_finite() { best } else { 0.06 }
+    }
+    fn on(&self, x: f64, y: f64, off: f64) -> V3 {
+        [x, y, self.surf(x, y) + off]
+    }
+    /// Punkt kolumny `j` na wysokości `y` (powyżej R7 — ku wierzchołkowi).
+    fn col(&self, j: usize, y: f64) -> V3 {
+        let c: Vec<V3> = (0..ROWS).map(|r| self.lat[r][j]).chain([APEX]).collect();
+        let i = c.windows(2).position(|w| y <= w[1][1]).unwrap_or(c.len() - 2);
+        let (a, b) = (c[i], c[i + 1]);
+        let t = ((y - a[1]) / (b[1] - a[1]).max(1e-9)).clamp(if i == 0 { -2.0 } else { 0.0 }, 1.0);
+        add(a, scale(sub(b, a), t))
+    }
+    /// Punkt kolumny `j` w ułamku `t` długości łuku między wysokościami `y0` i `y1` (t < 0: liniowo poniżej `y0`).
+    fn col_arc(&self, j: usize, y0: f64, y1: f64, t: f64) -> V3 {
+        if t <= 0.0 {
+            return self.col(j, y0 + (y1 - y0) * t);
+        }
+        let mut pts = vec![self.col(j, y0)];
+        pts.extend((0..ROWS).map(|r| self.lat[r][j]).filter(|q| q[1] > y0 && q[1] < y1));
+        pts.push(self.col(j, y1));
+        let total: f64 = pts.windows(2).map(|w| len(sub(w[1], w[0]))).sum();
+        let mut left = t.min(1.0) * total;
+        for w in pts.windows(2) {
+            let l = len(sub(w[1], w[0]));
+            if left <= l && l > 0.0 {
+                return add(w[0], scale(sub(w[1], w[0]), left / l));
+            }
+            left -= l;
+        }
+        *pts.last().unwrap()
+    }
+    fn radial(p: V3) -> V3 {
+        norm(sub(p, CENTER))
     }
 }
 
+/// Skorupa nad czaszką: dolna linia (y na półkolumnę), wiersze (ułamek do wierzchołka, odsunięcie), grzebień.
 struct Shell {
-    front: f64,
-    back: f64,
-    tau: f64,
-    m: usize,
-    top: f64,
-    flare: f64,
+    lower: [f64; 6],
+    rows: Vec<(f64, f64)>,
+    apex: Option<f64>,
+    comb: f64,
+    /// Przesunięcie czubka do przodu (kaszkiet).
+    fwd: f64,
 }
 
-fn shell(front: f64, back: f64, tau: f64) -> Shell {
-    Shell { front, back, tau, m: 3, top: 1.0, flare: 0.0 }
-}
-
-fn emit_shell(mb: &mut MeshBuilder, pr: &Prof, s: &Shell, mat: MatKey) {
-    let rings: Vec<Vec<V3>> = (0..=s.m)
-        .map(|i| {
-            let t = i as f64 / s.m as f64;
-            (0..N)
-                .map(|k| {
-                    let wk = ((theta(k).cos() - 0.1) / 0.8).clamp(0.0, 1.0);
-                    let low = s.back + (s.front - s.back) * wk;
-                    pr.pt(low + (s.top - low) * t, theta(k), s.tau + s.flare * (1.0 - t) * (1.0 - wk))
+fn emit_shell(h: &Head, mb: &mut MeshBuilder, s: &Shell, mat: MatKey) -> Vec<Vec<V3>> {
+    let rings: Vec<Vec<V3>> = s
+        .rows
+        .iter()
+        .map(|&(t, off)| {
+            (0..COLS)
+                .map(|j| {
+                    let (hj, _) = half(j);
+                    let top = h.lat[ROWS - 1][j][1] + 0.006;
+                    let p = h.col_arc(j, s.lower[hj], top, t);
+                    let mid = if hj == 0 || hj == 5 { s.comb * t * t } else { 0.0 };
+                    add(add(p, scale(Head::radial(p), off + mid)), [0.0, 0.0, s.fwd * t])
                 })
                 .collect()
         })
         .collect();
-    mb.loft(mat, &rings, false);
-    if s.top >= 1.0 {
-        mb.poly(mat, rings.last().unwrap(), Some([0.0, 1.0, 0.0]));
+    h.loft(mb, mat, &rings);
+    if let Some(off) = s.apex {
+        let a = add(APEX, [0.0, off + s.comb * 0.8, s.fwd]);
+        let last = rings.last().unwrap();
+        for j in 0..COLS {
+            let (p, q) = (last[j], last[(j + 1) % COLS]);
+            h.poly(mb, mat, &[p, q, a], sub(scale(add(add(p, q), a), 1.0 / 3.0), CENTER));
+        }
     }
+    rings
 }
 
-/// Pierścień 6-boczny w płaszczyźnie XZ, obiegany przeciwnie do ruchu wskazówek wokół kierunku wzrostu lofta.
-fn ring6(c: V3, rx: f64, rz: f64, down: bool) -> Vec<V3> {
-    (0..6).map(|k| {
-        let a = (if down { -1.0 } else { 1.0 }) * TAU * k as f64 / 6.0;
-        [c[0] + rx * a.sin(), c[1], c[2] + rz * a.cos()]
-    }).collect()
-}
-
-fn hair_shell(style: &str) -> Option<Shell> {
-    Some(match style {
-        "buzz" => Shell { m: 2, ..shell(0.66, 0.50, 0.004) },
-        "fade" => shell(0.64, 0.38, 0.006),
-        "krotkie_klasyczne" | "kok" | "kucyk" => Shell { m: 4, ..shell(0.70, 0.30, 0.02) },
-        "medium" | "dlugie" => shell(0.62, 0.12, 0.018),
-        "bob" => Shell { flare: 0.012, ..shell(0.62, 0.0, 0.02) },
-        "lysiejacy" => Shell { top: 0.62, ..shell(0.62, 0.30, 0.012) },
-        _ => return None,
-    })
-}
-
-/// (skorupa, długość daszka m, brzeg tylny)
-fn hat(kind: &str) -> Option<(Shell, f64)> {
-    Some(match kind {
-        "czapka_daszek" => (shell(0.60, 0.45, 0.02), 0.07),
-        "czapka_mundurowa" | "czapka_policji_rd" => (shell(0.59, 0.50, 0.026), 0.06),
-        "kaszkiet" => (shell(0.58, 0.50, 0.016), 0.045),
-        "czapka_zimowa" => (shell(0.52, 0.28, 0.022), 0.0),
-        "beret" => (Shell { flare: 0.02, ..shell(0.62, 0.55, 0.03) }, 0.0),
-        "kaptur" => (Shell { flare: 0.015, ..shell(0.40, 0.02, 0.04) }, 0.0),
-        "kask_budowlany" => (shell(0.58, 0.52, 0.03), 0.04),
-        "helm_psp" => (shell(0.55, 0.20, 0.034), 0.03),
-        _ => return None,
-    })
-}
-
-pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P, hs: f64) {
+pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
     let hd = &sk[idx(sk, "Head")];
-    let l = hd.tail[1] - hd.head[1];
-    // głowa rośnie w dół (do szyi), żeby czubek zostawał w `height`
-    let pr = Prof { y0: hd.tail[1] - l * hs, h: l * hs, k: sc.sv * hs * 1.4 };
-
-    let skull: Vec<Vec<V3>> = SKULL.iter().map(|s| pr.ring(s.0, 0.0)).collect();
-    mb.loft(MatKey::Skin, &skull, false);
-    mb.poly(MatKey::Skin, &skull[0], Some([0.0, -1.0, 0.0]));
-    mb.poly(MatKey::Skin, skull.last().unwrap(), Some([0.0, 1.0, 0.0]));
-
-    // --- twarz
-    let patch = |mb: &mut MeshBuilder, mat: MatKey, u0: f64, u1: f64, f0: f64, f1: f64, off: f64| {
-        let q = [pr.front(f0, u0, off), pr.front(f0, u1, off), pr.front(f1, u1, off), pr.front(f1, u0, off)];
-        let want = pr.front(f0, u0, 1.0);
-        mb.quad(mat, q[0], q[1], q[2], q[3], Some(sub(want, pr.front(f0, u0, 0.0))));
-    };
-    // wielokąt płata we współrzędnych (u, f) na przedniej ściance
-    let poly = |mb: &mut MeshBuilder, mat: MatKey, pts: &[(f64, f64)], off: f64| {
-        let v: Vec<V3> = pts.iter().map(|&(u, f)| pr.front(f, u, off)).collect();
-        let n = sub(pr.front(pts[0].1, pts[0].0, 1.0), pr.front(pts[0].1, pts[0].0, 0.0));
-        mb.poly(mat, &v, Some(n));
-    };
-    for s in [-1.0f64, 1.0] {
-        // oko: migdał; brew: równoległobok opadający ku nosowi
-        let (c, w, h, f0) = (s * 0.5, 0.25, 0.034, 0.525);
-        poly(mb, MatKey::Face, &[(c - w, f0), (c - w * 0.45, f0 + h), (c + w * 0.5, f0 + h * 1.1), (c + w, f0 + 0.004), (c + w * 0.5, f0 - h * 0.8), (c - w * 0.45, f0 - h * 0.9)], 0.002);
-        let (i, o) = (s * 0.2, s * 0.82);
-        poly(mb, MatKey::Hair, &[(i, 0.592), (o, 0.606), (o, 0.628), (i, 0.614)], 0.003);
-        // nozdrze
-        poly(mb, MatKey::Face, &[(s * 0.06, 0.322), (s * 0.15, 0.322), (s * 0.15, 0.337), (s * 0.06, 0.337)], 0.011);
-    }
-    // usta: łuk górnej wargi (ciemny) i wystająca dolna warga (skóra)
-    poly(mb, MatKey::Face, &[(-0.4, 0.226), (-0.14, 0.24), (0.0, 0.234), (0.14, 0.24), (0.4, 0.226), (0.14, 0.208), (-0.14, 0.208)], 0.002);
-    // nos: grzbiet, czubek i skrzydełka (5 trójkątów)
-    let (top, mid, tip) = (pr.front(0.50, 0.0, 0.006), pr.front(0.42, 0.0, 0.017 * sc.sv), pr.front(0.355, 0.0, 0.032 * sc.sv));
-    let (nl, nr) = (pr.front(0.34, 0.2, 0.012), pr.front(0.34, -0.2, 0.012));
-    let inside = pr.front(0.42, 0.0, -0.04);
-    for t in [vec![top, nl, tip, mid], vec![top, mid, tip, nr], vec![tip, nl, nr]] {
-        let c = scale(t.iter().fold([0.0; 3], |a, &q| add(a, q)), 1.0 / t.len() as f64);
-        mb.poly(MatKey::Skin, &t, Some(sub(c, inside)));
-    }
-    match p.s("glasses") {
-        "przeciwsloneczne" => {
-            for s in [-1.0f64, 1.0] {
-                patch(mb, MatKey::Face, (s * 0.12).min(s * 0.86), (s * 0.12).max(s * 0.86), 0.47, 0.585, 0.006);
+    let crown = hd.tail[1];
+    let hh = sc.hh;
+    let age = p.f("age");
+    let adult = ((age - 11.0) / 6.0).clamp(0.0, 1.0);
+    let male = 0.5 + (p.f("sex").clamp(0.0, 1.0) - 0.5) * adult;
+    let fem = 1.0 - male;
+    let c = sc.child;
+    let fat = ((p.f("bmi") - 22.5) / 8.0).clamp(-0.6, 1.5);
+    // twarz dziecka niżej na głowie (czaszka większa względem twarzy)
+    let fc = 1.0 - 0.17 * c;
+    let fy = |y: f64| if y < 0.14 { y * fc } else { 0.14 * fc + (y - 0.14) * (H0 - 0.14 * fc) / (H0 - 0.14) };
+    let by = hh / H0;
+    let bw = by * (1.0 + 0.05 * c) * (1.0 - 0.02 * fem);
+    let mut lat = [[[0.0; 3]; COLS]; ROWS];
+    for (r, row) in TPL.iter().enumerate() {
+        for j in 0..COLS {
+            let (hj, sx) = half(j);
+            let [mut x, y, mut z] = row[hj];
+            // płeć: węższa żuchwa, mniejszy podbródek i łuki brwiowe; tusza: pełniejsze policzki
+            if r <= 1 && (2..=3).contains(&hj) {
+                x *= 1.0 - 0.08 * fem + 0.04 * fat + 0.1 * c;
             }
-            patch(mb, MatKey::Face, -0.12, 0.12, 0.545, 0.565, 0.006);
-        }
-        "korekcyjne" => {
-            for s in [-1.0f64, 1.0] {
-                let (a, b) = ((s * 0.14).min(s * 0.84), (s * 0.14).max(s * 0.84));
-                let (f0, f1, tu, tf) = (0.47, 0.585, 0.07, 0.02);
-                patch(mb, MatKey::Face, a, b, f0, f0 + tf, 0.006);
-                patch(mb, MatKey::Face, a, b, f1 - tf, f1, 0.006);
-                patch(mb, MatKey::Face, a, a + tu, f0 + tf, f1 - tf, 0.006);
-                patch(mb, MatKey::Face, b - tu, b, f0 + tf, f1 - tf, 0.006);
+            if (1..=3).contains(&r) && (1..=2).contains(&hj) {
+                // pełniejsze policzki dziecka
+                x *= 1.0 + 0.06 * c;
+                z += 0.004 * c;
             }
-            patch(mb, MatKey::Face, -0.14, 0.14, 0.54, 0.56, 0.006);
-        }
-        _ => {}
-    }
-
-    // uszy: płaskie czworościany z boku czaszki
-    for sd in [-1.0f64, 1.0] {
-        let th = sd * std::f64::consts::FRAC_PI_2;
-        let e = |f: f64, dz: f64, out: f64| {
-            let mut q = pr.pt(f, th, out);
-            q[2] += dz * pr.k;
-            q
-        };
-        let (a, b, c) = (e(0.40, 0.0, 0.0), e(0.52, 0.0, 0.0), e(0.46, 0.0, 0.0));
-        let (tip, back) = (e(0.47, -0.022, 0.018), e(0.46, -0.03, 0.0));
-        let _ = c;
-        let inside = pr.pt(0.46, 0.0, -0.05);
-        for t in [[a, b, tip], [b, back, tip], [back, a, tip]] {
-            let m = scale(add(add(t[0], t[1]), t[2]), 1.0 / 3.0);
-            mb.poly(MatKey::Skin, &t, Some(sub(m, inside)));
+            if r <= 1 && hj == 0 {
+                z -= 0.004 * fem + 0.008 * c;
+            }
+            if r == 5 && hj <= 1 {
+                z -= 0.003 * fem + 0.004 * c;
+            }
+            if (2..=3).contains(&r) && (2..=3).contains(&hj) {
+                x += 0.005 * fat;
+            }
+            lat[r][j] = [sx * x, fy(y), z];
         }
     }
-
-    // --- zarost: skorupa, której tylne wierzchołki chowają się w głowie
-    let (lo, hi, tau, thr) = match p.s("beard") {
-        "kilkudniowy" => (0.04, 0.40, 0.003, -0.2),
-        "krotka_broda" => (0.0, 0.42, 0.012, -0.2),
-        "pelna_broda" => (-0.05, 0.46, 0.022, -0.3),
-        "wasy" => (0.39, 0.46, 0.012, 0.85),
-        "kozia" => (0.0, 0.2, 0.018, 0.85),
-        _ => (0.0, 0.0, 0.0, 0.0),
-    };
-    if tau > 0.0 {
-        let rings: Vec<Vec<V3>> = (0..3)
-            .map(|i| {
-                let f = lo + (hi - lo) * i as f64 / 2.0;
-                (0..N).map(|k| pr.pt(f, theta(k), if theta(k).cos() > thr { tau } else { -0.006 })).collect()
-            })
-            .collect();
-        mb.loft(MatKey::Hair, &rings, false);
+    let mut h = Head { lat, bx: bw, by, bz: bw, chin: crown - hh, tris: vec![] };
+    for r in 0..ROWS - 1 {
+        for j in 0..COLS {
+            let k = (j + 1) % COLS;
+            let (a, b, cc, d) = (h.lat[r][j], h.lat[r][k], h.lat[r + 1][k], h.lat[r + 1][j]);
+            if a[2] > -0.02 || b[2] > -0.02 {
+                h.tris.push([a, b, cc]);
+                h.tris.push([a, cc, d]);
+            }
+        }
     }
 
-    // --- włosy i nakrycie głowy
-    let cover = hat(p.s("headType"));
+    // --- czaszka i twarz
+    let rings: Vec<Vec<V3>> = h.lat.iter().map(|r| r.to_vec()).collect();
+    h.loft(mb, MatKey::Skin, &rings);
+    h.poly(mb, MatKey::Skin, &rings[0], [0.0, -1.0, 0.2]);
+    for j in 0..COLS {
+        let (a, b) = (rings[ROWS - 1][j], rings[ROWS - 1][(j + 1) % COLS]);
+        h.poly(mb, MatKey::Skin, &[a, b, APEX], sub(scale(add(add(a, b), APEX), 1.0 / 3.0), CENTER));
+    }
+
     let style = p.s("hairStyle");
-    let hair = hair_shell(style);
-    if let Some(h) = &hair {
-        if cover.as_ref().is_none_or(|(c, _)| h.back < c.back - 0.2 || h.back < 0.15) {
-            emit_shell(mb, &pr, h, MatKey::Hair);
+    let head_type = p.s("headType");
+    let covers_ears = matches!(style, "medium" | "dlugie" | "bob") || matches!(head_type, "czapka_zimowa" | "kaptur" | "helm_psp");
+    let big_eye = 1.14 + 0.14 * c + 0.04 * fem;
+    for sx in [-1.0f64, 1.0] {
+        // oko: białko (migdał), tęczówka, linia rzęs górnej powieki
+        let (ex, ey) = (sx * 0.032, fy(0.117));
+        let e = |dx: f64, dy: f64, off: f64| h.on(ex + sx * dx * big_eye, ey + dy * big_eye, off);
+        let white = [(-0.0145, -0.0006), (-0.0068, 0.0052), (0.0045, 0.006), (0.0142, 0.0016), (0.0062, -0.0042), (-0.0062, -0.0046)];
+        let wp: Vec<V3> = white.iter().map(|&(dx, dy)| e(dx, dy, 0.0016 + 0.0018 * (1.0 - (dx / 0.0145).powi(2)))).collect();
+        h.poly(mb, MatKey::Eye, &wp, [0.0, 0.0, 1.0]);
+        let ir = 0.0054;
+        let iris = [(-0.8 * ir, 0.0049), (-0.8 * ir, -0.0041), (0.8 * ir, -0.0041), (0.8 * ir, 0.0049)];
+        let ip: Vec<V3> = iris.iter().map(|&(dx, dy)| e(dx - 0.0004, dy, 0.0042)).collect();
+        h.poly(mb, MatKey::Face, &ip, [0.0, 0.0, 1.0]);
+        let lid = [(-0.0152, -0.0004), (-0.001, 0.0062), (0.0148, 0.0018)];
+        for w in lid.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let t = 0.0017;
+            let q = [e(a.0, a.1 - t * 0.4, 0.0034), e(b.0, b.1 - t * 0.4, 0.0034), e(b.0, b.1 + t, 0.0034), e(a.0, a.1 + t, 0.0034)];
+            h.poly(mb, MatKey::Face, &q, [0.0, 0.0, 1.0]);
+        }
+        // brew: pas od nasady nosa łukiem ku skroni
+        let arch = 0.002 * fem;
+        let bt = 1.0 - 0.35 * fem;
+        let brow = [(0.012, 0.134, 0.0062), (0.031, 0.1405 + arch, 0.005), (0.054, 0.137 + arch, 0.0028)];
+        for w in brow.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let q = [h.on(sx * a.0, fy(a.1) - a.2 * bt * 0.5, 0.0014), h.on(sx * b.0, fy(b.1) - b.2 * bt * 0.5, 0.0014), h.on(sx * b.0, fy(b.1) + b.2 * bt * 0.5, 0.0014), h.on(sx * a.0, fy(a.1) + a.2 * bt * 0.5, 0.0014)];
+            h.poly(mb, MatKey::Hair, &q, [0.0, 0.2, 1.0]);
+        }
+        // ucho: płaski płat odchylony do tyłu (przód przy czaszce), od oczu do podstawy nosa
+        if !covers_ears {
+            let ear = |x: f64, y: f64, z: f64| [sx * x, fy(y), z];
+            let (a, b) = (ear(0.073, 0.147, -0.008), ear(0.07, 0.09, -0.002));
+            let (cc, d, ee) = (ear(0.085, 0.152, -0.03), ear(0.091, 0.122, -0.042), ear(0.08, 0.087, -0.018));
+            let out = [sx, 0.0, 0.25];
+            for t in [[a, cc, d], [a, d, ee], [a, ee, b]] {
+                h.poly(mb, MatKey::Skin, &t, out);
+            }
         }
     }
-    let nape = pr.at(0.28);
-    let back = |f: f64| {
-        let (d, _, cz, y) = pr.at(f);
-        [0.0, y, cz - d]
+    // nos: nasada, grzbiet, czubek, skrzydełka, podstawa
+    let ns = (1.0 - 0.28 * c) * (1.0 - 0.08 * fem);
+    let nz = |x: f64, y: f64, out: f64| h.on(x * ns, fy(y), out * ns);
+    let (root, mid, tip) = (nz(0.0, 0.128, 0.002), nz(0.0, 0.106, 0.012), [0.0, fy(0.089), h.surf(0.0, fy(0.089)) + 0.026 * ns]);
+    let (sl, sr) = (nz(0.011, 0.109, 0.0), nz(-0.011, 0.109, 0.0));
+    let (al, ar) = (nz(0.018, 0.085, 0.004), nz(-0.018, 0.085, 0.004));
+    let base = nz(0.0, 0.08, 0.006);
+    let inside = [0.0, fy(0.1), 0.06];
+    for t in [vec![root, sl, mid], vec![root, mid, sr], vec![sl, al, tip, mid], vec![sr, mid, tip, ar], vec![al, base, tip], vec![ar, tip, base]] {
+        let cen = scale(t.iter().fold([0.0; 3], |a, &q| add(a, q)), 1.0 / t.len() as f64);
+        h.poly(mb, MatKey::Skin, &t, sub(cen, inside));
+    }
+    // usta: ciemna szczelina i dolna warga
+    let lw = 0.0245 * (1.0 + 0.04 * fem);
+    let my = fy(0.0576);
+    let beard = p.s("beard");
+    let boff = match beard {
+        "krotka_broda" => 0.006,
+        "pelna_broda" => 0.011,
+        "kozia" => 0.006,
+        _ => 0.0,
     };
+    let mo = |x: f64, y: f64, off: f64| h.on(x, y, off + boff);
+    h.poly(mb, MatKey::Face, &[mo(-lw, my + 0.0004, 0.0026), mo(-0.011, my - 0.002, 0.003), mo(0.011, my - 0.002, 0.003), mo(lw, my + 0.0004, 0.0026), mo(0.011, my + 0.0026, 0.003), mo(-0.011, my + 0.0026, 0.003)], [0.0, 0.0, 1.0]);
+    if boff == 0.0 {
+        let ll = 0.0035 + 0.0015 * fem;
+        let lip = [mo(-lw * 0.75, my - 0.0012, 0.0012), mo(lw * 0.75, my - 0.0012, 0.0012), mo(lw * 0.55, my - 0.009, 0.0002), mo(-lw * 0.55, my - 0.009, 0.0002)];
+        let lip = [lip[0], lip[1], [lip[2][0], lip[2][1], lip[2][2]], [lip[3][0], lip[3][1], lip[3][2]]];
+        let lip = [add(lip[0], [0.0, 0.0, ll * 0.5]), add(lip[1], [0.0, 0.0, ll * 0.5]), lip[2], lip[3]];
+        h.poly(mb, MatKey::Skin, &lip, [0.0, -0.4, 1.0]);
+    }
+
+    // --- zarost: cienka warstwa na żuchwie (wierzchołki siatki odsunięte promieniowo)
+    let region: Option<(MatKey, f64, Vec<(usize, usize)>)> = {
+        let jaw: Vec<(usize, usize)> = (0..=2).flat_map(|r| (0..=3).map(move |c| (r, c))).collect();
+        let stache = vec![(2, 0), (2, 1), (3, 0), (3, 1)];
+        let mut all = jaw.clone();
+        all.extend(stache.iter().copied());
+        match beard {
+            "kilkudniowy" => Some((MatKey::Stubble, 0.0011, all)),
+            "krotka_broda" => Some((MatKey::Hair, 0.006, all)),
+            "pelna_broda" => {
+                let mut v = all;
+                v.extend([(3, 2), (3, 3)]);
+                Some((MatKey::Hair, 0.011, v))
+            }
+            "wasy" => Some((MatKey::Hair, 0.004, stache)),
+            "kozia" => Some((MatKey::Hair, 0.006, vec![(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1), (3, 0), (3, 1)])),
+            _ => None,
+        }
+    };
+    if let Some((mat, off, cells)) = region {
+        let has = |r: usize, j: usize| cells.contains(&(r, half(j).0));
+        let lift = |r: usize, j: usize| {
+            let q = h.lat[r][j];
+            // krawędź obszaru przylega do skóry; broda pełna zwisa pod podbródkiem
+            let edge = !(has(r + 1, j) || r == 3) || r == 3 && half(j).0 >= 2;
+            let o = if edge && off > 0.002 { off * 0.35 } else { off };
+            let drop = if beard == "pelna_broda" && r == 0 && half(j).0 <= 1 { 0.012 } else { 0.0 };
+            add(add(q, scale(Head::radial(q), o)), [0.0, -drop, drop * 0.3])
+        };
+        for r in 0..3 {
+            for j in 0..COLS {
+                let k = (j + 1) % COLS;
+                if has(r, j) && has(r, k) && has(r + 1, j) && has(r + 1, k) {
+                    let q = [lift(r, j), lift(r, k), lift(r + 1, k), lift(r + 1, j)];
+                    let n = Head::radial(scale(add(q[0], q[2]), 0.5));
+                    h.poly(mb, mat, &[q[0], q[1], q[2]], n);
+                    h.poly(mb, mat, &[q[0], q[2], q[3]], n);
+                }
+            }
+        }
+    }
+
+    // --- okulary
+    let g = p.s("glasses");
+    if matches!(g, "korekcyjne" | "przeciwsloneczne") {
+        let (ey, z) = (fy(0.117), h.surf(0.0, fy(0.117)).max(h.surf(0.032, fy(0.128))) + 0.004);
+        let (x0, x1, y0, y1) = (0.013, 0.053, ey - 0.012, ey + 0.011);
+        for sx in [-1.0f64, 1.0] {
+            let q = |x: f64, y: f64| [sx * x, y, z - (x - 0.03).max(0.0) * 0.35];
+            if g == "przeciwsloneczne" {
+                h.poly(mb, MatKey::Face, &[q(x0, y0), q(x1, y0), q(x1, y1), q(x0, y1)], [0.0, 0.0, 1.0]);
+            } else {
+                let t = 0.0026;
+                for (a0, a1, b0, b1) in [(x0, x1, y1 - t, y1), (x0, x1, y0, y0 + t), (x0, x0 + t, y0, y1), (x1 - t, x1, y0, y1)] {
+                    h.poly(mb, MatKey::Face, &[q(a0, b0), q(a1, b0), q(a1, b1), q(a0, b1)], [0.0, 0.0, 1.0]);
+                }
+            }
+            // zausznik
+            let a = q(x1, y1);
+            let b = [sx * 0.078, y1 + 0.004, -0.02];
+            h.poly(mb, MatKey::Face, &[a, b, add(b, [0.0, -0.003, 0.0]), add(a, [0.0, -0.003, 0.0])], [sx, 0.0, 0.0]);
+        }
+        h.poly(mb, MatKey::Face, &[[-x0, y1 - 0.004, z], [x0, y1 - 0.004, z], [x0, y1 - 0.0015, z], [-x0, y1 - 0.0015, z]], [0.0, 0.0, 1.0]);
+    }
+
+    // --- włosy
+    let short_line = [0.2, 0.197, 0.186, 0.145, 0.085, 0.066];
+    let long_line = [0.2, 0.196, 0.17, 0.1, 0.045, 0.035];
+    // (dolna linia, początek, grubość w połowie, grubość u góry); pod nakryciem tylko dolny pas
+    let spec: Option<([f64; 6], f64, f64, f64)> = match style {
+        "buzz" => Some((short_line, 0.0, 0.0035, 0.004)),
+        "fade" => Some(([0.2, 0.197, 0.19, 0.16, 0.12, 0.105], 0.0, 0.004, 0.011)),
+        "krotkie_klasyczne" => Some((short_line, 0.0, 0.009, 0.012)),
+        "kok" | "kucyk" => Some(([0.205, 0.2, 0.18, 0.125, 0.1, 0.09], 0.0, 0.005, 0.007)),
+        "medium" | "dlugie" => Some((long_line, 0.0, 0.013, 0.015)),
+        "bob" => Some(([0.19, 0.185, 0.14, 0.06, 0.045, 0.045], -0.15, 0.017, 0.016)),
+        "lysiejacy" => Some(([0.22, 0.215, 0.17, 0.125, 0.105, 0.095], 0.0, 0.006, 0.0)),
+        _ => None,
+    };
+    let covered = head_type != "brak";
+    let hair: Option<Shell> = spec.map(|(lower, t0, mid, top)| {
+        let rows = if style == "lysiejacy" {
+            vec![(t0, 0.0), (0.35, mid), (0.55, 0.0)]
+        } else if covered {
+            vec![(t0, 0.0), (0.33, mid), (0.6, top)]
+        } else {
+            vec![(t0, 0.0), (0.33, mid), (0.67, top), (1.0, top)]
+        };
+        let apex = (!covered && style != "lysiejacy").then_some(top);
+        Shell { lower: lower.map(fy), rows, apex, comb: 0.0, fwd: 0.0 }
+    });
+    let hair_off = hair.as_ref().map_or(0.0, |s| s.rows.iter().map(|r| r.1).fold(0.0, f64::max)).max(spec.map_or(0.0, |s| s.3));
+    if let Some(s) = &hair {
+        emit_shell(&h, mb, s, MatKey::Hair);
+    }
+    let hat_low = matches!(head_type, "czapka_zimowa" | "kaptur" | "helm_psp");
     match style {
-        "dlugie" | "bob" => {
-            let len = if style == "dlugie" { 0.30 } else { 0.09 } * sc.sv;
-            let (z, y) = (nape.2 - nape.0 * 0.55, nape.3);
-            let rings = vec![ring6([0.0, y, z], 0.08 * pr.k, 0.045 * pr.k, true), ring6([0.0, y - len * 0.5, z - 0.005], 0.085 * pr.k, 0.05 * pr.k, true), ring6([0.0, y - len, z - 0.01], 0.06 * pr.k, 0.035 * pr.k, true)];
-            mb.loft(MatKey::Hair, &rings, false);
-            mb.poly(MatKey::Hair, rings.last().unwrap(), Some([0.0, -1.0, 0.0]));
+        "dlugie" | "bob" | "kucyk" => {
+            let (len, w0, w1) = match style {
+                "dlugie" => (0.2, 0.068, 0.05),
+                "bob" => (0.035, 0.07, 0.066),
+                _ => (0.17, 0.022, 0.012),
+            };
+            let top = if style == "kucyk" { h.col(5, fy(0.17)) } else { h.col(5, fy(0.11)) };
+            let z0 = top[2] - if style == "kucyk" { 0.02 } else { 0.004 };
+            let ring = |y: f64, w: f64, d: f64, z: f64| -> Vec<V3> {
+                (0..6).map(|i| {
+                    let a = -std::f64::consts::TAU * i as f64 / 6.0;
+                    [w * a.sin(), y, z + d * a.cos()]
+                }).collect()
+            };
+            if !(hat_low && style == "kucyk") {
+                let d0 = if style == "kucyk" { w0 } else { 0.03 };
+                let rings = vec![ring(top[1], w0, d0, z0 + if style == "kucyk" { 0.0 } else { 0.012 }), ring(top[1] - len * 0.5, (w0 + w1) * 0.55, d0 * 0.9, z0 - 0.008), ring(top[1] - len, w1, d0 * 0.6, z0 - 0.006)];
+                h.loft(mb, MatKey::Hair, &rings);
+                h.poly(mb, MatKey::Hair, rings.last().unwrap(), [0.0, -1.0, 0.0]);
+            }
         }
-        "kok" if cover.is_none() => {
-            let c = add(back(0.88), [0.0, 0.0, -0.035 * pr.k]);
-            let rings: Vec<Vec<V3>> = [(-0.035, 0.028), (0.0, 0.048), (0.035, 0.028)].iter().map(|&(dy, r)| ring6([c[0], c[1] + dy * pr.k, c[2]], r * pr.k, r * pr.k, false)).collect();
-            mb.loft(MatKey::Hair, &rings, true);
-        }
-        "kucyk" if cover.is_none() => {
-            let c = add(back(0.80), [0.0, 0.0, -0.02 * pr.k]);
-            let len = 0.2 * sc.sv;
-            let rings = vec![ring6(c, 0.03 * pr.k, 0.03 * pr.k, true), ring6([c[0], c[1] - len * 0.5, c[2] - 0.02], 0.026 * pr.k, 0.026 * pr.k, true), ring6([c[0], c[1] - len, c[2] - 0.01], 0.012 * pr.k, 0.012 * pr.k, true)];
-            mb.loft(MatKey::Hair, &rings, false);
+        "kok" if head_type == "brak" => {
+            let c0 = add(h.col(5, fy(0.19)), [0.0, 0.0, -0.022]);
+            let ring = |dy: f64, r: f64| -> Vec<V3> {
+                (0..6).map(|i| {
+                    let a = std::f64::consts::TAU * i as f64 / 6.0;
+                    [c0[0] + r * a.sin(), c0[1] + dy, c0[2] + r * a.cos()]
+                }).collect()
+            };
+            let rings = vec![ring(-0.024, 0.02), ring(0.0, 0.032), ring(0.024, 0.02)];
+            h.loft(mb, MatKey::Hair, &rings);
+            h.poly(mb, MatKey::Hair, &rings[0], [0.0, -1.0, 0.0]);
+            h.poly(mb, MatKey::Hair, &rings[2], [0.0, 1.0, 0.0]);
         }
         _ => {}
     }
-    if let Some((c, brim)) = cover {
-        emit_shell(mb, &pr, &c, MatKey::Helmet);
-        if brim > 0.0 {
-            let (r, l, f) = (pr.pt(c.front, theta(N - 1), c.tau), pr.pt(c.front, theta(0), c.tau), c.front);
-            let fwd = [0.0, -0.012, brim * pr.k];
-            let _ = f;
-            let (r2, l2) = (add(r, fwd), add(l, fwd));
-            mb.quad(MatKey::Helmet, r, l, l2, r2, Some([0.0, 1.0, 0.0]));
-            mb.quad(MatKey::Helmet, r, r2, l2, l, Some([0.0, -1.0, 0.0]));
+
+    // --- nakrycia głowy
+    let o = hair_off + 0.004;
+    let line = |v: [f64; 6]| v.map(fy);
+    let visor = |mb: &mut MeshBuilder, ring: &[V3], len: f64, drop: f64, mat: MatKey| {
+        // daszek od dolnej krawędzi przodu (kolumny C2' … C2)
+        let idx = [COLS - 2, COLS - 1, 0, 1, 2];
+        let pts: Vec<V3> = idx.iter().map(|&j| ring[j]).collect();
+        let tip: Vec<V3> = pts.iter().map(|&q| add(q, [q[0] * 0.15, -drop, len * (1.0 - q[0].abs() * 6.0).max(0.45)])).collect();
+        for i in 0..4 {
+            h.poly(mb, mat, &[pts[i], pts[i + 1], tip[i + 1], tip[i]], [0.0, 1.0, 0.1]);
         }
+    };
+    match head_type {
+        "czapka_daszek" | "czapka_mundurowa" => {
+            let s = Shell { lower: line([0.178, 0.176, 0.17, 0.152, 0.13, 0.122]), rows: vec![(0.0, o + 0.002), (0.4, o + 0.008), (0.72, o + 0.01), (1.0, o + 0.009)], apex: Some(o + 0.008), comb: 0.0, fwd: 0.0 };
+            let r = emit_shell(&h, mb, &s, MatKey::Helmet);
+            visor(mb, &r[0], 0.068, 0.012, MatKey::Helmet);
+        }
+        "czapka_policji_rd" => {
+            // czapka garnizonowa: otok, szerokie denko, czarny daszek
+            let lo = line([0.168, 0.167, 0.165, 0.16, 0.158, 0.158]);
+            let band = Shell { lower: lo, rows: vec![(0.0, o + 0.004), (0.32, o + 0.007)], apex: None, comb: 0.0, fwd: 0.0 };
+            let r = emit_shell(&h, mb, &band, MatKey::Outer);
+            let top: Vec<V3> = r[1].iter().map(|&q| {
+                let d = norm([q[0], 0.0, q[2] - 0.004]);
+                add(q, [d[0] * 0.024, 0.016 + q[2].max(0.0) * 0.12, d[2] * 0.024 + 0.006])
+            }).collect();
+            h.loft(mb, MatKey::Helmet, &[r[1].clone(), top.clone()]);
+            h.poly(mb, MatKey::Helmet, &top, [0.0, 1.0, 0.0]);
+            visor(mb, &r[0], 0.06, 0.02, MatKey::Face);
+        }
+        "kaszkiet" => {
+            // kaszkiet: niska główka nasunięta do przodu, krótki daszek
+            let s = Shell { lower: line([0.176, 0.174, 0.168, 0.152, 0.132, 0.126]), rows: vec![(0.0, o + 0.003), (0.45, o + 0.012), (1.0, o + 0.004)], apex: Some(o), comb: 0.0, fwd: 0.022 };
+            let r = emit_shell(&h, mb, &s, MatKey::Helmet);
+            visor(mb, &r[0], 0.045, 0.012, MatKey::Helmet);
+        }
+        "czapka_zimowa" => {
+            let lo = line([0.168, 0.164, 0.15, 0.11, 0.095, 0.095]);
+            emit_shell(&h, mb, &Shell { lower: lo, rows: vec![(0.0, o + 0.012), (0.18, o + 0.014), (0.2, o + 0.009), (0.6, o + 0.011), (1.0, o + 0.01)], apex: Some(o + 0.014), comb: 0.0, fwd: 0.0 }, MatKey::Helmet);
+        }
+        "beret" => {
+            let s = Shell { lower: line([0.185, 0.182, 0.176, 0.165, 0.158, 0.156]), rows: vec![(0.0, o + 0.003), (0.5, o + 0.022)], apex: None, comb: 0.0, fwd: 0.0 };
+            let r = emit_shell(&h, mb, &s, MatKey::Helmet);
+            let top: Vec<V3> = r[1].iter().map(|&q| add(q, [q[0] * 0.1 + 0.012, 0.016, q[2] * 0.06])).collect();
+            h.loft(mb, MatKey::Helmet, &[r[1].clone(), top.clone()]);
+            h.poly(mb, MatKey::Helmet, &top, [0.0, 1.0, 0.0]);
+        }
+        "kaptur" => {
+            let lo = line([0.205, 0.19, 0.11, 0.03, 0.0, 0.0]);
+            emit_shell(&h, mb, &Shell { lower: lo, rows: vec![(0.0, o + 0.012), (0.3, o + 0.022), (0.65, o + 0.024), (1.0, o + 0.024)], apex: Some(o + 0.024), comb: 0.0, fwd: 0.0 }, MatKey::Top);
+        }
+        "kask_budowlany" => {
+            // kask EN 397: kopuła z grzebieniem, wąskie rondo dookoła, krótki daszek
+            let lo = line([0.176, 0.174, 0.17, 0.162, 0.152, 0.148]);
+            let s = Shell { lower: lo, rows: vec![(0.0, o + 0.018), (0.3, o + 0.026), (0.65, o + 0.028), (1.0, o + 0.028)], apex: Some(o + 0.022), comb: 0.008, fwd: 0.0 };
+            let r = emit_shell(&h, mb, &s, MatKey::Helmet);
+            let rim: Vec<V3> = r[0].iter().map(|&q| add(add(q, scale(norm([q[0], 0.0, q[2] - 0.002]), 0.016)), [0.0, -0.006, 0.0])).collect();
+            h.loft(mb, MatKey::Helmet, &[rim, r[0].clone()]);
+            visor(mb, &r[0], 0.04, 0.012, MatKey::Helmet);
+        }
+        "helm_psp" => {
+            // hełm strażacki: wysoka kopuła z grzebieniem, osłona karku, krótki daszek
+            let lo = line([0.172, 0.17, 0.158, 0.118, 0.078, 0.07]);
+            let s = Shell { lower: lo, rows: vec![(0.0, o + 0.022), (0.22, o + 0.03), (0.6, o + 0.034), (1.0, o + 0.034)], apex: Some(o + 0.032), comb: 0.016, fwd: 0.0 };
+            let r = emit_shell(&h, mb, &s, MatKey::Helmet);
+            let guard: Vec<V3> = r[0].iter().map(|&q| {
+                let back = (-q[2] / 0.1).clamp(0.0, 1.0);
+                add(add(q, scale(norm([q[0], 0.0, q[2]]), 0.006 + 0.03 * back)), [0.0, -0.02 * back - 0.004, 0.0])
+            }).collect();
+            h.loft(mb, MatKey::Helmet, &[guard, r[0].clone()]);
+            visor(mb, &r[0], 0.034, 0.018, MatKey::Helmet);
+        }
+        _ => {}
     }
 }

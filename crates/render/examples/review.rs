@@ -98,7 +98,7 @@ fn tlum(spec: &Value, dir: &str) {
         s["phase"] = json!(phase);
         person(s)
     };
-    let models = [pose("stand", 0.0), pose("walk", 0.25), pose("sit", 0.0), pose("drive", 0.0), pose("rest", 0.0)];
+    let models = [pose("stand", 0.0), pose("walk", 0.25), pose("sit", 0.0), pose("drive", 0.0), pose("rest", 0.0), pose("ride", 0.0)];
     let meshes: Vec<(&MeshData, [f64; 3])> = models.iter().map(|m| (&m.body, [0.0; 3])).collect();
     let top = models[0].body.bounds.max[1];
     let hh = 0.30 * (top / 1.75).max(0.75);
@@ -106,6 +106,17 @@ fn tlum(spec: &Value, dir: &str) {
     let hands = {
         let b = models[0].body.bounds;
         bx([b.min[0], 0.55 * top - 0.25, -0.2], [b.max[0], 0.55 * top + 0.05, 0.2])
+    };
+    // zbliżenie lewej dłoni (stoi) i dłoni na kierownicy (prowadzi)
+    let around = |m: &HumanModel, name: &str, r: f64| {
+        let j = m.joints.iter().find(|j| j.name == name).expect("kość");
+        let c: [f64; 3] = std::array::from_fn(|k| (j.head[k] + j.tail[k]) / 2.0);
+        bx([c[0] - r, c[1] - r, c[2] - r], [c[0] + r, c[1] + r, c[2] + r])
+    };
+    let hand = around(&models[0], "LeftHand", 0.11);
+    let grip = {
+        let (a, b) = (around(&models[3], "LeftHand", 0.1), around(&models[3], "RightHand", 0.1));
+        bx(std::array::from_fn(|k| a.min[k].min(b.min[k])), std::array::from_fn(|k| a.max[k].max(b.max[k])))
     };
     let feet = bx([-0.3, 0.0, -0.2], [0.3, 0.3, 0.3]);
     let s = |label, az, el, focus, i: usize| Shot { label, az, el, focus, items: vec![i] };
@@ -125,10 +136,16 @@ fn tlum(spec: &Value, dir: &str) {
         s("DLONIE PRZOD", 0.0, 6.0, Some(hands), 0),
         s("STOPY 3/4", 35.0, 18.0, Some(feet), 0),
         s("T-POSE PRZOD", 0.0, 4.0, None, 4),
+        s("PROWADZI 3/4", 40.0, 14.0, None, 3),
+        s("PASAZER BOK", 90.0, 4.0, None, 5),
+        s("DLON LEWA 3/4", 50.0, 20.0, Some(hand), 0),
+        s("DLONIE NA KIEROWNICY", 30.0, 25.0, Some(grip), 3),
+        s("GLOWA TYL 3/4", 150.0, 8.0, Some(head), 0),
+        s("STOI 3/4 TYL", 215.0, 10.0, None, 0),
     ];
     write(dir, &shots, &meshes);
     let stats: Vec<Value> = models.iter().map(|m| json!(m.stats)).collect();
-    std::fs::write(format!("{dir}/stats.json"), serde_json::to_string_pretty(&json!({ "poses": stats, "hip_stand": models[0].hip, "hip_sit": models[2].hip, "hip_drive": models[3].hip, "min_y": models.iter().map(|m| m.body.bounds.min[1]).collect::<Vec<_>>() })).unwrap()).unwrap();
+    std::fs::write(format!("{dir}/stats.json"), serde_json::to_string_pretty(&json!({ "poses": stats, "hip_stand": models[0].hip, "hip_sit": models[2].hip, "hip_drive": models[3].hip, "hip_ride": models[5].hip, "min_y": models.iter().map(|m| m.body.bounds.min[1]).collect::<Vec<_>>() })).unwrap()).unwrap();
     println!("{dir}: {}", serde_json::to_string(&stats).unwrap());
 }
 

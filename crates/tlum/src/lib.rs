@@ -4,6 +4,7 @@
 //! lewa strona postaci = +X; origin = grunt pod środkiem między stopami (poza siedząca: pod biodrami).
 
 mod body;
+mod font;
 mod head;
 mod skel;
 
@@ -40,7 +41,7 @@ pub fn extra() -> &'static Value {
 pub struct TlumSpec {
     #[serde(flatten)]
     pub mix: MixSpec,
-    /// `rest` (T-pose rr_human), `stand` (domyślnie), `walk`, `sit`, `drive`.
+    /// `rest` (T-pose rr_human), `stand` (domyślnie), `walk`, `sit` (krzesło), `drive` (kierowca), `ride` (pasażer).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pose: Option<String>,
     /// Faza kroku 0–1 (tylko `walk`).
@@ -87,10 +88,11 @@ pub struct HumanModel {
     /// Całe ciało w jednej siatce (jeden prymityw na slot materiału).
     pub body: MeshData,
     /// Kości w pozie (head/tail w przestrzeni modelu); pomocnicze IK podążają za dłonią/stopą.
+    /// Kolejność: 29 kości `rr_human`, potem palce (Unity Humanoid: `LeftThumbProximal` … `RightLittleDistal`).
     pub joints: Vec<Joint>,
     /// Kości w T-pose przeskalowane parametrami (baza pod skin).
     pub rest: Vec<Joint>,
-    /// Punkt biodrowy (Hips.head) w pozie — do osadzenia w Miejscu Tabora.
+    /// Punkt H (środek stawów biodrowych) w pozie — do osadzenia w Miejscu Tabora.
     pub hip: V3,
     pub stats: HumanStats,
     pub params: ParamMap,
@@ -105,7 +107,7 @@ fn vest_color(kind: &str) -> &'static str {
         "kam_niebieska" => "#1f4aa8",
         "kdr_bialo_niebieska" => "#e8eef6",
         "odblask_pomaranczowa" => "#ff6a13",
-        "kamizelka_policji" => "#1b2b4e",
+        "kamizelka_policji" => "#17191f",
         _ => "#dff020",
     }
 }
@@ -114,30 +116,27 @@ fn materials(p: &P) -> Vec<MaterialSpec> {
     let pal = &extra()["palety"];
     let skin = pal["monk"][(p.f("skinTone") as usize).clamp(1, 10) - 1]["hex"].as_str().unwrap();
     let hair = mix_hex(p.s("hairColor"), pal["siwe"][1]["hex"].as_str().unwrap(), p.f("greyRatio").clamp(0.0, 1.0));
-    let top = if p.s("upperMidType") != "brak" { p.s("upperMidColor") } else { p.s("upperBaseColor") };
+    let (mid, outer) = (p.s("upperMidType"), p.s("outerType"));
+    // marynarka bez okrycia gra rolę okrycia (koszula widoczna w wycięciu)
+    let top = if !matches!(mid, "brak" | "marynarka") { p.s("upperMidColor") } else { p.s("upperBaseColor") };
+    let jacket = if mid == "marynarka" && matches!(outer, "brak" | "kamizelka") { p.s("upperMidColor") } else { p.s("outerColor") };
     let helmet = MaterialSpec { double_sided: true, ..mat(MatKey::Helmet, "Nakrycie głowy", p.s("headColor"), 0.6) };
+    let stubble = mix_hex(skin, &hair, 0.3);
     vec![
         mat(MatKey::Skin, "Skóra", skin, 0.9),
         mat(MatKey::Top, "Góra", top, 0.9),
         mat(MatKey::Bottom, "Dół", p.s("lowerColor"), 0.9),
         mat(MatKey::Shoes, "Buty", p.s("feetColor"), 0.8),
         mat(MatKey::Hair, "Włosy", &hair, 0.9),
-        mat(MatKey::Outer, "Okrycie", p.s("outerColor"), 0.85),
+        mat(MatKey::Outer, "Okrycie", jacket, 0.85),
         mat(MatKey::HiVis, "Kamizelka", vest_color(p.s("vest")), 0.7),
         helmet,
         mat(MatKey::Face, "Twarz", "#241d1a", 0.9),
+        MaterialSpec { metalness: 0.3, ..mat(MatKey::Reflective, "Taśma odblaskowa", "#c9cdd2", 0.35) },
+        mat(MatKey::Eye, "Białko oka", "#e9e4dc", 0.4),
+        mat(MatKey::Detail, "Akcent", body::detail_color(p), 0.7),
+        mat(MatKey::Stubble, "Zarost", &stubble, 0.95),
     ]
-}
-
-/// Mnożnik głowy wg wieku (głów we wzroście: dziecko 5,5 → dorosły 7,8): dzieci mają większą głowę.
-fn head_scale(age: f64) -> f64 {
-    const T: [(f64, f64); 4] = [(3.0, 5.5), (7.0, 6.2), (13.0, 7.0), (18.0, 7.8)];
-    let heads = match T.iter().position(|t| age < t.0) {
-        None => 7.8,
-        Some(0) => T[0].1,
-        Some(i) => T[i - 1].1 + (T[i].1 - T[i - 1].1) * (age - T[i - 1].0) / (T[i].0 - T[i - 1].0),
-    };
-    (7.8 / heads).clamp(1.0, 1.5)
 }
 
 pub fn generate(spec: &TlumSpec) -> HumanModel {
@@ -148,23 +147,23 @@ pub fn generate(spec: &TlumSpec) -> HumanModel {
 
     let sc = skel::Scale::new(&p);
     let rest = skel::rest(&sc);
-    let w = skel::fk(&rest, &skel::rotations(&rest, pose, phase, p.s("posture")));
-    let dy = if pose == Pose::Rest { 0.0 } else { skel::ground_shift(&rest, &w) };
+    let w = skel::pose(&rest, &sc, pose, phase, p.s("posture"));
+    let dy = if pose == Pose::Rest { 0.0 } else { skel::ground_shift(&rest, &sc, &w) };
     let lift = Xform::translate([0.0, dy, 0.0]);
+    let wl: Vec<Xform> = w.iter().map(|x| lift.mul(x)).collect();
 
     let mut mb = MeshBuilder::default();
-    for part in body::parts(&rest, &sc, &p) {
-        let mut b = MeshBuilder::default();
-        body::emit(&mut b, &part);
-        mb.push(&b.build(vec![]), &lift.mul(&w[part.bone]));
-    }
+    let b = body::Body::new(&rest, &sc, &p, &wl);
+    b.emit(&mut mb);
+    b.hands(&mut mb, &wl);
     let mut hb = MeshBuilder::default();
-    head::build(&mut hb, &rest, &sc, &p, head_scale(p.f("age")));
-    mb.push(&hb.build(vec![]), &lift.mul(&w[skel::idx(&rest, "Head")]));
+    head::build(&mut hb, &rest, &sc, &p);
+    mb.push(&hb.build(vec![]), &wl[skel::idx(&rest, "Head")]);
     let body = mb.build(materials(&p));
 
     let joints = skel::posed(&rest, &w, dy);
-    let hip = joints[skel::idx(&joints, "Hips")].head;
+    let (hl, hr) = (joints[skel::idx(&joints, "LeftUpperLeg")].head, joints[skel::idx(&joints, "RightUpperLeg")].head);
+    let hip = std::array::from_fn(|k| (hl[k] + hr[k]) / 2.0);
     let b = body.bounds;
     let stats = HumanStats { pose, triangles: body.triangles(), height: b.max[1] - b.min[1] };
     HumanModel { body, joints, rest, hip, stats, params: r.params }
@@ -177,7 +176,8 @@ impl HumanModel {
 }
 
 /// GLB: `Body` (jedna siatka w pozie, `extras.stats`) + hierarchia pustych węzłów kości
-/// (`Root` … `LeftHandGrip`); pozycja lokalna = różnica głów kości, więc węzły leżą w pozie.
+/// (`Root` … `RightHandGrip`, potem palce `LeftThumbProximal` … `RightLittleDistal`);
+/// pozycja lokalna = różnica głów kości, więc węzły leżą w pozie.
 pub fn to_glb(m: &HumanModel) -> Vec<u8> {
     let empty = MeshData::empty();
     let mut nodes = vec![ExportNode { name: "Body".into(), mesh: &m.body, offset: None, parent: None, rotation: None, extras: Some(json!({ "stats": m.stats })) }];
