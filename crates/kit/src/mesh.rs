@@ -85,6 +85,11 @@ pub enum MatKey {
     Rim,
     Headlight,
     Taillight,
+    /// Kierunkowskazy (pomarańczowe, Regulamin EKG ONZ nr 48).
+    Indicator,
+    /// Tablica rejestracyjna: tło i niebieski pasek UE.
+    Plate,
+    PlateBand,
     // Ludzie (Tłum): sloty zgodne z CharacterLibrary (Skin/Top/Bottom/Shoes) + dodatki.
     Skin,
     Top,
@@ -129,6 +134,9 @@ impl MatKey {
             MatKey::Rim => "rim",
             MatKey::Headlight => "headlight",
             MatKey::Taillight => "taillight",
+            MatKey::Indicator => "indicator",
+            MatKey::Plate => "plate",
+            MatKey::PlateBand => "plateBand",
             MatKey::Skin => "Skin",
             MatKey::Top => "Top",
             MatKey::Bottom => "Bottom",
