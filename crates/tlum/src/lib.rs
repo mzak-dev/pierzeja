@@ -121,7 +121,8 @@ fn materials(p: &P) -> Vec<MaterialSpec> {
     let top = if !matches!(mid, "brak" | "marynarka") { p.s("upperMidColor") } else { p.s("upperBaseColor") };
     let jacket = if mid == "marynarka" && matches!(outer, "brak" | "kamizelka") { p.s("upperMidColor") } else { p.s("outerColor") };
     let helmet = MaterialSpec { double_sided: true, ..mat(MatKey::Helmet, "Nakrycie głowy", p.s("headColor"), 0.6) };
-    let stubble = mix_hex(skin, &hair, 0.3);
+    // slot `Stubble`: cień zarostu, a bez zarostu odcień warg
+    let stubble = if p.s("beard") == "brak" { mix_hex(skin, "#9c4f4a", 0.32) } else { mix_hex(skin, &hair, 0.3) };
     vec![
         mat(MatKey::Skin, "Skóra", skin, 0.9),
         mat(MatKey::Top, "Góra", top, 0.9),
@@ -132,10 +133,10 @@ fn materials(p: &P) -> Vec<MaterialSpec> {
         mat(MatKey::HiVis, "Kamizelka", vest_color(p.s("vest")), 0.7),
         helmet,
         mat(MatKey::Face, "Twarz", "#241d1a", 0.9),
-        MaterialSpec { metalness: 0.3, ..mat(MatKey::Reflective, "Taśma odblaskowa", "#c9cdd2", 0.35) },
+        MaterialSpec { metalness: 0.3, ..mat(MatKey::Reflective, "Taśma odblaskowa", "#dde0e3", 0.35) },
         mat(MatKey::Eye, "Białko oka", "#e9e4dc", 0.4),
         mat(MatKey::Detail, "Akcent", body::detail_color(p), 0.7),
-        mat(MatKey::Stubble, "Zarost", &stubble, 0.95),
+        mat(MatKey::Stubble, "Zarost / wargi", &stubble, 0.95),
     ]
 }
 
@@ -157,7 +158,7 @@ pub fn generate(spec: &TlumSpec) -> HumanModel {
     b.emit(&mut mb);
     b.hands(&mut mb, &wl);
     let mut hb = MeshBuilder::default();
-    head::build(&mut hb, &rest, &sc, &p);
+    head::build(&mut hb, &rest, &sc, &p, r.seed);
     mb.push(&hb.build(vec![]), &wl[skel::idx(&rest, "Head")]);
     let body = mb.build(materials(&p));
 
