@@ -176,7 +176,8 @@ pub(crate) fn seat_points(p: &P) -> Vec<V3> {
         out.extend((0..n).map(|j| [x0 - j as f64 * pitch, y, z]));
     };
     let mut out = Vec::new();
-    let zf0 = d.zc - 0.95;
+    // punkt H 1,08 m za czołem kabiny: stopy w pozie `drive` (ok. 0,7 m przed H) zostają w kabinie
+    let zf0 = d.zc - 1.08;
     let front = match d.cab {
         Cab::Day => 3,
         _ => d.seats.min(2),
