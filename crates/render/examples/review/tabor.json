@@ -13,7 +13,7 @@
   "van-straz": { "archetype": "van", "seed": 3, "overrides": { "service": "straz" } },
   "kombi-techniczne": { "archetype": "kombi", "seed": 3, "overrides": { "service": "techniczne", "livery": "chevron" } },
   "suv-straz": { "archetype": "suv", "seed": 3, "overrides": { "service": "straz" } },
-  "PD": { "archetype": "podwozie_lekkie", "seed": 7, "overrides": { "wheelbase": 4.8, "seats": 1, "module": "laweta", "moduleLength": 5.2 } },
+  "PD": { "archetype": "podwozie_lekkie", "seed": 7, "overrides": { "wheelbase": 4.8, "length": 7.9, "seats": 1, "module": "laweta", "moduleLength": 5.2 } },
   "SCRt": { "archetype": "podwozie_srednie", "seed": 7, "overrides": { "wheelbase": 4.6, "seats": 3, "module": "techniczny", "moduleLength": 4.4, "compartments": 3, "passThrough": 0, "crane": 1, "winch": 1, "roofRack": 1 } },
   "GBA": { "archetype": "podwozie_srednie", "seed": 3 },
   "podwozie-lekkie": { "archetype": "podwozie_lekkie", "seed": 3 },

@@ -618,3 +618,52 @@ fn lightbar(s: Svc, n: usize, lx: f64, d: f64) -> MeshData {
     let (col, em) = lamp(s);
     mb.build(vec![mat(MatKey::Metal, "Obudowa belki", "#1a1c1e", 0.5, 0.4, None), mat(MatKey::GlassLit, "Lampy błyskowe", col, 0.2, 0.0, Some(em))])
 }
+
+// ---------------------------------------------------------------- pojazdy ciężkie
+
+/// Kabina pojazdu ciężkiego dla oklejenia: półszerokość, czoło, dach, szyba, pas nad szybą, drzwi.
+pub(crate) struct HeavyCab {
+    pub hwc: f64,
+    pub top: f64,
+    /// Górna krawędź szyby (y) i jej położenie (z); pas blachy nad szybą kończy się na `z_rf`.
+    pub y_wt: f64,
+    pub z_wt: f64,
+    pub z_rf: f64,
+    /// Linia okien bocznych.
+    pub ybel: f64,
+    /// Przednie drzwi kabiny (z0, z1).
+    pub door: (f64, f64),
+}
+
+/// Oklejenie kabiny pojazdu ciężkiego: belka na dachu kabiny, a w PSP napis STRAŻ na pasie nad
+/// szybą i numer operacyjny na przednich drzwiach. Zwraca belkę (siatka, przesunięcie).
+pub(crate) fn apply_heavy(mb: &mut MeshBuilder, p: &P, seed: u32, c: &HeavyCab) -> Option<(MeshData, V3)> {
+    let s = svc_of(p.s("service"));
+    if s == Svc::Cywilny {
+        return None;
+    }
+    let a = MatKey::Accent;
+    if s == Svc::Straz {
+        // STRAŻ na pochyłym pasie nad szybą, czytelny sprzed pojazdu
+        let v = norm([0.0, c.top - c.y_wt, c.z_rf - c.z_wt]);
+        let n = norm(cross([1.0, 0.0, 0.0], v));
+        let len = (c.top - c.y_wt).hypot(c.z_wt - c.z_rf);
+        // nad osłoną przeciwsłoneczną (0,08 m), z miejscem na kropkę Ż
+        let cell = fit_cell("STRAŻ", 0.8 * len, 1.3 * c.hwc).min((len - 0.1) / 9.0);
+        let wid = text_cols("STRAŻ") as f64 * cell;
+        let o = add(add([-wid / 2.0, c.y_wt, c.z_wt], scale(v, 0.08)), scale(n, 0.006));
+        text(mb, a, "STRAŻ", o, [1.0, 0.0, 0.0], v, n, cell, false);
+        // numer operacyjny na przednich drzwiach pod szybą
+        let number = format!("{:03} L {:02}", 1 + (hash01_seeded(seed, &[21.0]) * 998.0) as u32, 1 + (hash01_seeded(seed, &[22.0]) * 98.0) as u32);
+        let cell = fit_cell(&number, 0.15, 0.9 * (c.door.1 - c.door.0));
+        let len = text_cols(&number) as f64 * cell;
+        let (zc, y0, x) = ((c.door.0 + c.door.1) / 2.0, c.ybel - 0.12 - 7.0 * cell, c.hwc + 0.01);
+        text(mb, a, &number, [x, y0, zc + len / 2.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], cell, false);
+        text(mb, a, &number, [-x, y0, zc - len / 2.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], cell, false);
+    }
+    let lamps = p.f("lightbarLamps") as usize;
+    (lamps > 0).then(|| {
+        let (lx, d) = ((1.4 * c.hwc).min(1.6), 0.3);
+        (lightbar(s, lamps, lx, d), [0.0, c.top - 0.005, c.z_rf - d / 2.0 - 0.05])
+    })
+}

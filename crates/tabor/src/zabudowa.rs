@@ -190,6 +190,8 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool, seed: u32) 
     let n = p.f("compartments") as usize;
     if n > 0 {
         let (c0, c1) = (sp.z_r + 0.2, z_a - 0.1);
+        // żaluzje mają realnie ≤ 1,6 m szerokości: dłuższa zabudowa dostaje więcej kolumn
+        let n = n.max(((c1 - c0) / 1.6).ceil() as usize);
         let wc = (c1 - c0) / n as f64;
         let yu1 = sp.ytop - 0.14;
         let yu0 = yu1 - 0.75;

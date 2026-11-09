@@ -8,7 +8,7 @@ fn make(v: Value) -> VehicleModel {
 }
 
 fn pd() -> Value {
-    json!({ "archetype": "podwozie_lekkie", "seed": 7, "overrides": { "wheelbase": 4.8, "seats": 1, "module": "laweta", "moduleLength": 5.2 } })
+    json!({ "archetype": "podwozie_lekkie", "seed": 7, "overrides": { "wheelbase": 4.8, "length": 7.9, "seats": 1, "module": "laweta", "moduleLength": 5.2 } })
 }
 
 fn scrt() -> Value {
@@ -87,10 +87,14 @@ fn seat_nodes_match_seat_count_and_cab_follows_seats() {
 #[test]
 fn glb_has_body_wheels_and_shared_mesh() {
     for (n, s) in all() {
-        let js = glb_json(&to_glb(&make(s)));
+        let m = make(s);
+        let js = glb_json(&to_glb(&m));
         let nodes = js["nodes"].as_array().unwrap();
         assert_eq!(nodes[0]["name"], "Body", "{n}");
-        assert_eq!(js["meshes"].as_array().unwrap().len(), 2, "{n}: nadwozie + jedno koło");
+        // nadwozie + jedno koło (+ belka świetlna służby na dachu kabiny)
+        let bar = usize::from(m.lightbar.is_some());
+        assert_eq!(js["meshes"].as_array().unwrap().len(), 2 + bar, "{n}: nadwozie + jedno koło + belka");
+        assert_eq!(nodes.iter().any(|x| x["name"] == "Lightbar"), bar == 1, "{n}: węzeł Lightbar");
         for w in ["Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR"] {
             assert!(nodes.iter().any(|x| x["name"] == w), "{n}: {w}");
         }

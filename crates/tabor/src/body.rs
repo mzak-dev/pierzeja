@@ -400,6 +400,18 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
         van_extras(mb, c, half, taper);
     }
 
+    // wycieraczki: dwa ramiona na dole szyby, tuż nad podstawą (`cowl`)
+    let ws = |dz: f64| {
+        let z = cowl - dz;
+        (z, half(z)[6][1] + 0.008)
+    };
+    let ((za0, ya0), (zb0, yb0)) = (ws(0.04), ws(0.08));
+    let hwz = half(cowl - 0.06)[5][0];
+    for x0 in [-0.9 * hwz, 0.04] {
+        let x1 = x0 + 0.82 * hwz;
+        mb.quad(MatKey::Plastic, [x0, ya0, za0], [x1, ya0, za0], [x1, yb0, zb0], [x0, yb0, zb0], Some([0.0, 1.0, 0.4]));
+    }
+
     // lusterka na ramieniu u podstawy słupka A (osobówka ok. 0,14 m poza burtę, van 0,2 m),
     // na obudowie boczny powtarzacz kierunkowskazu
     let m = half(za - 0.08)[3];
