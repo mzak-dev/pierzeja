@@ -32,20 +32,27 @@ pub fn build(p: &P, materials: Vec<MaterialSpec>) -> MeshData {
             mb.quad(MatKey::Tyre, outer[k], outer[n], lip[n], lip[k], Some([s, rad[1] * 0.5, rad[2] * 0.5]));
             mb.quad(MatKey::Rim, lip[k], lip[n], dish[n], dish[k], Some([s * 0.5, -rad[1] * 0.8, -rad[2] * 0.8]));
         }
-        // ciemna tarcza, 5 szprych, kołpak i 4 nakrętki (pryzmy bez dna)
-        mb.poly(MatKey::Plastic, &dish, Some([s, 0.0, 0.0]));
+        // ciężarowe: stalowa tarcza z 10 nakrętkami (bez szprych); osobowe: ciemna tarcza, 5 szprych, 4 nakrętki
+        let truck = p.s("bodyType") == "podwozie";
+        mb.poly(if truck { MatKey::Rim } else { MatKey::Plastic }, &dish, Some([s, 0.0, 0.0]));
         let sx = s * (hw * 0.62 + 0.006);
         let at = |ang: f64, rad: f64| [sx, rad * ang.cos(), rad * ang.sin()];
+        if truck {
+            let hub: Vec<V3> = (0..8).map(|k| [sx + s * 0.02, rr * 0.3 * (k as f64 * PI / 4.0).cos(), rr * 0.3 * (k as f64 * PI / 4.0).sin()]).collect();
+            mb.poly(MatKey::Plastic, &hub, Some([s, 0.0, 0.0]));
+            for i in 0..10 {
+                let a = i as f64 * PI / 5.0;
+                nut(&mut mb, s, sx, rr * 0.42 * a.cos(), rr * 0.42 * a.sin(), rr * 0.035);
+            }
+            continue;
+        }
         for i in 0..5 {
             let a = i as f64 * 2.0 * PI / 5.0;
             mb.quad(MatKey::Rim, at(a - 0.2, rr * 0.2), at(a + 0.2, rr * 0.2), at(a + 0.11, rr * 0.92), at(a - 0.11, rr * 0.92), Some([s, 0.0, 0.0]));
         }
         let hub: Vec<V3> = (0..6).map(|k| [sx + s * 0.006, rr * 0.2 * (k as f64 * PI / 3.0).cos(), rr * 0.2 * (k as f64 * PI / 3.0).sin()]).collect();
         mb.poly(MatKey::Rim, &hub, Some([s, 0.0, 0.0]));
-        for i in 0..4 {
-            let a = (i as f64 + 0.5) * PI / 2.0;
-            nut(&mut mb, s, sx, rr * 0.4 * a.cos(), rr * 0.4 * a.sin(), rr * 0.045);
-        }
+        // osobowe: bez nakrętek (z kamery gry niewidoczne, koło liczy się 4 razy)
     }
     mb.build(materials)
 }

@@ -1,0 +1,1 @@
+{ "archetype": "van", "seed": 3, "overrides": { "service": "medycy", "wheelbase": 3.7, "seats": 2 } }

@@ -1,0 +1,1 @@
+{ "archetype": "podwozie_srednie", "seed": 7, "overrides": { "wheelbase": 4.6, "seats": 3, "module": "techniczny", "moduleLength": 4.4, "compartments": 3, "passThrough": 0, "crane": 1, "winch": 1, "roofRack": 1 } }

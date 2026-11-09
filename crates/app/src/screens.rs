@@ -62,9 +62,6 @@ pub fn start(root: &mut egui::Ui, docs: &Docs, cmds: &mut Vec<Cmd>) {
     let cw = (cols.width() - right_w - 28.0 - 2.0 * gap) / 3.0;
     let d = data();
     let td = tabor_core::data();
-    let row_hint = |ui: &mut egui::Ui, text: &str| {
-        ui.label(RichText::new(text).size(12.5).color(FAINT));
-    };
     for (i, fam) in [Fam::Budynki, Fam::Pojazdy, Fam::Ludzie].into_iter().enumerate() {
         let rect = egui::Rect::from_min_size(cols.min + Vec2::new(i as f32 * (cw + gap), 0.0), Vec2::new(cw, cols.height().min(320.0)));
         let mut ui = root.new_child(egui::UiBuilder::new().max_rect(rect));
@@ -114,9 +111,12 @@ pub fn start(root: &mut egui::Ui, docs: &Docs, cmds: &mut Vec<Cmd>) {
                     }
                 }
                 Fam::Ludzie => {
-                    ui.add_space(4.0);
-                    row_hint(ui, "Generator Tłum (ludzie, mundury,");
-                    row_hint(ui, "pozy) — w przygotowaniu.");
+                    for a in tlum_core::data().archetypes.iter().take(5) {
+                        let col = crate::rgb(a.vector.get("upperBaseColor").and_then(|v| v.as_str()).unwrap_or("#808080"));
+                        if list_row(ui, Some(Color32::from_rgb(col[0], col[1], col[2])), None, &a.short, &format!("{}–{}", a.years[0], a.years[1])).on_hover_text(&a.description).clicked() {
+                            cmds.push(Cmd::NewHuman(a.id.clone()));
+                        }
+                    }
                 }
             }
         });
@@ -129,7 +129,7 @@ pub fn start(root: &mut egui::Ui, docs: &Docs, cmds: &mut Vec<Cmd>) {
     right.add_space(8.0);
     right.label(RichText::new("Otwarte karty").size(12.5).color(FAINT));
     for (i, t) in docs.tabs.iter().enumerate() {
-        if list_row(&mut right, None, Some(if t.doc.mode == crate::Mode::Vehicle { ic::CAR } else { ic::FILE }), &t.doc.name, t.doc.mode.label()).clicked() {
+        if list_row(&mut right, None, Some(match t.doc.mode { crate::Mode::Vehicle => ic::CAR, crate::Mode::Human => ic::PERSON_SIMPLE, _ => ic::FILE }), &t.doc.name, t.doc.mode.label()).clicked() {
             cmds.push(Cmd::Tab(i));
         }
     }

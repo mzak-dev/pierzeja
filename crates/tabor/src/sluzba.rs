@@ -39,7 +39,7 @@ fn body_colors(s: Svc) -> Option<(&'static str, &'static str)> {
     match s {
         Svc::Cywilny => None,
         Svc::Policja => Some(("#a5a8a6", "#a5a8a6")), // ≈ RAL 9006
-        Svc::Medycy => Some(("#f1dd38", "#f1dd38")),  // RAL 1016
+        Svc::Medycy => Some(("#f1dd38", "#2b2d2f")),  // RAL 1016, zderzaki z czarnego tworzywa
         Svc::Straz => Some(("#ab2524", "#f7f9ef")),   // RAL 3000, zderzaki białe
         Svc::Techniczne => Some(("#f4f8f4", "#f4f8f4")),
     }
@@ -81,9 +81,9 @@ fn palette(s: Svc, checker: bool) -> [&'static str; 3] {
 
 fn lamp(s: Svc) -> (&'static str, &'static str) {
     if s == Svc::Techniczne {
-        ("#e8a200", "#ffb000") // żółte (§ 38)
+        ("#ffb20f", "#ffc94a") // żółte (§ 38)
     } else {
-        ("#1d4fd8", "#3a6dff")
+        ("#2f6bff", "#5a8cff")
     }
 }
 
@@ -108,6 +108,11 @@ fn glyph(c: char) -> [u8; 7] {
         'A' => [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
         'B' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110],
         'C' => [0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110],
+        'D' => [0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110],
+        'E' => [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111],
+        'G' => [0b01110, 0b10001, 0b10000, 0b10111, 0b10001, 0b10001, 0b01111],
+        'H' => [0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
+        'K' => [0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001],
         'I' => [0b01110, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
         'J' => [0b00111, 0b00010, 0b00010, 0b00010, 0b00010, 0b10010, 0b01100],
         'L' => [0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111],
@@ -119,8 +124,10 @@ fn glyph(c: char) -> [u8; 7] {
         'S' => [0b01111, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110],
         'T' => [0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100],
         'U' => [0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110],
-        'Z' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111],
-        'Ż' => [0b11111, 0b00001, 0b00010, 0b11111, 0b01000, 0b10000, 0b11111], // Ƶ: Z z poprzeczką
+        'W' => [0b10001, 0b10001, 0b10001, 0b10101, 0b10101, 0b11011, 0b10001],
+        'Y' => [0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100],
+        // Ż = Z + kropka nad literą (rysowana osobno w `text`)
+        'Z' | 'Ż' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111],
         '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
         '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
         '2' => [0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111],
@@ -165,10 +172,13 @@ fn text(mb: &mut MeshBuilder, m: MatKey, s: &str, o: V3, u: V3, v: V3, n: V3, ce
                 }
             }
         }
+        if ch == 'Ż' {
+            boxes.push((2, 3, usize::MAX, 0)); // kropka: wiersz nad literą
+        }
         for (c0, c1, r, hgt) in boxes {
             let (x0, x1) = (6 * i + c0, 6 * i + c1);
             let (x0, x1) = if mirror { (cols - x1, cols - x0) } else { (x0, x1) };
-            let (y0, y1) = (7 - r - hgt, 7 - r);
+            let (y0, y1) = if r == usize::MAX { (8, 9) } else { (7 - r - hgt, 7 - r) };
             mb.quad(m, pt(x0, y0), pt(x1, y0), pt(x1, y1), pt(x0, y1), Some(n));
         }
     }
@@ -187,6 +197,8 @@ pub(crate) struct Hull<'a> {
     pub clr: f64,
     pub ytail: f64,
     pub zf: f64,
+    /// Krawędź maski (góra pochylonego czoła).
+    pub zn: f64,
     pub zr: f64,
     pub zg: f64,
     pub cowl: f64,
@@ -209,6 +221,21 @@ impl Wall<'_> {
         let l = |f: &dyn Fn(&Half) -> f64| f(&self.hs[i]) + (f(&self.hs[i + 1]) - f(&self.hs[i])) * t;
         (l(&|h| h[2][0]), l(&|h| h[2][1]), l(&|h| h[3][1]))
     }
+    /// x burty w (z, y): bok jest pochylony, więc idzie po łamanej talia → linia okien → róg szyby → dach.
+    fn x(&self, z: f64, y: f64) -> f64 {
+        let i = self.zs.windows(2).position(|w| z <= w[1]).unwrap_or(self.zs.len() - 2);
+        let (z0, z1) = (self.zs[i], self.zs[i + 1]);
+        let t = if z1 - z0 < 1e-9 { 0.0 } else { ((z - z0) / (z1 - z0)).clamp(0.0, 1.0) };
+        let p = |k: usize, c: usize| self.hs[i][k][c] + (self.hs[i + 1][k][c] - self.hs[i][k][c]) * t;
+        for k in 2..5 {
+            let (ya, yb) = (p(k, 1), p(k + 1, 1));
+            if y <= yb || k == 4 {
+                let u = if yb - ya < 1e-6 { 0.0 } else { ((y - ya) / (yb - ya)).clamp(0.0, 1.0) };
+                return p(k, 0) + (p(k + 1, 0) - p(k, 0)) * u;
+            }
+        }
+        unreachable!()
+    }
     fn breaks(&self, z0: f64, z1: f64) -> Vec<f64> {
         let mut v = vec![z0];
         v.extend(self.zs.iter().copied().filter(|&z| z > z0 + 1e-6 && z < z1 - 1e-6));
@@ -228,15 +255,43 @@ fn sided(side: f64, p: V3) -> V3 {
     [p[0] * side, p[1], p[2]]
 }
 
-/// Pas na ścianie boczej (obie strony), przycięty do ściany pionowej w każdej stacji.
+/// Najdłuższy odcinek z w `z0..z1`, na którym górna krawędź pasa `y1` mieści się pod linią okien
+/// (pas ma stałą szerokość i kończy się prosto, zamiast zwężać się klinem na masce i tyle).
+fn band_range(w: &Wall, z0: f64, z1: f64, y1: f64) -> Option<(f64, f64)> {
+    let n = ((z1 - z0) / 0.02).ceil().max(1.0) as usize;
+    let ok = |i: usize| y1 <= w.at(z0 + (z1 - z0) * i as f64 / n as f64).2 - 0.01;
+    let (mut best, mut cur): (Option<(usize, usize)>, Option<usize>) = (None, None);
+    for i in 0..=n {
+        match (ok(i), cur) {
+            (true, None) => cur = Some(i),
+            (false, Some(s)) => {
+                if best.is_none_or(|b| i - 1 - s > b.1 - b.0) {
+                    best = Some((s, i - 1));
+                }
+                cur = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(s) = cur {
+        if best.is_none_or(|b| n - s > b.1 - b.0) {
+            best = Some((s, n));
+        }
+    }
+    let z = |i: usize| z0 + (z1 - z0) * i as f64 / n as f64;
+    best.filter(|b| b.1 > b.0).map(|b| (z(b.0), z(b.1)))
+}
+
+/// Pas na ścianie boczej (obie strony) na odcinku `z0..z1` (z `band_range` całego zestawu pasów,
+/// żeby wszystkie kończyły się równo), stała wysokość, dół przycięty do talii.
 fn band(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1): (f64, f64), e: f64) {
-    let pts: Vec<(f64, f64, f64, f64)> = w
+    let pts: Vec<(f64, f64, f64, f64, f64)> = w
         .breaks(z0, z1)
         .into_iter()
         .map(|z| {
-            let (x, mid, bel) = w.at(z);
-            let lo = y0.max(mid);
-            (z, x + e, lo, y1.min(bel - 0.01).max(lo))
+            let lo = y0.max(w.at(z).1);
+            let hi = y1.max(lo);
+            (z, w.x(z, lo) + e, lo, hi, w.x(z, hi) + e)
         })
         .collect();
     // ponytail: kolejne stacje o tej samej geometrii nie są scalane (tylko ~1 kwadrat na stację)
@@ -246,7 +301,7 @@ fn band(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1
             continue;
         }
         for side in [1.0, -1.0] {
-            mb.quad(m, sided(side, [a.1, a.2, a.0]), sided(side, [b.1, b.2, b.0]), sided(side, [b.1, b.3, b.0]), sided(side, [a.1, a.3, a.0]), Some([side, 0.0, 0.0]));
+            mb.quad(m, sided(side, [a.1, a.2, a.0]), sided(side, [b.1, b.2, b.0]), sided(side, [b.4, b.3, b.0]), sided(side, [a.4, a.3, a.0]), Some([side, 0.0, 0.0]));
         }
     }
 }
@@ -256,9 +311,9 @@ fn rect(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1
     if !w.fits(z0, z1, y0, y1) {
         return false;
     }
-    let (xa, xb) = (w.at(z0).0 + e, w.at(z1).0 + e);
+    let x = |z: f64, y: f64| w.x(z, y) + e;
     for side in [1.0, -1.0] {
-        mb.quad(m, sided(side, [xa, y0, z0]), sided(side, [xb, y0, z1]), sided(side, [xb, y1, z1]), sided(side, [xa, y1, z0]), Some([side, 0.0, 0.0]));
+        mb.quad(m, sided(side, [x(z0, y0), y0, z0]), sided(side, [x(z1, y0), y0, z1]), sided(side, [x(z1, y1), y1, z1]), sided(side, [x(z0, y1), y1, z0]), Some([side, 0.0, 0.0]));
     }
     true
 }
@@ -266,7 +321,7 @@ fn rect(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1
 /// Napis na bokach, czytelny od przodu do tyłu po obu stronach; `zc` = środek, `y0` = dół liter.
 fn side_text(mb: &mut MeshBuilder, w: &Wall, m: MatKey, s: &str, zc: f64, y0: f64, cell: f64, e: f64) {
     let len = text_cols(s) as f64 * cell;
-    let x = w.at(zc).0 + e;
+    let x = w.x(zc, y0) + e; // napis pionowy, oparty dołem o pochyloną burtę
     text(mb, m, s, [x, y0, zc + len / 2.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], cell, false);
     text(mb, m, s, [-x, y0, zc - len / 2.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], cell, false);
 }
@@ -353,34 +408,75 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
     let (a, b) = (MatKey::Accent, MatKey::Trim);
     let checker = checker_of(p);
     let w = Wall { zs: g.zs, hs: g.zs.iter().map(|&z| (g.half)(z)).collect() };
-    let ytop = g.yb - 0.025; // pas leży poniżej linii okien (§ 36 ust. 2)
+    // pas leży poniżej linii okien (§ 36 ust. 2) i poniżej podstawy szyby, żeby biegł od błotnika do tyłu
+    let ytop = g.yb.min((g.top)(g.cowl)) - 0.03;
     let span = (g.zr + 0.05, (g.zf - 0.05).min(g.cowl + 0.15)); // pas kończy się na błotniku, nie schodzi na maskę
     let (e_band, e_det, e_txt) = (0.004, 0.007, 0.010);
 
     // --- pasy boczne
     let mut stack: Vec<(f64, MatKey)> = match s {
-        Svc::Medycy => vec![(0.06, a), (0.08, b), (0.15, a)], // czerwony–niebieski–czerwony (Dz.U. 2026/227)
+        // decyzja użytkownika 2026-11-10 (zdjęcie ZRM na Sprinterze): niebieski nad czerwonym i czerwony
+        // pas pod dachem, zamiast czerwony–niebieski–czerwony (Dz.U. 2026/227)
+        Svc::Medycy => vec![(0.16, b), (0.20, a)],
         Svc::Straz => vec![(0.15, a)],
-        _ if checker => vec![(0.23, b)],
+        _ if checker => vec![(0.25, b)],
         _ => vec![(0.20, a)],
     };
     let mut y = ytop;
     let band_top = ytop;
+    let range = band_range(&w, span.0, span.1, ytop);
     for (t, m) in stack.drain(..) {
-        band(mb, &w, m, span, (y - t, y), e_band);
+        if let Some(r) = range {
+            band(mb, &w, m, r, (y - t, y), e_band);
+        }
         y -= t;
     }
     let band_bot = y;
+    // van: pasy przechodzą na tylne drzwi (między pionowymi lampami)
+    if g.van {
+        let hr = 0.84 * (g.half)(g.zr)[2][0];
+        let mut y = ytop;
+        let stack: Vec<(f64, MatKey)> = match s {
+            Svc::Medycy => vec![(0.16, b), (0.20, a)],
+            Svc::Straz => vec![(0.15, a)],
+            _ if checker => vec![(0.25, b)],
+            _ => vec![(0.20, a)],
+        };
+        for (t, m) in stack {
+            let z = g.zr - 0.004;
+            mb.quad(m, [hr, y - t, z], [-hr, y - t, z], [-hr, y, z], [hr, y, z], Some([0.0, 0.0, -1.0]));
+            y -= t;
+        }
+    }
+
+    // --- Medycy na vanie: czerwony pas pod dachem (boki do przedniej krawędzi dachu, tylne drzwi)
+    if s == Svc::Medycy && g.van {
+        let (y0, y1) = (g.h - 0.24, g.h - 0.06);
+        let br = w.breaks(g.zr + 0.05, g.roof_f);
+        for k in br.windows(2) {
+            for side in [1.0, -1.0] {
+                let q = |z: f64, y: f64| sided(side, [w.x(z, y) + e_band, y, z]);
+                // dwa trójkąty: burta przy dachu bywa skręcona, a `quad` po prawej stronie dzieli inną przekątną
+                mb.poly(a, &[q(k[0], y0), q(k[1], y0), q(k[1], y1)], Some([side, 0.0, 0.0]));
+                mb.poly(a, &[q(k[0], y0), q(k[1], y1), q(k[0], y1)], Some([side, 0.0, 0.0]));
+            }
+        }
+        let (z, hr) = (g.zr - 0.004, w.x(g.zr, y1) - 0.02);
+        mb.quad(a, [hr, y0, z], [-hr, y0, z], [-hr, y1, z], [hr, y1, z], Some([0.0, 0.0, -1.0]));
+    }
 
     // --- wzór na pasie
     if checker && s != Svc::Medycy && s != Svc::Straz {
-        // trójrzędowa szachownica: żółte pola 12×5 cm co 24 cm, przesunięte co rząd
-        for row in 0..3 {
-            let (ya, yb) = (band_top - 0.05 * (row + 1) as f64, band_top - 0.05 * row as f64);
-            let mut z = span.0 + 0.12 * (row % 2) as f64;
-            while z + 0.12 < span.1 {
-                rect(mb, &w, a, (z, z + 0.12), (ya, yb), e_det);
-                z += 0.24;
+        // dwurzędowa szachownica: żółte pola 7×7 cm co 14 cm, przesunięte co rząd (na odcinku pasa)
+        let q = 0.07;
+        if let Some((za, zb)) = band_range(&w, span.0, span.1, band_top) {
+            for row in 0..2 {
+                let (ya, yb) = (band_top - 0.01 - q * (row + 1) as f64, band_top - 0.01 - q * row as f64);
+                let mut z = za + q * (row % 2) as f64;
+                while z + q < zb {
+                    rect(mb, &w, a, (z, z + q), (ya, yb), e_det);
+                    z += 2.0 * q;
+                }
             }
         }
     } else if s == Svc::Policja {
@@ -403,6 +499,12 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
             let cell = fit_cell("POLICJA", h, 1.0);
             side_text(mb, &w, b, "POLICJA", 0.0, band_bot + 0.045, cell, e_txt);
         }
+        Svc::Policja => {
+            // Straż Miejska: żółty napis pod szachownicą, na przednich drzwiach
+            let zc = (door.0 + door.1) / 2.0;
+            let cell = fit_cell("STRAŻ MIEJSKA", band_top - band_bot - 0.17, (door.1 - door.0) * 0.95);
+            side_text(mb, &w, a, "STRAŻ MIEJSKA", zc, band_bot + 0.02, cell, e_txt);
+        }
         Svc::Straz => {
             let cell = fit_cell("STRAŻ", 0.14, (door.1 - door.0) * 0.9);
             let (zc, y0) = ((door.0 + door.1) / 2.0, band_bot - 0.04 - 7.0 * cell);
@@ -415,7 +517,7 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
 
     // --- Medycy: lustrzany AMBULANS na masce, logo P w okręgu na boku vana
     if s == Svc::Medycy {
-        let (zn, zs) = (g.zf - 0.18, g.cowl); // maska: od czoła do podstawy szyby
+        let (zn, zs) = (g.zn - 0.03, g.cowl); // maska: od krawędzi czoła do podstawy szyby
         let hood_len = zn - zs;
         if hood_len > 0.2 {
             let zmid = (zn + zs) / 2.0;
@@ -429,10 +531,11 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
             }
         }
         if g.van {
-            let (yc, r) = (0.72, 0.2);
-            let zc = (g.zr + 0.25 + g.z_dw - 1.32) / 2.0;
-            if w.fits(zc - r, zc + r, yc - r, yc + r) {
-                let x = w.at(zc).0 + e_det;
+            // oznaczenie zespołu na gładkiej ścianie ładowni: nad pasami, za drzwiami przesuwnymi
+            let (yc, r) = (ytop + 0.26, 0.2);
+            let zc = g.z_dw - 1.75;
+            if zc - r > g.zr + 0.1 {
+                let x = w.x(zc, yc - r) + e_det;
                 for k in 0..12 {
                     let (t0, t1) = (2.0 * PI * k as f64 / 12.0, 2.0 * PI * (k + 1) as f64 / 12.0);
                     let q = |t: f64, rad: f64| [x, yc + rad * t.sin(), zc + rad * t.cos()];
@@ -453,6 +556,35 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
     if chevron_on {
         chevron(mb, a, (0.8 * ht, ry0, ry1), g.zr - 0.006, (0.12, 0.24));
     }
+    // napis z tyłu (czytany zza pojazdu) i z przodu na masce (czytany sprzed pojazdu)
+    let rear_word = match s {
+        Svc::Policja if checker => Some(("STRAŻ MIEJSKA", b)),
+        Svc::Policja => Some(("POLICJA", a)),
+        Svc::Medycy => Some(("AMBULANS", a)),
+        _ => None,
+    };
+    if let Some((word, m)) = rear_word.filter(|_| !chevron_on) {
+        let (y0, y1) = if g.van { (ytop + 0.04, g.h * 0.6 - 0.04) } else { (ry0 + 0.02, g.ytail - 0.19) };
+        let cell = fit_cell(word, (y1 - y0).min(0.12), if g.van { 1.6 * ht } else { 0.95 * ht });
+        let wid = text_cols(word) as f64 * cell;
+        text(mb, m, word, [wid / 2.0, (y0 + y1) / 2.0 - 3.5 * cell, g.zr - 0.006], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], cell, false);
+    }
+    if s == Svc::Policja && !checker {
+        // niebieskie pole z białym POLICJA przy przedniej krawędzi maski
+        let (zh, zs) = (g.zn - 0.03, g.cowl);
+        if zh - zs > 0.25 {
+            let half_w = (g.half)(zh - 0.1)[5][0];
+            let cell = fit_cell("POLICJA", 0.1, 1.2 * half_w);
+            let (wid, ht7) = (text_cols("POLICJA") as f64 * cell, 7.0 * cell);
+            let zb = zh - 0.04;
+            let v = norm([0.0, (g.top)(zb - ht7) - (g.top)(zb), -ht7]);
+            let n = norm(cross([1.0, 0.0, 0.0], v));
+            let at = |x: f64, t: f64, lift: f64| add(add([x, (g.top)(zb), zb], scale(v, t)), scale(n, lift));
+            let (m0, m1) = (-0.03, ht7 + 0.03);
+            mb.quad(a, at(-wid / 2.0 - 0.04, m0, 0.005), at(wid / 2.0 + 0.04, m0, 0.005), at(wid / 2.0 + 0.04, m1, 0.005), at(-wid / 2.0 - 0.04, m1, 0.005), Some(n));
+            text(mb, b, "POLICJA", at(-wid / 2.0, 0.0, 0.008), [1.0, 0.0, 0.0], v, n, cell, false);
+        }
+    }
 
     // --- dach: belka i numer operacyjny
     let mut slots = Slots::new(g.roof_r + 0.03, g.roof_f - 0.03);
@@ -463,7 +595,7 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
         if let Some(zc) = slots.claim_front(depth) {
             let (z0, z1) = (zc - depth / 2.0, zc + depth / 2.0);
             let roof_x = [z0, z1].iter().map(|&z| (g.half)(z)[5][0]).fold(f64::MAX, f64::min);
-            let lx = (1.5 * roof_x).clamp(0.5, 1.3);
+            let lx = (1.7 * roof_x).clamp(0.9, 1.4);
             let ymax = [z0, zc, z1].iter().map(|&z| (g.top)(z)).fold(f64::MIN, f64::max);
             let y = ymax + if g.van { 0.02 } else { 0.0 } - 0.01;
             bar = Some((lightbar(s, lamps, lx, depth), [0.0, y, zc]));
@@ -471,6 +603,13 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
     }
     if s == Svc::Straz {
         let number = format!("{:03} L {:02}", 1 + (hash01_seeded(seed, &[21.0]) * 998.0) as u32, 1 + (hash01_seeded(seed, &[22.0]) * 98.0) as u32);
+        if g.van {
+            // van: numer także na ścianie ładowni nad pasem i na tylnych drzwiach
+            let cell = 0.025;
+            side_text(mb, &w, a, &number, g.z_dw - 1.9, ytop + 0.1, cell, e_txt);
+            let wid = text_cols(&number) as f64 * cell;
+            text(mb, a, &number, [wid / 2.0, ytop + 0.1, g.zr - 0.006], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], cell, false);
+        }
         let hroof = (g.half)(g.roof_r + 0.5 * (g.roof_f - g.roof_r))[5][0];
         let cell = (0.2f64 / 7.0).min(1.7 * hroof / text_cols(&number) as f64);
         let mut placed = false;
@@ -481,8 +620,9 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
                 placed = true;
             }
         }
-        if !placed && !chevron_on {
-            // brak miejsca na dachu: numer na tylnej ściance, 15 cm
+        let _ = placed;
+        if !chevron_on && !g.van {
+            // numer także na tylnej ściance (klapie), 15 cm
             let cell = (0.15f64 / 7.0).min((ry1 - ry0) / 7.0).min(1.5 * ht / text_cols(&number) as f64);
             let wid = text_cols(&number) as f64 * cell;
             text(mb, a, &number, [wid / 2.0, (ry0 + ry1) / 2.0 - 3.5 * cell, g.zr - 0.006], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], cell, false);
@@ -494,7 +634,7 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
 /// Belka: obudowa i lampy (kwadraty emisyjne): 2 na końcach, reszta po równo z przodu i z tyłu.
 fn lightbar(s: Svc, n: usize, lx: f64, d: f64) -> MeshData {
     let mut mb = MeshBuilder::default();
-    let hgt = 0.09;
+    let hgt = 0.11;
     mb.bx(MatKey::Metal, [-lx / 2.0, 0.0, -d / 2.0], [lx / 2.0, hgt, d / 2.0]);
     let (front, back, ends) = match n {
         0 => (0, 0, 0),
@@ -507,7 +647,7 @@ fn lightbar(s: Svc, n: usize, lx: f64, d: f64) -> MeshData {
         let wd = (pitch - 0.012).clamp(0.02, 0.12);
         for i in 0..k {
             let x = -lx / 2.0 + 0.03 + pitch * (i as f64 + 0.5);
-            mb.quad(MatKey::GlassLit, [x - wd / 2.0, 0.015, z], [x + wd / 2.0, 0.015, z], [x + wd / 2.0, hgt - 0.015, z], [x - wd / 2.0, hgt - 0.015, z], Some([0.0, 0.0, nz]));
+            mb.quad(MatKey::Beacon, [x - wd / 2.0, 0.015, z], [x + wd / 2.0, 0.015, z], [x + wd / 2.0, hgt - 0.015, z], [x - wd / 2.0, hgt - 0.015, z], Some([0.0, 0.0, nz]));
         }
     };
     face(&mut mb, front, d / 2.0 + eps, 1.0);
@@ -516,9 +656,59 @@ fn lightbar(s: Svc, n: usize, lx: f64, d: f64) -> MeshData {
         for side in [1.0, -1.0] {
             let x = side * (lx / 2.0 + eps);
             let wd = (d / 2.0 - 0.02).max(0.03);
-            mb.quad(MatKey::GlassLit, [x, 0.015, -wd / 2.0], [x, 0.015, wd / 2.0], [x, hgt - 0.015, wd / 2.0], [x, hgt - 0.015, -wd / 2.0], Some([side, 0.0, 0.0]));
+            mb.quad(MatKey::Beacon, [x, 0.015, -wd / 2.0], [x, 0.015, wd / 2.0], [x, hgt - 0.015, wd / 2.0], [x, hgt - 0.015, -wd / 2.0], Some([side, 0.0, 0.0]));
         }
     }
     let (col, em) = lamp(s);
-    mb.build(vec![mat(MatKey::Metal, "Obudowa belki", "#1a1c1e", 0.5, 0.4, None), mat(MatKey::GlassLit, "Lampy błyskowe", col, 0.2, 0.0, Some(em))])
+    mb.build(vec![mat(MatKey::Metal, "Obudowa belki", "#1a1c1e", 0.5, 0.4, None), mat(MatKey::Beacon, "Lampy błyskowe", col, 0.2, 0.0, Some(em))])
+}
+
+// ---------------------------------------------------------------- pojazdy ciężkie
+
+/// Kabina pojazdu ciężkiego dla oklejenia: półszerokość, czoło, dach, szyba, pas nad szybą, drzwi.
+pub(crate) struct HeavyCab {
+    pub hwc: f64,
+    pub top: f64,
+    /// Górna krawędź szyby (y) i jej położenie (z); pas blachy nad szybą kończy się na `z_rf`.
+    pub y_wt: f64,
+    pub z_wt: f64,
+    pub z_rf: f64,
+    /// Linia okien bocznych.
+    pub ybel: f64,
+    /// Przednie drzwi kabiny (z0, z1).
+    pub door: (f64, f64),
+}
+
+/// Oklejenie kabiny pojazdu ciężkiego: belka na dachu kabiny, a w PSP napis STRAŻ na pasie nad
+/// szybą i numer operacyjny na przednich drzwiach. Zwraca belkę (siatka, przesunięcie).
+pub(crate) fn apply_heavy(mb: &mut MeshBuilder, p: &P, seed: u32, c: &HeavyCab) -> Option<(MeshData, V3)> {
+    let s = svc_of(p.s("service"));
+    if s == Svc::Cywilny {
+        return None;
+    }
+    let a = MatKey::Accent;
+    if s == Svc::Straz {
+        // STRAŻ na pochyłym pasie nad szybą, czytelny sprzed pojazdu
+        let v = norm([0.0, c.top - c.y_wt, c.z_rf - c.z_wt]);
+        let n = norm(cross([1.0, 0.0, 0.0], v));
+        let len = (c.top - c.y_wt).hypot(c.z_wt - c.z_rf);
+        // nad osłoną przeciwsłoneczną (0,08 m), z miejscem na kropkę Ż
+        let cell = fit_cell("STRAŻ", 0.8 * len, 1.3 * c.hwc).min((len - 0.1) / 9.0);
+        let wid = text_cols("STRAŻ") as f64 * cell;
+        let o = add(add([-wid / 2.0, c.y_wt, c.z_wt], scale(v, 0.08)), scale(n, 0.006));
+        text(mb, a, "STRAŻ", o, [1.0, 0.0, 0.0], v, n, cell, false);
+        // numer operacyjny na przednich drzwiach pod szybą
+        let number = format!("{:03} L {:02}", 1 + (hash01_seeded(seed, &[21.0]) * 998.0) as u32, 1 + (hash01_seeded(seed, &[22.0]) * 98.0) as u32);
+        let cell = fit_cell(&number, 0.15, 0.9 * (c.door.1 - c.door.0));
+        let len = text_cols(&number) as f64 * cell;
+        // pod klamką (klamka ok. 0,2 m pod linią okien)
+        let (zc, y0, x) = ((c.door.0 + c.door.1) / 2.0, c.ybel - 0.3 - 7.0 * cell, c.hwc + 0.01);
+        text(mb, a, &number, [x, y0, zc + len / 2.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], cell, false);
+        text(mb, a, &number, [-x, y0, zc - len / 2.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], cell, false);
+    }
+    let lamps = p.f("lightbarLamps") as usize;
+    (lamps > 0).then(|| {
+        let (lx, d) = ((1.4 * c.hwc).min(1.6), 0.3);
+        (lightbar(s, lamps, lx, d), [0.0, c.top - 0.005, c.z_rf - d / 2.0 - 0.05])
+    })
 }

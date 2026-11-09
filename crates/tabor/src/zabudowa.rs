@@ -3,6 +3,7 @@
 //! oświetleniowy i wyposażenie dachu. Gniazda: tył kabiny (HDS), tył ramy (zderzak), dach.
 
 use crate::ciezkie::{beam, cyl, full_ring, half_seg, lerp, prism_x, side_quad, D};
+use crate::tablice::plate;
 use crate::P;
 use procedura_kit::mesh::{MatKey, MeshBuilder, V3};
 
@@ -25,29 +26,44 @@ fn span(d: &D, p: &P) -> Span {
     Span { z_r, z_f, ytop: if tall { d.h - 0.30 } else { d.h - 0.05 }, hx: d.w / 2.0 - 0.03 }
 }
 
-pub(crate) fn module(mb: &mut MeshBuilder, d: &D, p: &P) {
+pub(crate) fn module(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) {
     let sp = span(d, p);
     match p.s("module") {
         "none" => {}
-        "laweta" => laweta(mb, d, &sp),
-        "pozarniczy" => rescue(mb, d, p, &sp, false),
-        "techniczny" => rescue(mb, d, p, &sp, true),
+        "laweta" => laweta(mb, d, &sp, seed),
+        "pozarniczy" => rescue(mb, d, p, &sp, false, seed),
+        "techniczny" => rescue(mb, d, p, &sp, true, seed),
         // ponytail: furgon, doka, wywrotka, chłodnia, minibus to issue 10–11; na razie skrzynia
-        _ => flatbed(mb, d, &sp),
+        _ => flatbed(mb, d, &sp, seed),
     }
     if p.f("crane") > 0.5 {
         crane(mb, d, p);
     }
 }
 
-/// Zderzak tylny (pod linią zejścia) z lampami; `hb` = półszerokość.
-fn rear(mb: &mut MeshBuilder, d: &D, hb: f64) {
+/// Zderzak tylny (pod linią zejścia) z zespołami lamp (zewnętrzna część pomarańczowa —
+/// kierunkowskaz) i tablicą pośrodku; `hb` = półszerokość.
+fn rear(mb: &mut MeshBuilder, d: &D, hb: f64, seed: u32) {
     let y0 = (d.dep(d.zr) + 0.03).max(d.clr + 0.1);
-    mb.bx(MatKey::Bumper, [-hb, y0, d.zr + 0.003], [hb, y0 + 0.25, d.zr + 0.12]);
+    // czoło zderzaka 6 mm przed `zr`: lampy i tablica leżą na nim i nie wystają poza długość
+    mb.bx(MatKey::Bumper, [-hb, y0, d.zr + 0.006], [hb, y0 + 0.25, d.zr + 0.12]);
+    let z = d.zr + 0.003;
     for side in [1.0f64, -1.0] {
-        let (a, b) = (hb * 0.72 * side, hb * 0.97 * side);
-        let z = d.zr;
-        mb.quad(MatKey::Taillight, [a, y0 + 0.04, z], [b, y0 + 0.04, z], [b, y0 + 0.21, z], [a, y0 + 0.21, z], Some([0.0, 0.0, -1.0]));
+        let q = |x: f64, y: f64, dz: f64| [x * hb * side, y, z - dz];
+        mb.quad(MatKey::Taillight, q(0.66, y0 + 0.04, 0.0), q(0.97, y0 + 0.04, 0.0), q(0.97, y0 + 0.21, 0.0), q(0.66, y0 + 0.21, 0.0), Some([0.0, 0.0, -1.0]));
+        mb.quad(MatKey::Indicator, q(0.86, y0 + 0.045, 0.001), q(0.965, y0 + 0.045, 0.001), q(0.965, y0 + 0.205, 0.001), q(0.86, y0 + 0.205, 0.001), Some([0.0, 0.0, -1.0]));
+    }
+    plate(mb, seed, 7.0, [0.0, y0 + 0.125, z + 0.003], -1.0); // tło na zr+0,005, znaki na zr+0,004
+}
+
+/// Boczne światła obrysowe (pomarańczowe, co ok. 2,5 m) przy dolnej krawędzi zabudowy w `x = hx`;
+/// `y(z)` = wysokość dolnej krawędzi lampy (nad nadkolem wyżej).
+fn side_markers(mb: &mut MeshBuilder, hx: f64, y: &dyn Fn(f64) -> f64, z0: f64, z1: f64) {
+    let n = ((z1 - z0) / 2.5).ceil().max(1.0) as usize;
+    for i in 0..=n {
+        let z = lerp(z0, z1, i as f64 / n as f64);
+        let y = y(z);
+        side_quad(mb, MatKey::Indicator, hx + 0.004, y, y + 0.05, z - 0.06, z + 0.06);
     }
 }
 
@@ -90,7 +106,7 @@ fn headboard(mb: &mut MeshBuilder, sp: &Span, hxd: f64, yt: f64, h: f64) {
 }
 
 /// Laweta: pokład z rampą, siłowniki, burta czołowa, wciągarka, niskie burty, zderzak z lampami.
-fn laweta(mb: &mut MeshBuilder, d: &D, sp: &Span) {
+fn laweta(mb: &mut MeshBuilder, d: &D, sp: &Span, seed: u32) {
     let yt = deck(mb, d, sp);
     let hxd = d.w / 2.0 - 0.02;
     headboard(mb, sp, hxd, yt, 0.75);
@@ -110,10 +126,11 @@ fn laweta(mb: &mut MeshBuilder, d: &D, sp: &Span) {
     for side in [1.0f64, -1.0] {
         cyl(mb, MatKey::Metal, [0.56 * side, d.y_fr + 0.05, sp.z_f - 0.9], [0.56 * side, yt - 0.12, lerp(sp.z_r, sp.z_f, 0.45)], 0.045, 6, true);
     }
-    rear(mb, d, hxd - 0.05);
+    side_markers(mb, hxd, &|_| yt - 0.08, sp.z_r + 0.6, sp.z_f - 0.3);
+    rear(mb, d, hxd - 0.05, seed);
 }
 
-fn flatbed(mb: &mut MeshBuilder, d: &D, sp: &Span) {
+fn flatbed(mb: &mut MeshBuilder, d: &D, sp: &Span, seed: u32) {
     let yt = deck(mb, d, sp);
     let hxd = d.w / 2.0 - 0.02;
     headboard(mb, sp, hxd, yt, 0.9);
@@ -123,7 +140,8 @@ fn flatbed(mb: &mut MeshBuilder, d: &D, sp: &Span) {
         mb.bx(MatKey::Paint, [a.min(b), yt, sp.z_r + 0.1], [a.max(b), yt + 0.4, sp.z_f - 0.12]);
     }
     mb.bx(MatKey::Paint, [-hxd, yt, sp.z_r + 0.06], [hxd, yt + 0.4, sp.z_r + 0.1]);
-    rear(mb, d, hxd - 0.05);
+    side_markers(mb, hxd, &|_| yt + 0.05, sp.z_r + 0.3, sp.z_f - 0.3);
+    rear(mb, d, hxd - 0.05, seed);
 }
 
 // ───────────────────────── zabudowa ratownicza ─────────────────────────
@@ -145,7 +163,7 @@ fn shutter(mb: &mut MeshBuilder, hx: f64, z0: f64, z1: f64, y0: f64, y1: f64) {
 
 /// Zabudowa ratownicza: powłoka lofta z nadkolami i kopniakiem na tyle, skrytki z żaluzjami
 /// w 2 rzędach, przedział przelotowy, dach roboczy, tył ze skrytką, wyposażenie dachu.
-fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool) {
+fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool, seed: u32) {
     let hx = sp.hx;
     let pass = p.f("passThrough").min((sp.z_f - sp.z_r - 1.0).max(0.0));
     let z_a = sp.z_f - pass; // przód zamkniętej powłoki
@@ -156,9 +174,10 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool) {
         let sl = yb.max(d.arch(z, d.zar));
         [[0.0, yb, z], [hx - 0.06, sl, z], [hx, sl + 0.06, z], [hx, ymid.max(sl + 0.1), z], [hx, sp.ytop - 0.05, z], [hx - 0.05, sp.ytop, z], [0.0, sp.ytop, z]]
     };
-    let mut zs = vec![sp.z_r, z_a];
+    // powłoka zamknięta aż do przodu zabudowy; przedział przelotowy to skrytka z żaluzjami po obu stronach
+    let mut zs = vec![sp.z_r, sp.z_f];
     let kick = d.kick_z(base);
-    zs.extend([kick, d.zar - d.arch_a, d.zar - d.arch_at, d.zar + d.arch_at, d.zar + d.arch_a].into_iter().filter(|&z| z > sp.z_r + 0.05 && z < z_a - 0.05));
+    zs.extend([kick, d.zar - d.arch_a, d.zar - d.arch_at, d.zar + d.arch_at, d.zar + d.arch_a].into_iter().filter(|&z| z > sp.z_r + 0.05 && z < sp.z_f - 0.05));
     zs.sort_by(|a, b| a.total_cmp(b));
     zs.dedup_by(|a, b| (*a - *b).abs() < 0.08);
     let rings: Vec<Vec<V3>> = zs.iter().map(|&z| full_ring(half(z))).collect();
@@ -172,6 +191,8 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool) {
     let n = p.f("compartments") as usize;
     if n > 0 {
         let (c0, c1) = (sp.z_r + 0.2, z_a - 0.1);
+        // żaluzje mają realnie ≤ 1,6 m szerokości: dłuższa zabudowa dostaje więcej kolumn
+        let n = n.max(((c1 - c0) / 1.6).ceil() as usize);
         let wc = (c1 - c0) / n as f64;
         let yu1 = sp.ytop - 0.14;
         let yu0 = yu1 - 0.75;
@@ -190,14 +211,15 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool) {
             }
         }
     }
-    // przedział przelotowy: podłoga i most dachowy, bez ścian
+    // przedział przelotowy: jedna wysoka skrytka dostępna z obu stron
     if pass > 0.0 {
-        mb.bx(MatKey::Metal, [-hx, base, z_a], [hx, base + 0.06, sp.z_f]);
-        mb.bx(MatKey::Metal, [-hx, sp.ytop - 0.06, z_a], [hx, sp.ytop, sp.z_f]);
+        let yl0 = (base + 0.12).max(d.dep(z_a) + 0.06);
+        shutter(mb, hx, z_a + 0.03, sp.z_f - 0.03, yl0, sp.ytop - 0.14);
     }
 
-    // tył: zderzak z lampami, skrytka tylna
-    rear(mb, d, hx - 0.05);
+    // tył: zderzak z lampami, skrytka tylna; boczne obrysówki nad dolną krawędzią
+    side_markers(mb, hx, &|z| (base + 0.1).max(d.arch(z, d.zar) + 0.1).max(d.dep(z) + 0.1), sp.z_r + 0.3, z_a - 0.3);
+    rear(mb, d, hx - 0.05, seed);
     let zt = sp.z_r - 0.004;
     let yb = base.max(d.dep(sp.z_r));
     let (ry0, ry1) = (yb + 0.5, sp.ytop - 0.3);

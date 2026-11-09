@@ -50,11 +50,13 @@ pub struct RenderOptions {
     pub elevation: Option<f64>,
     /// Przezroczyste tło (bez nieba i terenu) — np. miniatury.
     pub transparent: bool,
+    /// Kadr: prostopadłościan, do którego dopasowuje się kamera (zbliżenia); `None` = cała scena.
+    pub focus: Option<Bounds>,
 }
 
 impl Default for RenderOptions {
     fn default() -> Self {
-        Self { width: 1200, height: 800, view: View::Iso, ssaa: 2, shadows: true, edges: true, night: false, ground: true, azimuth: None, elevation: None, transparent: false }
+        Self { width: 1200, height: 800, view: View::Iso, ssaa: 2, shadows: true, edges: true, night: false, ground: true, azimuth: None, elevation: None, transparent: false, focus: None }
     }
 }
 
@@ -144,7 +146,9 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
     let az = o.azimuth.unwrap_or(paz).to_radians();
     let el = o.elevation.unwrap_or(pel).to_radians();
 
-    let b = scene_bounds(items);
+    // kamera kadruje `focus` (zbliżenie) albo całą scenę; cienie i teren zawsze liczone dla całej sceny
+    let full = scene_bounds(items);
+    let b = o.focus.unwrap_or(full);
     let size = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
     let target = [(b.min[0] + b.max[0]) / 2.0, b.min[1] + size[1] * 0.42, (b.min[2] + b.max[2]) / 2.0];
     let dir = norm3(az.sin() * el.cos(), el.sin(), az.cos() * el.cos());
@@ -171,8 +175,9 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
     let l = if night { norm3(0.3, 0.9, 0.35) } else { norm3(-0.5, 0.74, 0.46) };
     let shadows = o.shadows && !night;
     let s = 1600usize;
-    let rr = size[0].hypot(size[1]).hypot(size[2]) / 2.0 + 2.0;
-    let c = [(b.min[0] + b.max[0]) / 2.0, (b.min[1] + b.max[1]) / 2.0, (b.min[2] + b.max[2]) / 2.0];
+    let fsize = [full.max[0] - full.min[0], full.max[1] - full.min[1], full.max[2] - full.min[2]];
+    let rr = fsize[0].hypot(fsize[1]).hypot(fsize[2]) / 2.0 + 2.0;
+    let c = [(full.min[0] + full.max[0]) / 2.0, (full.min[1] + full.max[1]) / 2.0, (full.min[2] + full.max[2]) / 2.0];
     let lx = norm3(l[2], 0.0, -l[0]);
     let ly = [l[1] * lx[2] - l[2] * lx[1], l[2] * lx[0] - l[0] * lx[2], l[0] * lx[1] - l[1] * lx[0]];
     let mut sm = vec![f32::NEG_INFINITY; if shadows { s * s } else { 1 }];
@@ -368,8 +373,8 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
     // ---------------------------------------------------------- teren
     if with_ground {
         // rozległy teren (aż po horyzont) cięty na siatkę pól, żeby pominąć tylko pola za kamerą
-        let ext = size[0].max(size[2]) * 2.5 + 160.0;
-        let (gx0, gz0) = ((b.min[0] + b.max[0]) / 2.0 - ext, (b.min[2] + b.max[2]) / 2.0 - ext);
+        let ext = fsize[0].max(fsize[2]) * 2.5 + 160.0;
+        let (gx0, gz0) = ((full.min[0] + full.max[0]) / 2.0 - ext, (full.min[2] + full.max[2]) / 2.0 - ext);
         let n = 40;
         let cell = (2.0 * ext) / n as f64;
         let (mut wp, mut idx) = (Vec::new(), Vec::new());

@@ -56,7 +56,16 @@ fn skeleton_matches_rr_human() {
             want.push(format!("{s}{n}"));
         }
     }
-    assert_eq!(names.len(), 29);
+    for s in ["Left", "Right"] {
+        for f in ["Thumb", "Index", "Middle", "Ring", "Little"] {
+            for ph in ["Proximal", "Intermediate", "Distal"] {
+                want.push(format!("{s}{f}{ph}"));
+            }
+        }
+    }
+    assert_eq!(names.len(), 59);
+    // kości rr_human pierwsze (gra animuje po nazwach i kolejności), palce dopisane na końcu
+    assert_eq!(names[28], "RightHandGrip");
     names.sort();
     want.sort();
     assert_eq!(names, want);

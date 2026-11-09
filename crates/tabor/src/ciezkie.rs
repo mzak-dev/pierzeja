@@ -4,6 +4,7 @@
 //! Konwencja jak w `body.rs`: przód +Z, lewa strona +X, origin = środek między osiami na gruncie.
 
 use crate::body::Layout;
+use crate::tablice::plate;
 use crate::{roll, P};
 use procedura_kit::mesh::{add, cross, len, norm, scale, sub, MatKey, MaterialSpec, MeshBuilder, V3};
 
@@ -166,7 +167,8 @@ pub(crate) fn extra_materials(p: &P) -> Vec<MaterialSpec> {
 /// brygadowa: przód 2, z tyłu 1–2 rzędy po 2–4.
 pub(crate) fn seat_points(p: &P) -> Vec<V3> {
     let d = D::new(p);
-    let y = 2.0 * d.r + 0.15 + 0.4;
+    // punkt H w kabinie nad kołem: podłoga kabiny 4x4 ok. 1,2–1,3 m, siedzisko ok. 0,4 m wyżej
+    let y = 2.0 * d.r + 0.15 + 0.5;
     let hwc = d.w / 2.0 - 0.03;
     let row = |n: usize, z: f64, out: &mut Vec<V3>| {
         let pitch = ((2.0 * hwc - 0.3) / n as f64).min(1.2);
@@ -174,7 +176,8 @@ pub(crate) fn seat_points(p: &P) -> Vec<V3> {
         out.extend((0..n).map(|j| [x0 - j as f64 * pitch, y, z]));
     };
     let mut out = Vec::new();
-    let zf0 = d.zc - 0.95;
+    // punkt H 1,08 m za czołem kabiny: stopy w pozie `drive` (ok. 0,7 m przed H) zostają w kabinie
+    let zf0 = d.zc - 1.08;
     let front = match d.cab {
         Cab::Day => 3,
         _ => d.seats.min(2),
@@ -279,11 +282,12 @@ pub(crate) fn half_seg(s: usize) -> usize {
 pub(crate) fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let d = D::new(p);
     frame(mb, &d);
-    let stations = cab(mb, &d, p, seed);
-    front(mb, &d, p);
-    crate::zabudowa::module(mb, &d, p);
-    // ponytail: no livery/lightbar on heavy vehicles yet (sluzba::apply needs a car hull), add with issue 10
-    Layout { wheelbase: d.wb, track: d.track, stations, lightbar: None }
+    let (stations, geom) = cab(mb, &d, p, seed);
+    front(mb, &d, p, seed);
+    crate::zabudowa::module(mb, &d, p, seed);
+    // oklejenie kabiny i belka na dachu kabiny (zabudowa: tylko lampy i obrysówki)
+    let lightbar = crate::sluzba::apply_heavy(mb, p, seed, &geom);
+    Layout { wheelbase: d.wb, track: d.track, stations, body_width: d.w, lightbar }
 }
 
 /// Podłużnice (z kopniakiem na tyle), poprzeczki, osie z resorami, zbiornik i akumulator.
@@ -318,33 +322,39 @@ fn frame(mb: &mut MeshBuilder, d: &D) {
     let dh = 0.2;
     mb.bx(MatKey::Metal, [-0.26, (d.r - dh).max(d.clr), d.zar - 0.22], [0.26, d.r + dh, d.zar + 0.22]);
     // zbiornik paliwa (lewa) i akumulatory (prawa) między osiami
-    mb.bx(MatKey::Metal, [0.46, yb - 0.1, -0.55], [0.98, yb + 0.4, 0.55]);
+    mb.bx(MatKey::Frame, [0.46, yb - 0.05, -0.5], [0.92, yb + 0.35, 0.3]);
     mb.bx(MatKey::Plastic, [-0.8, yb, -0.3], [-0.46, yb + 0.3, 0.3]);
 }
 
-/// Kabina: loft ze stacji (profil boku z nadkolem, szyba pochylona wg `windshieldAngle`),
-/// potem okna, drzwi, lampy, grill, lusterka, stopnie.
-fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> usize {
+/// Kabina: loft ze stacji (profil boku z nadkolem, szyba pochylona wg `windshieldAngle`, nad nią
+/// pas blachy zaokrąglony do dachu), potem okna, drzwi, lampy, grill, lusterka, stopnie.
+fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> (usize, crate::sluzba::HeavyCab) {
     let hwc = d.w / 2.0 - 0.03;
     let (zc, zb, top, ycb) = (d.zc, d.zb, d.cab_top, d.ycb);
-    let ywsb = ycb + 0.38 * (top - ycb);
+    // dolna krawędź szyby nad kołem przednim (TGL/Eurocargo ok. 1,4 m, TGM 4x4 ok. 1,6 m)
+    let ywsb = (ycb + 0.38 * (top - ycb)).max(2.0 * d.r + 0.6);
     let ybel = ywsb + 0.1;
-    let z_rf = zc - ((top - ywsb) / p.f("windshieldAngle").to_radians().tan()).max(0.15);
-    let prof = [(zb, top), (z_rf, top), (zc, ywsb)];
+    // szyba (MAN TGM, Scania P): ok. 1,1 m wysokości, kończy się ok. 0,3 m pod dachem
+    let y_wt = (top - 0.32).max(ywsb + 0.6);
+    let z_wt = zc - ((y_wt - ywsb) / p.f("windshieldAngle").to_radians().tan()).max(0.12);
+    let z_rf = z_wt - 0.16;
+    let prof = [(zb, top), (z_rf, top), (z_wt, y_wt), (zc, ywsb)];
     let tumble = p.f("tumblehome");
     let half = |z: f64| -> Half {
         let tz = pl(&prof, z);
         let g = ((tz - ybel) / (top - ybel)).clamp(0.0, 1.0);
         let hr = hwc * (1.0 - tumble * g);
-        let cc = 0.12f64.min(0.3 * hr);
-        let bel = ybel.min(tz - cc - 0.03);
+        // zaokrąglona krawędź dachu; górna krawędź okien bocznych na wysokości górnej krawędzi szyby
+        let cc = 0.2f64.min(0.3 * hr);
+        let y4 = (tz - cc).min(y_wt);
+        let bel = ybel.min(y4 - 0.03);
         let sill = ycb.max(d.arch(z, d.zaf));
         let mid = (ycb + 0.25).max(sill + 0.07).min(bel - 0.04);
         let sill = sill.min(mid - 0.02);
-        [[0.0, ycb, z], [hwc * 0.97, sill, z], [hwc, mid, z], [hwc, bel, z], [hr, tz - cc, z], [hr - cc, tz, z], [0.0, tz, z]]
+        [[0.0, ycb, z], [hwc * 0.97, sill, z], [hwc, mid, z], [hwc, bel, z], [hr, y4, z], [hr - cc, tz, z], [0.0, tz, z]]
     };
     // stacje: końce i szyba (priorytet), nadkole
-    let mut zs = vec![zb, z_rf, zc];
+    let mut zs = vec![zb, z_rf, z_wt, zc];
     let mut arches: Vec<f64> = [d.zaf - d.arch_a, d.zaf - d.arch_at, d.zaf + d.arch_at, d.zaf + d.arch_a].into_iter().filter(|&z| z > zb + 0.05 && z < zc - 0.05).collect();
     arches.retain(|&z| zs.iter().all(|k| (k - z).abs() > 0.08));
     arches.dedup_by(|a, b| (*a - *b).abs() < 0.08);
@@ -354,7 +364,7 @@ fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> usize {
     let roof_mat = if roll(seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
     mb.loft_with(&rings, Some(MatKey::Paint), |i, s| {
         let zm = (zs[i] + zs[i + 1]) / 2.0;
-        let wind = zm > z_rf;
+        let wind = zm > z_wt;
         match half_seg(s) {
             0 => MatKey::Plastic,
             1 => MatKey::Plastic,
@@ -413,9 +423,18 @@ fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> usize {
         mb.quad(MatKey::Plastic, q(0.50 * hf, ly0 - 0.02, 0.0), q(0.97 * hf, ly0 - 0.02, 0.0), q(0.97 * hf, ly1 + 0.02, 0.0), q(0.50 * hf, ly1 + 0.02, 0.0), Some([0.0, 0.0, 1.0]));
         mb.quad(MatKey::Headlight, q(0.54 * hf, ly0, 0.003), q(0.93 * hf, ly0, 0.003), q(0.93 * hf, ly1, 0.003), q(0.54 * hf, ly1, 0.003), Some([0.0, 0.0, 1.0]));
     }
+    // kierunkowskazy: nad reflektorem w narożu czoła i boczne na ściance kabiny za nadkolem
+    for side in [1.0f64, -1.0] {
+        let q = |x: f64, y: f64| [x * side, y, zfc + 0.004];
+        mb.quad(MatKey::Indicator, q(0.70 * hf, ly1 + 0.04), q(0.95 * hf, ly1 + 0.04), q(0.95 * hf, ly1 + 0.1), q(0.70 * hf, ly1 + 0.1), Some([0.0, 0.0, 1.0]));
+        let (zr0, x) = (d.zaf - d.arch_a - 0.05, (hz(d.zaf - d.arch_a - 0.1) + 0.004) * side);
+        let yr = (d.archtop + 0.08).max(ycb + 0.1);
+        mb.quad(MatKey::Indicator, [x, yr, zr0 - 0.12], [x, yr, zr0], [x, yr + 0.05, zr0], [x, yr + 0.05, zr0 - 0.12], Some([side, 0.0, 0.0]));
+    }
     // daszek nad szybą
-    let (zv, ho) = (z_rf, hwc * 0.8);
-    mb.bx(MatKey::Plastic, [-ho, top - 0.02, zv - 0.02], [ho, top + 0.1f64.min(d.h - top), zv + 0.12]);
+    // osłona przeciwsłoneczna nad szybą
+    let ho = hwc * 0.8;
+    mb.bx(MatKey::Plastic, [-ho, y_wt + 0.01, z_wt - 0.06], [ho, y_wt + 0.06, z_wt + 0.14]);
 
     // lusterka (do szerokości całkowitej) i stopnie
     for side in [1.0f64, -1.0] {
@@ -430,25 +449,36 @@ fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> usize {
         let ys = (ycb - 0.2).max(d.app(z0 + 0.75) + 0.02);
         mb.bx(MatKey::Plastic, [sa.min(sb), ys, z0], [sa.max(sb), ys + 0.04, z0 + 0.75]);
     }
-    zs.len()
+    // wycieraczki: dwa ramiona leżące na dole szyby
+    let ws = |y: f64| zc - (zc - z_wt) * (y - ywsb) / (y_wt - ywsb) + 0.012;
+    for x0 in [-0.92 * hwc, 0.05] {
+        let (ya, yb2) = (ywsb + 0.05, ywsb + 0.08);
+        mb.quad(MatKey::Plastic, [x0, ya, ws(ya)], [x0 + 0.85 * hwc, ya, ws(ya)], [x0 + 0.85 * hwc, yb2, ws(yb2)], [x0, yb2, ws(yb2)], Some([0.0, 0.5, 1.0]));
+    }
+    let geom = crate::sluzba::HeavyCab { hwc, top, y_wt, z_wt, z_rf, ybel, door: (door_z(0) - 0.95, door_z(0) - 0.05) };
+    (zs.len(), geom)
 }
 
-/// Zderzak przedni (kolor `bumperColor`), z wyciągarką w otworze, światła tylne w zabudowie.
-fn front(mb: &mut MeshBuilder, d: &D, p: &P) {
+/// Zderzak przedni (kolor `bumperColor`), z wyciągarką w otworze i tablicą (przy wyciągarce
+/// przesuniętą na prawą stronę zderzaka); światła tylne w zabudowie.
+fn front(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) {
     let hb = d.w / 2.0 - 0.1;
     let y0 = (d.clr + 0.05).max(d.app(d.zf) + 0.02);
-    let (y1, z0) = (y0 + 0.42, d.zc - 0.01);
+    // czoło zderzaka 4 mm za `zf`: tablica wystaje, a długość całkowita zostaje równa `length`
+    let (y1, z0, zfb) = (y0 + 0.42, d.zc - 0.01, d.zf - 0.004);
     if p.f("winch") > 0.5 {
         let o = 0.5;
-        mb.bx(MatKey::Bumper, [-hb, y0, z0], [-o, y1, d.zf]);
-        mb.bx(MatKey::Bumper, [o, y0, z0], [hb, y1, d.zf]);
-        mb.bx(MatKey::Bumper, [-o, y1 - 0.08, z0], [o, y1, d.zf]);
-        mb.bx(MatKey::Bumper, [-o, y0, z0], [o, y0 + 0.08, d.zf]);
+        mb.bx(MatKey::Bumper, [-hb, y0, z0], [-o, y1, zfb]);
+        mb.bx(MatKey::Bumper, [o, y0, z0], [hb, y1, zfb]);
+        mb.bx(MatKey::Bumper, [-o, y1 - 0.08, z0], [o, y1, zfb]);
+        mb.bx(MatKey::Bumper, [-o, y0, z0], [o, y0 + 0.08, zfb]);
         // bęben i hak
         let (zm, ym) = (d.zf - 0.09, (y0 + y1) / 2.0);
         cyl(mb, MatKey::Metal, [-o, ym, zm], [o, ym, zm], 0.065, 8, true);
         mb.bx(MatKey::Plastic, [-0.07, y0 - 0.0, d.zf - 0.05], [0.07, y0 + 0.08, d.zf]);
+        plate(mb, seed, 7.0, [-(o + hb) / 2.0, (y0 + y1) / 2.0, zfb], 1.0);
     } else {
-        mb.bx(MatKey::Bumper, [-hb, y0, z0], [hb, y1, d.zf]);
+        mb.bx(MatKey::Bumper, [-hb, y0, z0], [hb, y1, zfb]);
+        plate(mb, seed, 7.0, [0.0, (y0 + y1) / 2.0, zfb], 1.0);
     }
 }
