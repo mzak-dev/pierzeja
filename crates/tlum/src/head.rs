@@ -5,29 +5,42 @@
 
 use crate::skel::{idx, Joint, Scale};
 use crate::P;
-use procedura_kit::mesh::{add, len, norm, scale, sub, MatKey, MeshBuilder, V3};
+use procedura_kit::mesh::{add, cross, len, norm, scale, sub, MatKey, MeshBuilder, V3};
+use procedura_kit::random::hash01_seeded;
 
 const H0: f64 = 0.237;
 const ROWS: usize = 8;
 const COLS: usize = 10;
 /// Pół-pierścienie (kolumny C0 przód … C5 tył) dla x ≥ 0: (x, y, z). Druga połowa to lustro C4…C1.
+/// Wzorzec dorosłego mężczyzny: szeroka żuchwa z wyraźnym kątem, pełny podbródek.
 const TPL: [[V3; 6]; ROWS] = [
     // R0 dolny obrys żuchwy (podbródek → kąt żuchwy → kark)
-    [[0.0, 0.0, 0.074], [0.026, 0.005, 0.069], [0.046, 0.024, 0.05], [0.054, 0.052, 0.004], [0.048, 0.05, -0.054], [0.0, 0.05, -0.07]],
+    [[0.0, 0.0, 0.078], [0.028, 0.004, 0.073], [0.05, 0.02, 0.052], [0.06, 0.045, 0.006], [0.05, 0.05, -0.054], [0.0, 0.05, -0.07]],
     // R1 podbródek / warga dolna
-    [[0.0, 0.03, 0.094], [0.022, 0.032, 0.088], [0.047, 0.045, 0.058], [0.06, 0.072, 0.008], [0.061, 0.075, -0.072], [0.0, 0.075, -0.09]],
+    [[0.0, 0.028, 0.095], [0.024, 0.03, 0.09], [0.052, 0.042, 0.062], [0.066, 0.068, 0.01], [0.062, 0.075, -0.072], [0.0, 0.075, -0.09]],
     // R2 usta
-    [[0.0, 0.058, 0.1], [0.022, 0.058, 0.092], [0.05, 0.064, 0.064], [0.066, 0.088, 0.01], [0.067, 0.1, -0.082], [0.0, 0.1, -0.1]],
+    [[0.0, 0.058, 0.103], [0.024, 0.058, 0.094], [0.054, 0.064, 0.066], [0.069, 0.088, 0.01], [0.068, 0.1, -0.082], [0.0, 0.1, -0.1]],
     // R3 podstawa nosa, policzki
-    [[0.0, 0.08, 0.1], [0.024, 0.084, 0.092], [0.057, 0.086, 0.066], [0.071, 0.1, 0.008], [0.072, 0.124, -0.085], [0.0, 0.124, -0.104]],
+    [[0.0, 0.08, 0.1], [0.025, 0.084, 0.093], [0.059, 0.088, 0.068], [0.073, 0.1, 0.008], [0.073, 0.124, -0.085], [0.0, 0.124, -0.104]],
     // R4 oczy (oczodół cofnięty)
-    [[0.0, 0.116, 0.097], [0.031, 0.117, 0.079], [0.061, 0.115, 0.06], [0.075, 0.122, 0.004], [0.075, 0.148, -0.083], [0.0, 0.152, -0.102]],
+    [[0.0, 0.116, 0.095], [0.031, 0.117, 0.079], [0.062, 0.115, 0.06], [0.078, 0.122, 0.004], [0.077, 0.148, -0.083], [0.0, 0.152, -0.102]],
     // R5 łuki brwiowe
-    [[0.0, 0.138, 0.097], [0.032, 0.143, 0.091], [0.063, 0.14, 0.064], [0.077, 0.146, 0.002], [0.076, 0.172, -0.078], [0.0, 0.177, -0.1]],
+    [[0.0, 0.138, 0.098], [0.032, 0.143, 0.092], [0.066, 0.14, 0.064], [0.08, 0.146, 0.002], [0.078, 0.172, -0.078], [0.0, 0.177, -0.1]],
     // R6 czoło
-    [[0.0, 0.182, 0.093], [0.034, 0.182, 0.087], [0.066, 0.182, 0.056], [0.078, 0.184, -0.002], [0.071, 0.198, -0.072], [0.0, 0.201, -0.09]],
+    [[0.0, 0.182, 0.088], [0.035, 0.182, 0.083], [0.069, 0.182, 0.056], [0.081, 0.184, -0.002], [0.074, 0.198, -0.072], [0.0, 0.201, -0.09]],
     // R7 sklepienie
-    [[0.0, 0.216, 0.068], [0.03, 0.217, 0.062], [0.055, 0.218, 0.04], [0.063, 0.219, -0.004], [0.055, 0.225, -0.052], [0.0, 0.227, -0.066]],
+    [[0.0, 0.216, 0.06], [0.031, 0.217, 0.056], [0.058, 0.218, 0.04], [0.066, 0.219, -0.004], [0.057, 0.225, -0.052], [0.0, 0.227, -0.066]],
+];
+/// Wzorzec dziecka (ok. 5 lat): duża okrągła czaszka, twarz niżej i krótsza, pełne policzki, mała żuchwa.
+const TPL_CHILD: [[V3; 6]; ROWS] = [
+    [[0.0, 0.0, 0.064], [0.03, 0.005, 0.062], [0.052, 0.02, 0.048], [0.06, 0.042, 0.01], [0.052, 0.05, -0.05], [0.0, 0.05, -0.07]],
+    [[0.0, 0.024, 0.084], [0.03, 0.026, 0.082], [0.06, 0.036, 0.066], [0.072, 0.06, 0.014], [0.066, 0.07, -0.07], [0.0, 0.072, -0.092]],
+    [[0.0, 0.048, 0.092], [0.026, 0.048, 0.088], [0.059, 0.054, 0.071], [0.074, 0.078, 0.014], [0.073, 0.096, -0.084], [0.0, 0.098, -0.104]],
+    [[0.0, 0.068, 0.094], [0.028, 0.07, 0.09], [0.063, 0.074, 0.073], [0.078, 0.09, 0.012], [0.078, 0.12, -0.088], [0.0, 0.122, -0.108]],
+    [[0.0, 0.1, 0.092], [0.032, 0.102, 0.08], [0.065, 0.1, 0.064], [0.081, 0.108, 0.006], [0.081, 0.145, -0.088], [0.0, 0.15, -0.108]],
+    [[0.0, 0.124, 0.094], [0.034, 0.128, 0.09], [0.068, 0.126, 0.066], [0.084, 0.132, 0.002], [0.083, 0.17, -0.084], [0.0, 0.176, -0.106]],
+    [[0.0, 0.175, 0.094], [0.037, 0.175, 0.089], [0.072, 0.176, 0.06], [0.085, 0.178, -0.002], [0.078, 0.198, -0.078], [0.0, 0.2, -0.096]],
+    [[0.0, 0.214, 0.072], [0.033, 0.216, 0.066], [0.061, 0.217, 0.044], [0.07, 0.218, -0.004], [0.061, 0.225, -0.056], [0.0, 0.227, -0.07]],
 ];
 const APEX: V3 = [0.0, H0, -0.002];
 const CENTER: V3 = [0.0, 0.118, -0.004];
@@ -152,7 +165,7 @@ fn emit_shell(h: &Head, mb: &mut MeshBuilder, s: &Shell, mat: MatKey) -> Vec<Vec
     rings
 }
 
-pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
+pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P, seed: u32) {
     let hd = &sk[idx(sk, "Head")];
     let crown = hd.tail[1];
     let hh = sc.hh;
@@ -162,37 +175,48 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
     let fem = 1.0 - male;
     let c = sc.child;
     let fat = ((p.f("bmi") - 22.5) / 8.0).clamp(-0.6, 1.5);
-    // twarz dziecka niżej na głowie (czaszka większa względem twarzy)
-    let fc = 1.0 - 0.17 * c;
-    let fy = |y: f64| if y < 0.14 { y * fc } else { 0.14 * fc + (y - 0.14) * (H0 - 0.14 * fc) / (H0 - 0.14) };
+    // drobne różnice rysów z ziarna: szerokość żuchwy, nosa, rozstaw oczu, długość podbródka
+    let var = |k: f64| hash01_seeded(seed, &[k]) * 2.0 - 1.0;
+    let (v_jaw, v_nose, v_eye, v_chin) = (1.0 + 0.04 * var(1.0), 1.0 + 0.12 * var(2.0), 1.0 + 0.05 * var(3.0), 0.004 * var(4.0));
     let by = hh / H0;
-    let bw = by * (1.0 + 0.05 * c) * (1.0 - 0.02 * fem);
+    let bw = by * (1.0 + 0.08 * c) * (1.0 - 0.03 * fem);
     let mut lat = [[[0.0; 3]; COLS]; ROWS];
-    for (r, row) in TPL.iter().enumerate() {
+    for r in 0..ROWS {
         for j in 0..COLS {
             let (hj, sx) = half(j);
-            let [mut x, y, mut z] = row[hj];
-            // płeć: węższa żuchwa, mniejszy podbródek i łuki brwiowe; tusza: pełniejsze policzki
+            let [mut x, mut y, mut z] = TPL[r][hj];
+            // kobieta: węższa, łagodna żuchwa, krótszy podbródek, mniejsze łuki brwiowe
             if r <= 1 && (2..=3).contains(&hj) {
-                x *= 1.0 - 0.08 * fem + 0.04 * fat + 0.1 * c;
+                x *= (1.0 - 0.1 * fem) * v_jaw;
             }
-            if (1..=3).contains(&r) && (1..=2).contains(&hj) {
-                // pełniejsze policzki dziecka
-                x *= 1.0 + 0.06 * c;
-                z += 0.004 * c;
-            }
-            if r <= 1 && hj == 0 {
-                z -= 0.004 * fem + 0.008 * c;
+            if r <= 1 && hj <= 1 {
+                z -= 0.005 * fem;
+                y += 0.004 * fem * (1.0 - r as f64);
+                y -= v_chin * (1.0 - r as f64);
             }
             if r == 5 && hj <= 1 {
-                z -= 0.003 * fem + 0.004 * c;
+                z -= 0.003 * fem;
             }
-            if (2..=3).contains(&r) && (2..=3).contains(&hj) {
-                x += 0.005 * fat;
+            // tusza: pełniejsze policzki i żuchwa, podgardle
+            if r <= 3 && (1..=3).contains(&hj) {
+                x += 0.006 * fat.max(0.0) * if r <= 1 { 1.0 } else { 0.8 };
             }
-            lat[r][j] = [sx * x, fy(y), z];
+            if r == 0 && hj <= 2 {
+                y -= 0.006 * fat.max(0.0);
+            }
+            // dziecko: osobny wzorzec
+            let q = TPL_CHILD[r][hj];
+            let l = |a: f64, b: f64| a + (b - a) * c;
+            lat[r][j] = [sx * l(x, q[0]), l(y, q[1]), l(z, q[2])];
         }
     }
+    // cechy twarzy podane we współrzędnych wzorca dorosłego → wysokość w siatce (wiersze kolumny C0)
+    let rows_y: Vec<(f64, f64)> = (0..ROWS).map(|r| (TPL[r][0][1], lat[r][0][1])).chain([(H0, H0)]).collect();
+    let fy = |y: f64| {
+        let i = rows_y.windows(2).position(|w| y <= w[1].0).unwrap_or(rows_y.len() - 2);
+        let (a, b) = (rows_y[i], rows_y[i + 1]);
+        a.1 + (b.1 - a.1) * (y - a.0) / (b.0 - a.0)
+    };
     let mut h = Head { lat, bx: bw, by, bz: bw, chin: crown - hh, tris: vec![] };
     for r in 0..ROWS - 1 {
         for j in 0..COLS {
@@ -220,7 +244,7 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
     let big_eye = 1.14 + 0.14 * c + 0.04 * fem;
     for sx in [-1.0f64, 1.0] {
         // oko: białko (migdał), tęczówka, linia rzęs górnej powieki
-        let (ex, ey) = (sx * 0.032, fy(0.117));
+        let (ex, ey) = (sx * 0.032 * v_eye, fy(0.117));
         let e = |dx: f64, dy: f64, off: f64| h.on(ex + sx * dx * big_eye, ey + dy * big_eye, off);
         let white = [(-0.0145, -0.0006), (-0.0068, 0.0052), (0.0045, 0.006), (0.0142, 0.0016), (0.0062, -0.0042), (-0.0062, -0.0046)];
         let wp: Vec<V3> = white.iter().map(|&(dx, dy)| e(dx, dy, 0.0016 + 0.0018 * (1.0 - (dx / 0.0145).powi(2)))).collect();
@@ -247,7 +271,8 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
         }
         // ucho: płaski płat odchylony do tyłu (przód przy czaszce), od oczu do podstawy nosa
         if !covers_ears {
-            let ear = |x: f64, y: f64, z: f64| [sx * x, fy(y), z];
+            // ucho ok. 15% większe niż w pierwszej wersji, nasada przy powierzchni czaszki
+            let ear = |x: f64, y: f64, z: f64| [sx * (0.077 + (x - 0.072) * 1.15), fy(0.118 + (y - 0.118) * 1.15), -0.01 + (z + 0.01) * 1.15];
             let (a, b) = (ear(0.073, 0.147, -0.008), ear(0.07, 0.09, -0.002));
             let (cc, d, ee) = (ear(0.085, 0.152, -0.03), ear(0.091, 0.122, -0.042), ear(0.08, 0.087, -0.018));
             let out = [sx, 0.0, 0.25];
@@ -261,15 +286,15 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
     let nz = |x: f64, y: f64, out: f64| h.on(x * ns, fy(y), out * ns);
     let (root, mid, tip) = (nz(0.0, 0.128, 0.002), nz(0.0, 0.106, 0.012), [0.0, fy(0.089), h.surf(0.0, fy(0.089)) + 0.026 * ns]);
     let (sl, sr) = (nz(0.011, 0.109, 0.0), nz(-0.011, 0.109, 0.0));
-    let (al, ar) = (nz(0.018, 0.085, 0.004), nz(-0.018, 0.085, 0.004));
+    let (al, ar) = (nz(0.018 * v_nose, 0.085, 0.004), nz(-0.018 * v_nose, 0.085, 0.004));
     let base = nz(0.0, 0.08, 0.006);
     let inside = [0.0, fy(0.1), 0.06];
     for t in [vec![root, sl, mid], vec![root, mid, sr], vec![sl, al, tip, mid], vec![sr, mid, tip, ar], vec![al, base, tip], vec![ar, tip, base]] {
         let cen = scale(t.iter().fold([0.0; 3], |a, &q| add(a, q)), 1.0 / t.len() as f64);
         h.poly(mb, MatKey::Skin, &t, sub(cen, inside));
     }
-    // usta: ciemna szczelina i dolna warga
-    let lw = 0.0245 * (1.0 + 0.04 * fem);
+    // usta: ciemna szczelina między dwiema wargami (górna z łukiem Kupidyna, dolna pełniejsza), lekko wysunięte
+    let lw = 0.0245 * (1.0 + 0.04 * fem) * (1.0 - 0.12 * c);
     let my = fy(0.0576);
     let beard = p.s("beard");
     let boff = match beard {
@@ -278,14 +303,21 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
         "kozia" => 0.006,
         _ => 0.0,
     };
-    let mo = |x: f64, y: f64, off: f64| h.on(x, y, off + boff);
-    h.poly(mb, MatKey::Face, &[mo(-lw, my + 0.0004, 0.0026), mo(-0.011, my - 0.002, 0.003), mo(0.011, my - 0.002, 0.003), mo(lw, my + 0.0004, 0.0026), mo(0.011, my + 0.0026, 0.003), mo(-0.011, my + 0.0026, 0.003)], [0.0, 0.0, 1.0]);
-    if boff == 0.0 {
-        let ll = 0.0035 + 0.0015 * fem;
-        let lip = [mo(-lw * 0.75, my - 0.0012, 0.0012), mo(lw * 0.75, my - 0.0012, 0.0012), mo(lw * 0.55, my - 0.009, 0.0002), mo(-lw * 0.55, my - 0.009, 0.0002)];
-        let lip = [lip[0], lip[1], [lip[2][0], lip[2][1], lip[2][2]], [lip[3][0], lip[3][1], lip[3][2]]];
-        let lip = [add(lip[0], [0.0, 0.0, ll * 0.5]), add(lip[1], [0.0, 0.0, ll * 0.5]), lip[2], lip[3]];
-        h.poly(mb, MatKey::Skin, &lip, [0.0, -0.4, 1.0]);
+    let (lp, lh) = ((1.0 + 0.25 * fem) * (1.0 - 0.2 * c), (1.0 + 0.15 * fem) * (1.0 - 0.15 * c));
+    // wargi w slocie zarostu: bez zarostu ma on odcień warg (lib.rs), z kilkudniowym — cień zarostu
+    let lips = if matches!(beard, "brak" | "kilkudniowy") { MatKey::Stubble } else { MatKey::Skin };
+    let mo = |x: f64, y: f64, off: f64| h.on(x, my + y, off * lp + boff);
+    h.poly(mb, MatKey::Face, &[mo(-lw, 0.0004, 0.002), mo(-0.011, -0.0012, 0.0042), mo(0.011, -0.0012, 0.0042), mo(lw, 0.0004, 0.002), mo(0.011, 0.0012, 0.0042), mo(-0.011, 0.0012, 0.0042)], [0.0, 0.0, 1.0]);
+    for sx in [-1.0f64, 1.0] {
+        let c0 = mo(sx * lw, 0.0004, 0.0012);
+        let (b1, b0) = (mo(sx * 0.011, 0.0013, 0.0045), mo(0.0, 0.0013, 0.005));
+        let (t0, t1) = (mo(0.0, 0.0066 * lh, 0.0026), mo(sx * 0.011, 0.0058 * lh, 0.0022));
+        h.poly(mb, lips, &[c0, b1, b0, t0], [0.0, 0.3, 1.0]);
+        h.poly(mb, lips, &[c0, t0, t1], [0.0, 0.5, 1.0]);
+        let (d1, d0) = (mo(sx * 0.011, -0.0015, 0.0046), mo(0.0, -0.0015, 0.0052));
+        let (e0, e1) = (mo(0.0, -0.0088 * lh, 0.0014), mo(sx * 0.012, -0.0076 * lh, 0.0012));
+        h.poly(mb, lips, &[c0, d1, d0, e0], [0.0, -0.2, 1.0]);
+        h.poly(mb, lips, &[c0, e0, e1], [0.0, -0.5, 1.0]);
     }
 
     // --- zarost: cienka warstwa na żuchwie (wierzchołki siatki odsunięte promieniowo)
@@ -295,7 +327,7 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
         let mut all = jaw.clone();
         all.extend(stache.iter().copied());
         match beard {
-            "kilkudniowy" => Some((MatKey::Stubble, 0.0011, all)),
+            "kilkudniowy" => Some((MatKey::Stubble, 0.0018, all)),
             "krotka_broda" => Some((MatKey::Hair, 0.006, all)),
             "pelna_broda" => {
                 let mut v = all;
@@ -311,11 +343,15 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
         let has = |r: usize, j: usize| cells.contains(&(r, half(j).0));
         let lift = |r: usize, j: usize| {
             let q = h.lat[r][j];
-            // krawędź obszaru przylega do skóry; broda pełna zwisa pod podbródkiem
+            // normalna wierzchołka siatki (styczna kolumny × w górę), żeby warstwa nie wchodziła w skórę
+            let up = sub(h.lat[(r + 1).min(ROWS - 1)][j], h.lat[r.saturating_sub(1)][j]);
+            let tang = sub(h.lat[r][(j + 1) % COLS], h.lat[r][(j + COLS - 1) % COLS]);
+            let n = norm(cross(tang, up));
+            // brzeg obszaru nieco niżej (miękkie przejście), ale bez współpłaszczyznowości ze skórą
             let edge = !(has(r + 1, j) || r == 3) || r == 3 && half(j).0 >= 2;
-            let o = if edge && off > 0.002 { off * 0.35 } else { off };
+            let o = if edge { (off * 0.55).max(0.0016) } else { off };
             let drop = if beard == "pelna_broda" && r == 0 && half(j).0 <= 1 { 0.012 } else { 0.0 };
-            add(add(q, scale(Head::radial(q), o)), [0.0, -drop, drop * 0.3])
+            add(add(q, scale(n, o)), [0.0, -drop, drop * 0.3])
         };
         for r in 0..3 {
             for j in 0..COLS {
@@ -370,11 +406,11 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
     let covered = head_type != "brak";
     let hair: Option<Shell> = spec.map(|(lower, t0, mid, top)| {
         let rows = if style == "lysiejacy" {
-            vec![(t0, 0.0), (0.35, mid), (0.55, 0.0)]
+            vec![(t0, 0.0015), (0.35, mid), (0.55, 0.0015)]
         } else if covered {
-            vec![(t0, 0.0), (0.33, mid), (0.6, top)]
+            vec![(t0, 0.0015), (0.33, mid), (0.6, top)]
         } else {
-            vec![(t0, 0.0), (0.33, mid), (0.67, top), (1.0, top)]
+            vec![(t0, 0.0015), (0.33, mid), (0.67, top), (1.0, top)]
         };
         let apex = (!covered && style != "lysiejacy").then_some(top);
         Shell { lower: lower.map(fy), rows, apex, comb: 0.0, fwd: 0.0 }
@@ -490,10 +526,19 @@ pub(crate) fn build(mb: &mut MeshBuilder, sk: &[Joint], sc: &Scale, p: &P) {
             let r = emit_shell(&h, mb, &s, MatKey::Helmet);
             let guard: Vec<V3> = r[0].iter().map(|&q| {
                 let back = (-q[2] / 0.1).clamp(0.0, 1.0);
-                add(add(q, scale(norm([q[0], 0.0, q[2]]), 0.006 + 0.03 * back)), [0.0, -0.02 * back - 0.004, 0.0])
+                add(add(q, scale(norm([q[0], 0.0, q[2]]), 0.006 + 0.045 * back)), [0.0, -0.028 * back - 0.004, 0.0])
             }).collect();
             h.loft(mb, MatKey::Helmet, &[guard, r[0].clone()]);
             visor(mb, &r[0], 0.034, 0.018, MatKey::Helmet);
+            // grzebień: płetwa wzdłuż osi hełmu od czoła po kark
+            let apex = add(APEX, [0.0, o + 0.032 + 0.016 * 0.8, 0.0]);
+            let spine = [r[1][0], r[2][0], r[3][0], apex, r[3][5], r[2][5], r[1][5]];
+            let lift = |i: usize| 0.008 + 0.014 * (1.0 - ((i as f64 - 3.0) / 3.0).abs());
+            for i in 0..spine.len() - 1 {
+                let (a, b) = (spine[i], spine[i + 1]);
+                let (ta, tb) = (add(a, scale(Head::radial(a), lift(i))), add(b, scale(Head::radial(b), lift(i + 1))));
+                h.poly(mb, MatKey::Helmet, &[a, b, tb, ta], [1.0, 0.0, 0.0]);
+            }
         }
         _ => {}
     }

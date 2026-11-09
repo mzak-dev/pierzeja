@@ -170,8 +170,14 @@ fn driver_pose_fits_a_car_seat() {
             if pose == "drive" {
                 for s in ["Left", "Right"] {
                     let g = joint(&m, &format!("{s}HandGrip")).head;
-                    assert!((0.33..=0.47).contains(&(g[1] - h[1])), "{a}: dłoń {:.3} nad H", g[1] - h[1]);
-                    assert!((0.43..=0.57).contains(&(g[2] - h[2])), "{a}: dłoń {:.3} przed H", g[2] - h[2]);
+                    assert!((0.28..=0.40).contains(&(g[1] - h[1])), "{a}: dłoń {:.3} nad H", g[1] - h[1]);
+                    assert!((0.35..=0.45).contains(&(g[2] - h[2])), "{a}: dłoń {:.3} przed H", g[2] - h[2]);
+                    // łokieć wyraźnie zgięty (ok. 120–130°)
+                    let (sh, el, wr) = (joint(&m, &format!("{s}UpperArm")).head, joint(&m, &format!("{s}LowerArm")).head, joint(&m, &format!("{s}Hand")).head);
+                    let (u, v): (Vec<f64>, Vec<f64>) = ((0..3).map(|k| sh[k] - el[k]).collect(), (0..3).map(|k| wr[k] - el[k]).collect());
+                    let l = |x: &Vec<f64>| x.iter().map(|q| q * q).sum::<f64>().sqrt();
+                    let ang = ((0..3).map(|k| u[k] * v[k]).sum::<f64>() / l(&u) / l(&v)).acos().to_degrees();
+                    assert!((105.0..=145.0).contains(&ang), "{a}: łokieć {ang:.0}°");
                 }
             }
         }
@@ -186,5 +192,16 @@ fn child_legs_start_under_the_pelvis() {
         let h = m.bounds().max[1];
         // rozstaw stawów biodrowych ok. 10% wzrostu
         assert!((0.04..=0.06).contains(&(hx / h)), "{a}: staw biodrowy {hx:.3} przy wzroście {h:.2}");
+    }
+}
+
+#[test]
+fn child_head_is_larger_relative_to_height() {
+    // głów we wzroście: 5 lat ok. 6, 8 lat ok. 6,5, dorosły ok. 7,5 (staw głowy leży 0,928 wys. głowy pod czubkiem)
+    for (age, h, want) in [(5.0, 1.1, 6.0), (8.0, 1.3, 6.5), (35.0, 1.78, 7.5)] {
+        let m = make(json!({ "pose": "rest", "overrides": { "age": age, "height": h } }));
+        let head = joint(&m, "Head");
+        let n = h / ((head.tail[1] - head.head[1]) / 0.928);
+        assert!((n - want).abs() < 0.2, "{age} lat: {n:.2} głowy we wzroście");
     }
 }

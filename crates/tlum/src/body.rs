@@ -161,6 +161,10 @@ pub(crate) struct Fit {
     pub bag: bool,
     pub scba: bool,
     pub scarf: bool,
+    /// Rękawiczki (zima) albo białe rękawice drogówki — materiał dłoni.
+    pub hands: MatKey,
+    /// Ubiór służbowy PSP: napis na plecach i naszywka na ramieniu.
+    pub psp: bool,
 }
 
 impl Fit {
@@ -183,8 +187,8 @@ impl Fit {
             coat: matches!(outer, "plaszcz" | "parka"),
             vest: p.s("vest") != "brak",
             bulk: match outer {
-                "puchowka" => 1.12,
-                "parka" => 1.08,
+                "puchowka" => 1.16,
+                "parka" => 1.1,
                 "plaszcz" | "ubranie_specjalne" => 1.06,
                 "brak" => 1.0,
                 "kamizelka" => 1.02,
@@ -226,6 +230,8 @@ impl Fit {
             bag: matches!(carry, "torba" | "torba_medyczna"),
             scba: carry == "aparat_oddechowy",
             scarf: p.s("neckFaceType") == "szalik",
+            hands: if gear == "pas_bialy" || matches!(outer, "puchowka" | "parka") || p.f("temperature") < 0.0 { MatKey::Detail } else { MatKey::Skin },
+            psp: mid == "polar" && lower == "spodnie_mundurowe" && !jacket,
         }
     }
 }
@@ -312,7 +318,9 @@ impl<'a> Body<'a> {
 
     fn torso_stations(&self) -> Vec<Ts> {
         let k = self.sc.sv;
-        let (fat, fem, ad) = (self.fat, 1.0 - self.male, self.adult);
+        let (f, fem, ad, c) = (self.fat, 1.0 - self.male, self.adult, self.sc.child);
+        // tusza: ogólna (f), brzuch męski (fm), biodra i pośladki kobiece (ff)
+        let (fm, ff) = (f.max(0.0) * self.male, f.max(0.0) * fem);
         let bust = fem * ad;
         let (kw, kh) = (self.sc.kw, self.sc.kh);
         let km = (kw + kh) / 2.0;
@@ -320,22 +328,22 @@ impl<'a> Body<'a> {
         let hj = self.j("LeftUpperLeg").head[1];
         let (hy, sy, cy, uy, ny, ay) = (self.j("Hips").head[1], self.j("Spine").head[1], self.j("Chest").head[1], self.j("UpperChest").head[1], self.j("Neck").head[1], self.j("LeftUpperArm").head[1]);
         let (hips, spine, chest, upper, neck) = (self.i("Hips"), self.i("Spine"), self.i("Chest"), self.i("UpperChest"), self.i("Neck"));
-        // (y, półszer., przód, tył, środek z, ułamek płaskiego przodu/tyłu, wagi); bulk = grubość okrycia
-        let mk = |y: f64, w: f64, f: f64, b: f64, cz: f64, wt: Wt, cloth: bool| {
+        // (y, półszer., przód, tył, środek z, wagi, okrycie); bulk = grubość warstwy wierzchniej
+        let mk = |y: f64, w: f64, fr: f64, b: f64, cz: f64, wt: Wt, cloth: bool| {
             let g = if cloth { bulk } else { 1.0 };
-            let o = (g - 1.0) * 0.12;
-            Ts { y, w: w * k + o * k, f: f * k + o * k, b: b * k + o * k, cz: cz * k, af: 0.55 - 0.08 * bust, ab: 0.6, wt }
+            let o = (g - 1.0) * 0.22;
+            Ts { y, w: w * k + o * k, f: fr * k + o * k, b: b * k + o * k, cz: cz * k, af: 0.55 - 0.1 * bust, ab: 0.6, wt }
         };
         vec![
-            mk(hj - 0.075 * k, 0.122 * kh * (1.0 + 0.12 * fat), 0.07 + 0.01 * fat, 0.085 + 0.012 * fem, -0.008, w1(hips), false),
-            mk(hj + 0.005 * k, (0.163 + 0.014 * fem) * kh * (1.0 + 0.12 * fat), 0.083 + 0.02 * fat, 0.1 + 0.016 * fem + 0.02 * fat, -0.008, w1(hips), false),
-            mk(hy + 0.07 * k, (0.152 + 0.004 * fem) * km * (1.0 + 0.16 * fat), 0.092 + 0.05 * fat, 0.088, -0.002, w1(hips), true),
-            mk(sy + 0.06 * k, (0.142 - 0.016 * fem * ad) * kw * (1.0 + 0.18 * fat), 0.092 + 0.07 * fat, 0.08, 0.004, w1(spine), true),
-            mk(cy, (0.148 - 0.012 * fem * ad) * kw * (1.0 + 0.13 * fat), 0.098 + 0.05 * fat + 0.008 * bust, 0.086, 0.004, w2(spine, chest, 0.5), true),
-            mk(cy + 0.075 * k, (0.16 - 0.014 * fem * ad) * kw * (1.0 + 0.1 * fat), 0.104 + 0.03 * bust + 0.025 * fat, 0.092, 0.004, w1(chest), true),
-            mk(uy + 0.035 * k, (0.168 - 0.016 * fem * ad) * kw * (1.0 + 0.07 * fat), 0.094 + 0.012 * bust, 0.098, 0.0, w2(chest, upper, 0.7), true),
-            mk(ay + 0.026 * k, (0.176 - 0.016 * fem * ad) * kw, 0.056, 0.07, -0.006, w1(upper), true),
-            mk(ny + 0.046 * k, 0.064 - 0.006 * fem, 0.044, 0.056, -0.014, w2(upper, neck, 0.35), true),
+            mk(hj - 0.075 * k, 0.122 * kh * (1.0 + 0.12 * f + 0.1 * ff), 0.07 + 0.01 * f, 0.085 + 0.012 * fem + 0.015 * ff, -0.008, w1(hips), false),
+            mk(hj + 0.005 * k, (0.163 + 0.022 * fem) * kh * (1.0 + 0.1 * f + 0.12 * ff), 0.083 + 0.02 * f, 0.1 + 0.02 * fem + 0.02 * f + 0.02 * ff, -0.008, w1(hips), false),
+            mk(hy + 0.07 * k, (0.152 + 0.01 * fem + 0.006 * c) * km * (1.0 + 0.14 * f + 0.06 * ff), 0.092 + 0.04 * f + 0.025 * fm + 0.008 * c, 0.088, -0.002, w1(hips), true),
+            mk(sy + 0.06 * k, (0.142 - 0.028 * fem * ad + 0.012 * c) * kw * (1.0 + 0.16 * f + 0.06 * fm), 0.092 + 0.05 * f + 0.04 * fm + 0.012 * c, 0.08, 0.004, w1(spine), true),
+            mk(cy, (0.148 - 0.016 * fem * ad + 0.006 * c) * kw * (1.0 + 0.12 * f + 0.04 * fm), 0.098 + 0.035 * f + 0.02 * fm + 0.012 * bust + 0.006 * c, 0.086, 0.004, w2(spine, chest, 0.5), true),
+            mk(cy + 0.075 * k, (0.16 - 0.016 * fem * ad) * kw * (1.0 + 0.1 * f), 0.104 + 0.042 * bust + 0.025 * f, 0.092, 0.004, w1(chest), true),
+            mk(uy + 0.035 * k, (0.168 - 0.016 * fem * ad) * kw * (1.0 + 0.07 * f), 0.094 + 0.016 * bust + 0.01 * f, 0.098, 0.0, w2(chest, upper, 0.7), true),
+            mk(ay + 0.026 * k, (0.176 - 0.01 * fem * ad) * kw * (1.0 + 0.04 * f), 0.056, 0.07, -0.006, w1(upper), true),
+            mk(ny + 0.046 * k, (0.064 - 0.006 * fem) * (1.0 + 0.12 * f), 0.044, 0.056, -0.014, w2(upper, neck, 0.35), true),
         ]
     }
 
@@ -412,7 +420,7 @@ impl<'a> Body<'a> {
 
     fn neck(&self, mb: &mut MeshBuilder) {
         let k = self.sc.sv;
-        let r = (0.054 - 0.007 * (1.0 - self.male)) * k * (1.0 + 0.1 * self.fat);
+        let r = (0.054 - 0.007 * (1.0 - self.male)) * k * (1.0 + 0.15 * self.fat + 0.12 * self.sc.child);
         let (ny, hy) = (self.j("Neck").head[1], self.j("Head").head[1]);
         let (upper, head) = (self.i("UpperChest"), self.i("Head"));
         let ring = |y: f64, rd: f64, rw: f64, cz: f64, wt: Wt| Ring::new(ring8([0.0, y, cz * k], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], rd, rw), wt);
@@ -423,9 +431,10 @@ impl<'a> Body<'a> {
         ];
         let f = &self.fit;
         loft(mb, &self.rig, &rings, |i, _| if i == 0 && (f.turtleneck || f.scarf) { f.torso } else { MatKey::Skin });
-        let cover = if f.scarf { Some((MatKey::Detail, 0.05, 0.012)) } else if f.turtleneck { Some((MatKey::Top, 0.075, 0.006)) } else if f.collar { Some((MatKey::Top, 0.035, 0.005)) } else if f.jacket { Some((f.torso, 0.03, 0.007)) } else { None };
+        // kołnierz/szalik zaczyna się pod linią ramion (bez zębatego styku z barkami)
+        let cover = if f.scarf { Some((MatKey::Detail, 0.07, 0.02)) } else if f.turtleneck { Some((MatKey::Top, 0.075, 0.006)) } else if f.collar { Some((MatKey::Top, 0.035, 0.005)) } else if f.jacket { Some((f.torso, 0.035, 0.011)) } else { None };
         if let Some((mat, h, off)) = cover {
-            let lo = Ring::lerp(&rings[0], &rings[1], 0.15).grow(off * k);
+            let lo = Ring::lerp(&rings[0], &rings[1], 0.02).grow(off * k);
             let hi = Ring::lerp(&rings[0], &rings[1], 0.15 + h * k / (rings[1].pts[0][1] - rings[0].pts[0][1])).grow((off + 0.003) * k);
             loft(mb, &self.rig, &[lo, hi], |_, _| mat);
         }
@@ -447,21 +456,18 @@ impl<'a> Body<'a> {
     }
 
     fn arm(&self, mb: &mut MeshBuilder, s: &str, _sx: f64) {
-        let k = self.sc.sv * (1.0 + 0.12 * self.fat) * (1.0 + 0.08 * (self.male - 0.5));
+        let k = self.sc.sv * (1.0 + 0.16 * self.fat + 0.12 * self.sc.child) * (1.0 + 0.08 * (self.male - 0.5));
         let (sh, ua, la, hd) = (self.i(&format!("{s}Shoulder")), self.i(&format!("{s}UpperArm")), self.i(&format!("{s}LowerArm")), self.i(&format!("{s}Hand")));
         let f = &self.fit;
         let g = if f.sleeve == MatKey::Top && !f.short { 1.0 + (f.bulk - 1.0) * 0.5 } else { f.bulk };
         let c = |r: f64| r * k * g;
         let a = |r: f64| r * k;
-        let mut sts = vec![
-            (ua, -0.1, c(0.045), c(0.03), 0.0, w1(sh)),
-            (ua, 0.1, c(0.06), c(0.058), 0.0, w1(ua)),
-            (ua, 0.45, c(0.06), c(0.054), 0.002, w1(ua)),
-        ];
-        let mut mats = vec![f.sleeve, f.sleeve];
+        let mut sts = vec![(ua, -0.1, c(0.045), c(0.03), 0.0, w1(sh)), (ua, 0.1, c(0.06), c(0.058), 0.0, w1(ua))];
+        let mut mats = vec![f.sleeve];
         if f.short {
-            sts.push((ua, 0.47, a(0.054), a(0.049), 0.002, w1(ua)));
-            mats.push(f.sleeve);
+            // krótki rękaw: brzeg rękawa i skóra pod nim
+            sts.extend([(ua, 0.45, c(0.06), c(0.054), 0.002, w1(ua)), (ua, 0.47, a(0.054), a(0.049), 0.002, w1(ua))]);
+            mats.extend([f.sleeve, f.sleeve]);
         }
         let skin = if f.short { MatKey::Skin } else { f.sleeve };
         sts.extend([(ua, 1.0, c(0.044), c(0.046), 0.0, w2(ua, la, 0.5)), (la, 0.22, c(0.05), c(0.052), 0.004, w1(la)), (la, 0.98, c(0.03), c(0.036), 0.0, w2(la, hd, 0.2))]);
@@ -489,8 +495,10 @@ impl<'a> Body<'a> {
         let (fat, fem) = (self.fat, (1.0 - self.male) * self.adult);
         let (hips, ul, ll, ft) = (self.i("Hips"), self.i(&format!("{s}UpperLeg")), self.i(&format!("{s}LowerLeg")), self.i(&format!("{s}Foot")));
         let f = &self.fit;
-        let g = |r: f64| r * k * (1.0 + 0.16 * fat);
-        let gs = |r: f64| r * k * (1.0 + 0.08 * fat);
+        let ff = fat.max(0.0) * fem;
+        let c = self.sc.child;
+        let g = |r: f64| r * k * (1.0 + 0.18 * fat + 0.1 * ff + 0.12 * c);
+        let gs = |r: f64| r * k * (1.0 + 0.1 * fat + 0.1 * c);
         let mut sts = vec![
             (ul, -0.02, g(0.1 + 0.006 * fem), g(0.098 + 0.012 * fem), -0.004 * k, w2(hips, ul, 0.55)),
             (ul, 0.5, g(0.08 + 0.004 * fem), g(0.077 + 0.006 * fem), 0.004 * k, w1(ul)),
@@ -503,7 +511,8 @@ impl<'a> Body<'a> {
         if f.cut_legs {
             // szorty / spódnica: nogawka kończy się nad kolanem
             sts.insert(1, (ul, 0.42, g(0.083), g(0.08), 0.004 * k, w1(ul)));
-            mats = vec![if f.skirt { MatKey::Skin } else { MatKey::Bottom }, MatKey::Skin, MatKey::Skin, MatKey::Skin, MatKey::Skin, MatKey::Skin];
+            // pod spódnicą górna część uda w kolorze spódnicy (wystające fasetki nie świecą skórą)
+            mats = vec![MatKey::Bottom, MatKey::Skin, MatKey::Skin, MatKey::Skin, MatKey::Skin, MatKey::Skin];
         }
         if f.boot > 0.0 {
             // cholewka od ułamka `boot` goleni (licząc od kostki)
@@ -581,10 +590,11 @@ impl<'a> Body<'a> {
             }
             v
         };
-        let rings = [rect(-0.01, 0.03, 0.017, 0.002, -0.002), rect(0.094, 0.041, 0.012, 0.0, -0.002)];
+        let rings = [rect(-0.01, 0.033, 0.017, 0.002, -0.002), rect(0.094, 0.046, 0.012, 0.0, -0.002)];
+        let skin = self.fit.hands;
         let mut b = MeshBuilder::default();
-        b.loft(MatKey::Skin, &rings, false);
-        b.poly(MatKey::Skin, &rings[1], Some(ex));
+        b.loft(skin, &rings, false);
+        b.poly(skin, &rings[1], Some(ex));
         mb.push(&b.build(vec![]), &w[hd]);
         for f in FINGERS {
             for (n, ph) in PHALANGES.iter().enumerate() {
@@ -610,9 +620,9 @@ impl<'a> Body<'a> {
                 };
                 let (r0, r1) = (sec(start, 1.0), sec(end, tip));
                 let mut b = MeshBuilder::default();
-                b.loft(MatKey::Skin, &[r0, r1.clone()], false);
+                b.loft(skin, &[r0, r1.clone()], false);
                 if n == 2 {
-                    b.poly(MatKey::Skin, &r1, Some(ez));
+                    b.poly(skin, &r1, Some(ez));
                 }
                 mb.push(&b.build(vec![]), &w[bi]);
             }
@@ -623,33 +633,43 @@ impl<'a> Body<'a> {
     fn skirt(&self, mb: &mut MeshBuilder) {
         let k = self.sc.sv;
         let (hips, lu, ru) = (self.i("Hips"), self.i("LeftUpperLeg"), self.i("RightUpperLeg"));
-        let top = self.ts[1].clone();
         let knee = self.j("LeftLowerLeg").head[1];
         let hj = self.j("LeftUpperLeg").head[1];
-        let (len_, mat, flare) = if self.fit.coat { (hj - knee + 0.06 * k, MatKey::Outer, 1.0) } else { (0.75 * (hj - knee), MatKey::Bottom, 0.92) };
-        let mk = |t: f64, grow: f64| -> Ring {
-            let mut s = top.clone();
-            s.y = hj - len_ * t;
-            s.w = s.w.max(0.205 * k * self.sc.kh) * (1.0 + grow) * flare;
-            // poły muszą zakryć uda (przód uda ok. 0,1 m przed stawem biodrowym)
-            s.f = s.f.max(0.118 * k) + grow * 0.5 * k;
-            s.b = s.b.max(0.118 * k) + grow * 0.3 * k;
-            s.af = 0.6;
-            let mut r = s.ring(0.004 * k);
-            let wt: Vec<Wt> = r
-                .pts
-                .iter()
-                .map(|p| {
-                    let side = smooth(0.5 + p[0] / (0.2 * k));
-                    let leg = 0.25 + 0.6 * t;
-                    vec![(hips, 1.0 - leg), (lu, leg * side), (ru, leg * (1.0 - side))].into_iter().filter(|e| e.1 > 1e-6).collect()
-                })
-                .collect();
-            r.wt = wt;
-            r
-        };
-        // od dołu do góry: pierścienie obiegają +Y
-        let rings = [mk(1.0, 0.06), mk(0.45, 0.03), mk(-0.05, 0.0)];
+        let hx = self.j("LeftUpperLeg").head[0];
+        // obrys ud (jak w `leg`): poły obejmują je ciasno, żeby w siadzie leżały na udach
+        let fem = (1.0 - self.male) * self.adult;
+        // ×1,08: wierzchołki pierścieni 8-bocznych leżą dalej niż promień nominalny
+        let thigh = |r: f64| 1.08 * (r + 0.01 * fem) * k * (1.0 + 0.18 * self.fat + 0.1 * self.fat.max(0.0) * fem + 0.12 * self.sc.child);
+        let coat = self.fit.coat;
+        let (len_, mat) = if coat { (hj - knee + 0.02 * k, MatKey::Outer) } else { (0.72 * (hj - knee), MatKey::Bottom) };
+        let top = self.ts[1].clone();
+        // (ułamek długości, półszerokość, przód, tył, waga ud)
+        let st = [
+            // dół lekko rozszerzony (krój A)
+            (1.0, hx + thigh(0.083) + 0.03 * k, thigh(0.07) + 0.03 * k, thigh(0.07) + 0.02 * k, 1.0),
+            (0.45, hx + thigh(0.083) + 0.02 * k, thigh(0.083) + 0.024 * k, thigh(0.083) + 0.018 * k, 0.75),
+            (0.04, (top.w + 0.006 * k).max(hx + thigh(0.098) + 0.012 * k), top.f.max(thigh(0.1)) + 0.012 * k, top.b.max(thigh(0.1)) + 0.012 * k, 0.15),
+        ];
+        // od dołu do góry: pierścienie obiegają +Y; przód/tył poły podążają za udem swojej strony
+        let rings: Vec<Ring> = st
+            .iter()
+            .map(|&(t, w, f, b, leg)| {
+                let s = Ts { y: hj - len_ * t, w, f, b: b.max(f * 0.9), cz: -0.004 * k, af: 0.62, ab: 0.62, wt: w1(hips) };
+                let mut r = s.ring(0.0);
+                r.wt = r
+                    .pts
+                    .iter()
+                    .map(|p| {
+                        let side = smooth(0.5 + p[0] / (0.16 * k));
+                        vec![(hips, 1.0 - leg), (lu, leg * side), (ru, leg * (1.0 - side))].into_iter().filter(|e| e.1 > 1e-6).collect()
+                    })
+                    .collect();
+                r
+            })
+            .collect();
+        // u góry poły przechodzą płynnie w tułów (bez półki na wysokości pasa)
+        let mut rings = rings;
+        rings.push(self.torso_at(self.ts[2].y - 0.01 * k).ring(0.004 * k));
         loft(mb, &self.rig, &rings, |_, _| mat);
     }
 
@@ -692,6 +712,13 @@ impl<'a> Body<'a> {
         }
         if f.medic {
             self.text_back(mb, &["RATOWNIK", "MEDYCZNY"], y(6) + 0.06 * k, 0.0056 * k, 0.005 * k, MatKey::Reflective);
+        }
+        if f.psp {
+            self.text_back(mb, &["PSP"], y(6) + 0.03 * k, 0.012 * k, 0.004 * k, MatKey::Reflective);
+            self.arm_patch(mb);
+        }
+        if f.scarf {
+            self.scarf_end(mb);
         }
         if f.vest {
             self.vest(mb);
@@ -759,7 +786,8 @@ impl<'a> Body<'a> {
         }
         if self.fit.police {
             let letters = if self.fit.vest_dark { MatKey::Reflective } else { MatKey::Outer };
-            self.text_back(mb, &["POLICJA"], ts[6].y + 0.062 * k, 0.0068 * k, off + 0.003 * k, letters);
+            // napis pod górną krawędzią kamizelki (tam jej powierzchnia pokrywa się z tułowiem), równa linia liter
+            self.text_back(mb, &["POLICJA"], ts[6].y + 0.012 * k, 0.0085 * k, off + 0.003 * k, letters);
         }
     }
 
@@ -833,28 +861,57 @@ impl<'a> Body<'a> {
         let (p, n, wt) = self.surf(yc, 0.0, 0.004 * k, false);
         let side = norm(cross([0.0, 1.0, 0.0], n));
         self.boxy(mb, MatKey::Detail, add(p, scale(n, 0.055 * k)), side, n, 0.27 * k, 0.32 * k, 0.11 * k, &wt);
-        // szelki na barkach
-        for s in [-1.0, 1.0] {
-            let u = 0.075 * k;
-            let pts = [self.surf(self.ts[6].y + 0.03 * k, s * u, 0.014 * k, true), self.surf(self.ts[5].y, s * u * 1.05, 0.014 * k, true), self.surf(self.ts[4].y - 0.02 * k, s * u * 1.1, 0.014 * k, true)];
-            let sw = [0.02 * k, 0.0, 0.0];
-            for w in pts.windows(2) {
-                let (a, b) = (&w[0], &w[1]);
-                self.rig.poly(mb, MatKey::Detail, &[sub(a.0, sw), add(a.0, sw), add(b.0, sw), sub(b.0, sw)], &a.2, a.1);
-            }
+        // szelki na barkach (po powierzchni tułowia)
+        for sgn in [-1.0, 1.0] {
+            let u = 0.075 * k * sgn;
+            self.strap(mb, &[(self.ts[7].y + 0.012 * k, u), (self.ts[6].y, u * 1.05), (self.ts[5].y, u * 1.1), (self.ts[4].y - 0.02 * k, u * 1.15)], 0.038 * k, 0.014 * k, true, MatKey::Detail);
         }
     }
 
+    /// Pas po powierzchni tułowia (przód): kolejne punkty (wysokość, łuk od środka), szerokość `w`.
+    fn strap(&self, mb: &mut MeshBuilder, pts: &[(f64, f64)], w: f64, off: f64, front: bool, mat: MatKey) {
+        let q: Vec<(V3, V3, Wt)> = pts.iter().map(|&(y, u)| self.surf(y, u, off, front)).collect();
+        for s in q.windows(2) {
+            let (a, b) = (&s[0], &s[1]);
+            // poprzecznie do kierunku paska, w płaszczyźnie powierzchni
+            let d = norm(sub(b.0, a.0));
+            let (sa, sb) = (scale(norm(cross(a.1, d)), w * 0.5), scale(norm(cross(b.1, d)), w * 0.5));
+            self.rig.poly(mb, mat, &[sub(a.0, sa), add(a.0, sa), add(b.0, sb), sub(b.0, sb)], &a.2, a.1);
+        }
+    }
+
+    /// Torba medyczna na pasku przez lewy bark (pasek z przodu; z tyłu nie zasłania napisu), przylega do prawego biodra.
     fn bag(&self, mb: &mut MeshBuilder) {
         let k = self.sc.sv;
-        // torba na prawym biodrze, pasek przez lewy bark
-        let (p, n, wt) = self.surf(self.ts[1].y + 0.02 * k, -0.2 * k, 0.0, true);
+        let ts = &self.ts;
+        let (p, n, wt) = self.surf(ts[1].y + 0.03 * k, -0.15 * k, 0.012 * k, true);
         let side = norm(cross([0.0, 1.0, 0.0], n));
-        self.boxy(mb, MatKey::Detail, add(p, scale(n, 0.05 * k)), side, n, 0.26 * k, 0.2 * k, 0.1 * k, &wt);
-        let a = self.surf(self.ts[7].y + 0.005 * k, 0.07 * k, 0.008 * k, true);
-        let b = self.surf(self.ts[2].y, -0.12 * k, 0.012 * k, true);
-        let sw = [0.0, 0.022 * k, 0.0];
-        self.rig.poly(mb, MatKey::Detail, &[sub(a.0, sw), add(a.0, sw), add(b.0, sw), sub(b.0, sw)], &a.2, a.1);
+        let d = 0.075 * k;
+        self.boxy(mb, MatKey::Detail, add(p, scale(n, d * 0.5)), side, n, 0.24 * k, 0.18 * k, d, &wt);
+        let off = 0.012 * k;
+        self.strap(mb, &[(ts[7].y + 0.012 * k, 0.085 * k), (ts[6].y, 0.05 * k), (ts[5].y, 0.0), (ts[4].y, -0.06 * k), (ts[3].y, -0.11 * k), (ts[2].y + 0.01 * k, -0.15 * k)], 0.035 * k, off, true, MatKey::Detail);
+    }
+
+    /// Naszywka PSP na lewym ramieniu (płat na zewnętrznej stronie rękawa).
+    fn arm_patch(&self, mb: &mut MeshBuilder) {
+        let k = self.sc.sv;
+        let ua = self.i("LeftUpperArm");
+        let j = &self.sk[ua];
+        let d = sub(j.tail, j.head);
+        let c = add(j.head, scale(d, 0.28));
+        // w T-pose zewnętrzna strona ramienia to −Z… naszywka na boku zwróconym do przodu/na zewnątrz po opuszczeniu ręki: +Z
+        let r = 0.064 * k * self.fit.bulk + 0.003 * k;
+        let n = [0.0, 0.0, 1.0];
+        let (a, b) = (scale(norm(d), 0.03 * k), [0.0, 0.035 * k, 0.0]);
+        let o = add(c, scale(n, r));
+        self.rig.poly(mb, MatKey::Reflective, &[sub(sub(o, a), b), add(sub(o, b), a), add(add(o, a), b), sub(add(o, b), a)], &w1(ua), n);
+    }
+
+    /// Wolny koniec szalika na piersi.
+    fn scarf_end(&self, mb: &mut MeshBuilder) {
+        let k = self.sc.sv;
+        let ts = &self.ts;
+        self.strap(mb, &[(ts[8].y - 0.005 * k, 0.04 * k), (ts[6].y, 0.05 * k), (ts[5].y - 0.03 * k, 0.055 * k)], 0.06 * k, 0.012 * k, true, MatKey::Detail);
     }
 
     /// Aparat oddechowy: płyta nośna + butla na plecach.
