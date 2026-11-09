@@ -19,6 +19,8 @@ pub enum Cmd {
     Item(Item),
     Fam(Fam),
     NewVehicle(String),
+    NewHuman(String),
+    Pose(String),
     Reseed,
     Mode(Mode),
     Night,
@@ -76,6 +78,7 @@ pub fn item_info(i: Item) -> (&'static str, &'static str, &'static [&'static str
         Item::Parcel => (ic::RULER, "Działka", &[]),
         Item::Scena => (ic::DOTS_NINE, "Scena", &[]),
         Item::Veh(_) => (ic::CAR, "Pojazd", &[]),
+        Item::Hum(_) => (ic::PERSON_SIMPLE, "Człowiek", &[]),
     }
 }
 
@@ -104,6 +107,7 @@ pub fn ribbon_def(tab: RibbonTab, doc: &Doc, view: &View) -> Vec<(&'static str, 
     let veh = doc.mode == Mode::Vehicle;
     let v = |id: &'static str, icon: &'static str, label: &'static str| Rb { enabled: veh, ..rb(icon, label, Cmd::Item(Item::Veh(id)), view.item == Some(Item::Veh(id))) };
     match tab {
+        RibbonTab::Czlowiek => crate::human::ribbon(doc, view),
         RibbonTab::Pojazd => vec![
             ("Generuj", vec![v("typ", ic::CHART_SCATTER, "Typ"), Rb { enabled: veh, ..rb(ic::DICE_FIVE, "Losuj", Cmd::Reseed, false) }]),
             ("Nadwozie", vec![v("bryla", ic::BOUNDING_BOX, "Bryła"), v("sylwetka", ic::SHAPES, "Sylwetka"), v("zabudowa", ic::TRUCK, "Zabudowa")]),
@@ -112,7 +116,7 @@ pub fn ribbon_def(tab: RibbonTab, doc: &Doc, view: &View) -> Vec<(&'static str, 
             ("Wykończenie", vec![v("material", ic::SWATCHES, "Materiał")]),
         ],
         RibbonTab::Plik => vec![
-            ("Dokument", vec![rb(ic::PLUS, "Nowy", Cmd::Start, false), rb(ic::ROAD_HORIZON, "Nowa ulica", Cmd::NewStreet, false), rb(ic::CAR, "Nowy pojazd", Cmd::NewVehicle(tabor_core::data().default_archetype.clone()), false), Rb { enabled: false, ..rb(ic::FOLDER_OPEN, "Otwórz…", Cmd::Start, false) }, Rb { enabled: false, ..rb(ic::FLOPPY_DISK, "Zapisz", Cmd::Start, false) }]),
+            ("Dokument", vec![rb(ic::PLUS, "Nowy", Cmd::Start, false), rb(ic::ROAD_HORIZON, "Nowa ulica", Cmd::NewStreet, false), rb(ic::CAR, "Nowy pojazd", Cmd::NewVehicle(tabor_core::data().default_archetype.clone()), false), rb(ic::PERSON_SIMPLE, "Nowy człowiek", Cmd::NewHuman(tlum_core::data().default_archetype.clone()), false), Rb { enabled: false, ..rb(ic::FOLDER_OPEN, "Otwórz…", Cmd::Start, false) }, Rb { enabled: false, ..rb(ic::FLOPPY_DISK, "Zapisz", Cmd::Start, false) }]),
             ("Karta", vec![rb(ic::ARROW_COUNTER_CLOCKWISE, "Cofnij", Cmd::Undo, false), rb(ic::ARROW_CLOCKWISE, "Ponów", Cmd::Redo, false), rb(ic::X, "Zamknij", Cmd::CloseTab(usize::MAX), false)]),
             ("Integracje", vec![rb(ic::PLUGS_CONNECTED, "Serwer MCP", Cmd::Mcp, false)]),
         ],
@@ -152,6 +156,7 @@ pub fn ribbon_def(tab: RibbonTab, doc: &Doc, view: &View) -> Vec<(&'static str, 
 fn ribbon_tabs(f: Fam) -> Vec<(RibbonTab, &'static str)> {
     match f {
         Fam::Pojazdy => vec![(RibbonTab::Plik, "Plik"), (RibbonTab::Pojazd, "Pojazd"), (RibbonTab::Render, "Render"), (RibbonTab::Eksport, "Eksport")],
+        Fam::Ludzie => vec![(RibbonTab::Plik, "Plik"), (RibbonTab::Czlowiek, "Człowiek"), (RibbonTab::Render, "Render"), (RibbonTab::Eksport, "Eksport")],
         _ => vec![(RibbonTab::Plik, "Plik"), (RibbonTab::Budynek, "Budynek"), (RibbonTab::Ulica, "Ulica"), (RibbonTab::Render, "Render"), (RibbonTab::Eksport, "Eksport")],
     }
 }
@@ -160,6 +165,7 @@ fn ribbon_tabs(f: Fam) -> Vec<(RibbonTab, &'static str)> {
 fn home_of(mode: Mode) -> (RibbonTab, Item) {
     match mode {
         Mode::Vehicle => (RibbonTab::Pojazd, Item::Veh("bryla")),
+        Mode::Human => (RibbonTab::Czlowiek, Item::Hum("cialo")),
         Mode::Building => (RibbonTab::Budynek, Item::Kondygnacje),
         Mode::Street => (RibbonTab::Ulica, Item::Gzyms),
         _ => (RibbonTab::Ulica, Item::Scena),
@@ -295,13 +301,13 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             let s = new_seed();
             let d = docs.cur_mut();
             match mode {
-                Mode::Building | Mode::Vehicle => d.seed = s,
+                Mode::Building | Mode::Vehicle | Mode::Human => d.seed = s,
                 Mode::Street => d.street_seed = s,
                 _ => d.scene_seed = s,
             }
         }
         Cmd::Mode(m) => {
-            if matches!(mode, Mode::Building | Mode::Vehicle) {
+            if matches!(mode, Mode::Building | Mode::Vehicle | Mode::Human) {
                 docs.open(Doc::street(m));
             } else {
                 docs.cur_mut().mode = m;
@@ -311,6 +317,7 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             view.screen = Screen::Editor;
         }
         Cmd::Night => view.night = !view.night,
+        Cmd::Pose(p) => docs.cur_mut().pose = p,
         Cmd::Shadows => view.shadows = !view.shadows,
         Cmd::Preset(p) => {
             view.preset = Some(p);
@@ -331,6 +338,7 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             let s = match d.mode.scene() {
                 Some(k) => serde_json::to_string_pretty(&d.scene_spec(k)),
                 None if d.mode == Mode::Vehicle => serde_json::to_string_pretty(&d.vehicle_spec()),
+                None if d.mode == Mode::Human => serde_json::to_string_pretty(&d.human_spec()),
                 None if d.mode == Mode::Street => serde_json::to_string_pretty(&d.street_spec()),
                 None => serde_json::to_string_pretty(&d.spec()),
             };
@@ -349,11 +357,11 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             (view.screen, view.ribbon, view.item) = (Screen::Editor, RibbonTab::Budynek, Some(Item::Kondygnacje));
         }
         Cmd::Fam(f) => match f {
-            Fam::Ludzie => view.msg = "Tłum (ludzie) — w przygotowaniu".into(),
             _ => {
                 match docs.tabs.iter().rposition(|t| t.doc.mode.fam() == f) {
                     Some(i) => docs.active = i,
                     None if f == Fam::Pojazdy => docs.open(Doc::vehicle(&tabor_core::data().default_archetype)),
+                    None if f == Fam::Ludzie => docs.open(Doc::human(&tlum_core::data().default_archetype)),
                     None => docs.open(Doc::building("familok")),
                 }
                 view.screen = Screen::Editor;
@@ -364,6 +372,11 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             docs.open(Doc::vehicle(&a));
             view.screen = Screen::Editor;
             (view.ribbon, view.item) = (RibbonTab::Pojazd, Some(Item::Veh("bryla")));
+        }
+        Cmd::NewHuman(a) => {
+            docs.open(Doc::human(&a));
+            view.screen = Screen::Editor;
+            (view.ribbon, view.item) = (RibbonTab::Czlowiek, Some(Item::Hum("cialo")));
         }
         Cmd::NewStreet => {
             docs.open(Doc::street(Mode::Street));
@@ -387,6 +400,7 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             let (rib, item) = home_of(docs.cur().mode);
             let ok = match docs.cur().mode {
                 Mode::Vehicle => view.ribbon == RibbonTab::Pojazd,
+                Mode::Human => view.ribbon == RibbonTab::Czlowiek,
                 Mode::Building => view.ribbon == RibbonTab::Budynek,
                 _ => view.ribbon == RibbonTab::Ulica,
             };
@@ -399,7 +413,7 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
         Cmd::Undo => docs.undo(),
         Cmd::Redo => docs.redo(),
         Cmd::Archetype(a) => {
-            if matches!(mode, Mode::Building | Mode::Vehicle) {
+            if matches!(mode, Mode::Building | Mode::Vehicle | Mode::Human) {
                 docs.cur_mut().source = Source::Archetype(a);
             } else {
                 run(Cmd::NewBuilding(a), ctx, docs, der, view, window, exit);
@@ -462,7 +476,7 @@ fn mode_pill(ui: &mut egui::Ui, f: Fam, n: usize, active: bool) -> egui::Respons
     let (icon, enabled) = match f {
         Fam::Budynki => (ic::BUILDINGS, true),
         Fam::Pojazdy => (ic::CAR, true),
-        Fam::Ludzie => (ic::USER, false),
+        Fam::Ludzie => (ic::USER, true),
     };
     let font = egui::FontId::proportional(13.5);
     let tw = ui.fonts_mut(|g| g.layout_no_wrap(f.label().into(), font.clone(), TEXT).size().x);
@@ -478,7 +492,7 @@ fn mode_pill(ui: &mut egui::Ui, f: Fam, n: usize, active: bool) -> egui::Respons
     p.text(rect.left_center() + Vec2::new(14.0, 0.0), Align2::LEFT_CENTER, icon, egui::FontId::proportional(15.0), fg);
     p.text(rect.left_center() + Vec2::new(36.0, 0.0), Align2::LEFT_CENTER, f.label(), font, if active { TEXT } else { fg });
     p.text(rect.right_center() - Vec2::new(12.0, 0.0), Align2::RIGHT_CENTER, n, mono(11.0), fg);
-    if enabled { resp } else { resp.on_hover_text("Tłum — w przygotowaniu") }
+    if enabled { resp } else { resp.on_hover_text("Niedostępne") }
 }
 
 fn tab_chip(ui: &mut egui::Ui, name: &str, active: bool, dirty: bool) -> (bool, bool) {
@@ -685,6 +699,15 @@ fn bottom_bar(root: &mut egui::Ui, docs: &Docs, der: &Derived, view: &View, fps:
                             cmds.push(Cmd::Item(Item::Veh(id)));
                         }
                     }
+                } else if doc.mode == Mode::Human {
+                    let cur = crate::human::HSECTIONS.iter().position(|s| view.item == Some(Item::Hum(s.2)));
+                    for (k, (label, icon, id)) in crate::human::HSECTIONS.iter().enumerate() {
+                        let after = cur.is_some_and(|c| k > c);
+                        let rt = RichText::new(format!("{icon}  {label}")).size(13.5).color(if after { FAINT } else { TEXT });
+                        if chip(ui, rt, cur == Some(k)).clicked() {
+                            cmds.push(Cmd::Item(Item::Hum(id)));
+                        }
+                    }
                 } else if doc.mode == Mode::Building {
                     let cur = SECTIONS.iter().position(|s| view.item.is_some_and(|i| s.3.contains(&i)));
                     for (k, (label, icon, item, _)) in SECTIONS.iter().enumerate() {
@@ -755,7 +778,7 @@ fn parcel_ruler(ui: &mut egui::Ui, der: &Derived, view: &View, cmds: &mut Vec<Cm
 
 // ------------------------------------------------------------------ panele edytora
 
-fn tree_row(ui: &mut egui::Ui, depth: usize, caret: Option<bool>, eye: Option<bool>, label: &str, value: &str, selected: bool) -> (egui::Response, bool) {
+pub(crate) fn tree_row(ui: &mut egui::Ui, depth: usize, caret: Option<bool>, eye: Option<bool>, label: &str, value: &str, selected: bool) -> (egui::Response, bool) {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if selected {
@@ -786,7 +809,7 @@ fn param_field(ui: &mut egui::Ui, doc: &mut Doc, der: &Derived, key: &str) {
     param_field_in(ui, data(), doc, der, key);
 }
 
-fn param_field_in(ui: &mut egui::Ui, ds: &procedura_kit::data::Dataset, doc: &mut Doc, der: &Derived, key: &str) {
+pub(crate) fn param_field_in(ui: &mut egui::Ui, ds: &procedura_kit::data::Dataset, doc: &mut Doc, der: &Derived, key: &str) {
     let Some(def) = ds.param(key) else { return };
     let modified = doc.overrides.contains_key(key);
     let cur = doc.overrides.get(key).or(der.resolved.get(key)).cloned().unwrap_or(Value::Null);
@@ -833,11 +856,11 @@ fn readonly(ui: &mut egui::Ui, label: &str, value: String) {
     });
 }
 
-fn body<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+pub(crate) fn body<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     Frame::new().inner_margin(Margin { left: 10, right: 12, top: 8, bottom: 10 }).show(ui, add).inner
 }
 
-fn footer_link(ui: &mut egui::Ui, text: &str, enabled: bool) -> bool {
+pub(crate) fn footer_link(ui: &mut egui::Ui, text: &str, enabled: bool) -> bool {
     hline(ui);
     let mut clicked = false;
     Frame::new().inner_margin(Margin { left: 12, right: 12, top: 8, bottom: 10 }).show(ui, |ui| {
@@ -912,6 +935,8 @@ fn editor_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
         }
     } else if mode == Mode::Vehicle {
         vehicle_panels(ctx, docs, der, view, left, insp, insp_w, &proj, cmds);
+    } else if mode == Mode::Human {
+        crate::human::panels(ctx, docs, der, view, left, insp, insp_w, cmds);
     } else {
         street_panels(ctx, docs, der, view, left, insp, insp_w, cmds);
         if mode == Mode::Street && view.cornice_show && view.sview != SView::Plan {
@@ -1024,7 +1049,7 @@ fn vehicle_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mu
     }
 }
 
-fn dim_label(p: &egui::Painter, at: Pos2, text: &str, border: Color32) {
+pub(crate) fn dim_label(p: &egui::Painter, at: Pos2, text: &str, border: Color32) {
     let g = p.layout_no_wrap(text.into(), mono(12.5), Color32::WHITE);
     let r = egui::Rect::from_center_size(at - Vec2::new(0.0, 12.0), g.size() + Vec2::new(16.0, 8.0));
     p.rect(r, 4, Color32::from_rgb(0x18, 0x18, 0x18), Stroke::new(1.0, border), egui::StrokeKind::Inside);
@@ -1405,7 +1430,7 @@ fn viewport_toolbar(ctx: &egui::Context, docs: &mut Docs, view: &mut View, cmds:
                 if icon_btn(ui, ic::CORNERS_OUT, false, "Kadruj (F)").clicked() {
                     cmds.push(Cmd::Frame);
                 }
-                if mode == Mode::Vehicle {
+                if matches!(mode, Mode::Vehicle | Mode::Human) {
                     for (pr, label) in [(Preset::Side, "Bok"), (Preset::Front, "Przód"), (Preset::Top, "Góra"), (Preset::Iso, "Perspektywa")] {
                         let b = egui::Button::new(RichText::new(label).size(14.0).color(DIM)).fill(Color32::TRANSPARENT).stroke(Stroke::NONE).min_size(Vec2::new(0.0, 30.0));
                         if ui.add(b).clicked() {
@@ -1414,7 +1439,7 @@ fn viewport_toolbar(ctx: &egui::Context, docs: &mut Docs, view: &mut View, cmds:
                     }
                     sep(ui);
                 }
-                if !matches!(mode, Mode::Street | Mode::Vehicle) {
+                if !matches!(mode, Mode::Street | Mode::Vehicle | Mode::Human) {
                     for (p, icon, tip) in [(Preset::Front, ic::SQUARE, "Widok z frontu"), (Preset::Iso, ic::CUBE, "Izometria")] {
                         if icon_btn(ui, icon, false, tip).clicked() {
                             cmds.push(Cmd::Preset(p));
@@ -1471,6 +1496,12 @@ fn palette(ctx: &egui::Context, docs: &Docs, view: &mut View, cmds: &mut Vec<Cmd
         all.push((format!("Nowy pojazd: {} ({}–{})", a.name, a.years[0], a.years[1]), Cmd::NewVehicle(a.id.clone())));
         if doc.mode == Mode::Vehicle {
             all.push((format!("Typ pojazdu: {}", a.name), Cmd::Archetype(a.id.clone())));
+        }
+    }
+    for a in &tlum_core::data().archetypes {
+        all.push((format!("Nowy człowiek: {}", a.name), Cmd::NewHuman(a.id.clone())));
+        if doc.mode == Mode::Human {
+            all.push((format!("Typ postaci: {}", a.name), Cmd::Archetype(a.id.clone())));
         }
     }
     if doc.mode.is_street() {

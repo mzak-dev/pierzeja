@@ -5,6 +5,7 @@
 //! Ctrl+K — szukaj poleceń.
 
 mod editors;
+mod human;
 mod screens;
 mod theme;
 mod ui;
@@ -50,11 +51,13 @@ fn main() {
 const SKY: Color = Color::srgb(0.80, 0.85, 0.88);
 const NIGHT_SKY: Color = Color::srgb(0.04, 0.06, 0.11);
 
-/// `PIERZEJA_MODE=start|mcp|budynek|wielokat|ulica|osiedle|skrzyzowanie|rondo` — ekran startowy (zrzuty, testy).
+/// `PIERZEJA_MODE=start|mcp|budynek|wielokat|pojazd|czlowiek|ulica|osiedle|skrzyzowanie|rondo` — ekran startowy (zrzuty, testy);
+/// opcjonalnie `PIERZEJA_ARCHETYPE=id` (budynek/pojazd/człowiek), `PIERZEJA_POSE=stand|walk|sit|drive|rest`.
 fn initial_state() -> (Docs, View) {
     let mut view = View::default();
     let mut doc = Doc::building("familok");
     let m = std::env::var("PIERZEJA_MODE").unwrap_or_default();
+    let arch = |default: &str| std::env::var("PIERZEJA_ARCHETYPE").unwrap_or_else(|_| default.into());
     match m.as_str() {
         "" | "loading" => view.screen = Screen::Loading,
         "start" => view.screen = Screen::Start,
@@ -63,10 +66,17 @@ fn initial_state() -> (Docs, View) {
             doc.use_poly = true;
             view.item = Some(Item::Dzialka);
         }
+        "budynek" => doc = Doc::building(&arch("familok")),
         "pojazd" => {
-            doc = Doc::vehicle(&tabor_core::data().default_archetype);
+            doc = Doc::vehicle(&arch(&tabor_core::data().default_archetype));
             view.ribbon = RibbonTab::Pojazd;
             view.item = Some(Item::Veh("bryla"));
+        }
+        "czlowiek" => {
+            doc = Doc::human(&arch(&tlum_core::data().default_archetype));
+            doc.pose = std::env::var("PIERZEJA_POSE").unwrap_or_else(|_| "stand".into());
+            view.ribbon = RibbonTab::Czlowiek;
+            view.item = Some(Item::Hum("cialo"));
         }
         "ulica" | "osiedle" | "skrzyzowanie" | "rondo" => {
             doc = Doc::street(match m.as_str() {
@@ -124,6 +134,8 @@ pub enum Mode {
     Roundabout,
     /// Pojazd z Tabora.
     Vehicle,
+    /// Człowiek z Tłumu.
+    Human,
 }
 
 /// Tryb edytora (ProceduraSuite): zestaw dokumentów jednego generatora.
@@ -154,11 +166,15 @@ impl Fam {
 
 impl Mode {
     pub fn fam(self) -> Fam {
-        if self == Mode::Vehicle { Fam::Pojazdy } else { Fam::Budynki }
+        match self {
+            Mode::Vehicle => Fam::Pojazdy,
+            Mode::Human => Fam::Ludzie,
+            _ => Fam::Budynki,
+        }
     }
     /// Pierzeja i sceny (nie pojedynczy budynek ani pojazd).
     pub fn is_street(self) -> bool {
-        !matches!(self, Mode::Building | Mode::Vehicle)
+        !matches!(self, Mode::Building | Mode::Vehicle | Mode::Human)
     }
     pub fn scene(self) -> Option<SceneKind> {
         match self {
@@ -176,6 +192,7 @@ impl Mode {
             Mode::Crossroads => "Skrzyżowanie",
             Mode::Roundabout => "Rondo",
             Mode::Vehicle => "Pojazd",
+            Mode::Human => "Człowiek",
         }
     }
 }
@@ -253,6 +270,9 @@ pub struct Doc {
     pub rows: u32,
     pub arm: f64,
     pub scene_seed: u32,
+    // człowiek (Tłum): poza (`stand|walk|sit|drive|rest`) i faza kroku 0–1
+    pub pose: String,
+    pub phase: f64,
 }
 
 impl Doc {
@@ -279,6 +299,8 @@ impl Doc {
             rows: 3,
             arm: 90.0,
             scene_seed: 11,
+            pose: "stand".into(),
+            phase: 0.0,
         }
     }
     pub fn street(mode: Mode) -> Doc {
@@ -429,6 +451,7 @@ pub enum Screen {
 pub enum RibbonTab {
     Plik,
     Pojazd,
+    Czlowiek,
     Budynek,
     Ulica,
     Render,
@@ -458,6 +481,8 @@ pub enum Item {
     Scena,
     /// Wektor Tabora: `typ` albo id grupy (`bryla`, `sylwetka`, …).
     Veh(&'static str),
+    /// Wektor Tłumu: `typ` albo id grupy (`cialo`, `glowa`, …).
+    Hum(&'static str),
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -744,6 +769,14 @@ fn regenerate(
             st.body_type, st.length, st.width, st.height, st.wheelbase, st.seats
         );
         m.bounds()
+    } else if doc.mode == Mode::Human {
+        let spec = doc.human_spec();
+        let m = tlum_core::generate(&spec);
+        der.tris = spawn_mesh(b, c, m_, &m.body, Vec3::ZERO, night);
+        der.resolved = m.params.clone();
+        der.weights = tlum_core::resolve(&spec).weights["cialo"].iter().map(|(k, v)| (k.clone(), *v)).collect();
+        der.info = human::info(&m);
+        m.bounds()
     } else if doc.mode == Mode::Street {
         let street = pc::generate_street(&doc.street_spec());
         let mut tris = 0;
@@ -843,9 +876,10 @@ fn orbit(
                 orbit.dist = ((max.x - min.x - 40.0) / (0.75 * aspect)).max(size.y * 2.2) * 1.75;
                 orbit.target = Vec3::new((min.x + max.x) / 2.0, orbit.dist * 0.75 * 0.2, 0.0);
             }
-            Mode::Building | Mode::Vehicle => {
+            Mode::Building | Mode::Vehicle | Mode::Human => {
                 (orbit.yaw, orbit.pitch) = (34f32.to_radians(), 17f32.to_radians());
-                orbit.dist *= 0.92;
+                // człowiek: wysoka, wąska bryła — dalej i wyżej, żeby zmieściły się wymiary i znaczniki
+                orbit.dist *= if mode == Mode::Human { 1.2 } else { 0.92 };
             }
         }
     }
@@ -908,6 +942,8 @@ pub fn export_glb(doc: &Doc) -> Result<PathBuf, String> {
         pc::to_glb(&nodes)
     } else if doc.mode == Mode::Vehicle {
         tabor_core::to_glb(&tabor_core::generate(&doc.vehicle_spec()))
+    } else if doc.mode == Mode::Human {
+        tlum_core::to_glb(&tlum_core::generate(&doc.human_spec()))
     } else if doc.mode == Mode::Street {
         let street = pc::generate_street(&doc.street_spec());
         let mut nodes: Vec<pc::ExportNode> = street
