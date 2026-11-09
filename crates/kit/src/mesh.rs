@@ -90,6 +90,8 @@ pub enum MatKey {
     /// Tablica rejestracyjna: tło i niebieski pasek UE.
     Plate,
     PlateBand,
+    /// Lampy błyskowe belek świetlnych (emisyjne, nie szkło).
+    Beacon,
     // Ludzie (Tłum): sloty zgodne z CharacterLibrary (Skin/Top/Bottom/Shoes) + dodatki.
     Skin,
     Top,
@@ -137,6 +139,7 @@ impl MatKey {
             MatKey::Indicator => "indicator",
             MatKey::Plate => "plate",
             MatKey::PlateBand => "plateBand",
+            MatKey::Beacon => "beacon",
             MatKey::Skin => "Skin",
             MatKey::Top => "Top",
             MatKey::Bottom => "Bottom",

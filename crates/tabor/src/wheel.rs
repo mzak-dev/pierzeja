@@ -52,10 +52,7 @@ pub fn build(p: &P, materials: Vec<MaterialSpec>) -> MeshData {
         }
         let hub: Vec<V3> = (0..6).map(|k| [sx + s * 0.006, rr * 0.2 * (k as f64 * PI / 3.0).cos(), rr * 0.2 * (k as f64 * PI / 3.0).sin()]).collect();
         mb.poly(MatKey::Rim, &hub, Some([s, 0.0, 0.0]));
-        for i in 0..4 {
-            let a = (i as f64 + 0.5) * PI / 2.0;
-            nut(&mut mb, s, sx, rr * 0.4 * a.cos(), rr * 0.4 * a.sin(), rr * 0.045);
-        }
+        // osobowe: bez nakrętek (z kamery gry niewidoczne, koło liczy się 4 razy)
     }
     mb.build(materials)
 }

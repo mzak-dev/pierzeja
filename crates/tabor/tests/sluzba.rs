@@ -53,7 +53,7 @@ fn every_service_is_present_on_car_and_van() {
             // oklejenie: pas (Accent) i belka z lampami; bryła ta sama co cywilna
             assert!(paint_tris(&m, MatKey::Accent) >= 2, "{b}/{s}: brak pasa");
             let (bar, off) = m.lightbar.as_ref().unwrap_or_else(|| panic!("{b}/{s}: brak belki"));
-            assert!(bar.triangles() >= 12 && bar.material(MatKey::GlassLit).unwrap().emissive.is_some());
+            assert!(bar.triangles() >= 12 && bar.material(MatKey::Beacon).unwrap().emissive.is_some());
             assert!(off[1] > 1.2, "{b}/{s}: belka na dachu, y={}", off[1]);
             assert_eq!(m.stats.wheelbase, civ.stats.wheelbase);
             assert!((m.body.bounds.max[1] - civ.body.bounds.max[1]).abs() < 0.04, "{b}/{s}: bryła nie rośnie");
@@ -75,9 +75,9 @@ fn colours_follow_regulations() {
     let m = make("sedan_liftback", "straz", json!({}));
     assert!(rgb(&m.body.material(MatKey::Bumper).unwrap().color).iter().all(|&c| c > 190), "zderzaki PSP białe");
     let t = make("kombi", "techniczne", json!({}));
-    assert_eq!(t.lightbar.unwrap().0.material(MatKey::GlassLit).unwrap().emissive, Some("#ffc94a"), "żółte lampy § 38");
+    assert_eq!(t.lightbar.unwrap().0.material(MatKey::Beacon).unwrap().emissive, Some("#ffc94a"), "żółte lampy § 38");
     let p = make("kombi", "policja", json!({}));
-    assert_eq!(p.lightbar.unwrap().0.material(MatKey::GlassLit).unwrap().emissive, Some("#5a8cff"));
+    assert_eq!(p.lightbar.unwrap().0.material(MatKey::Beacon).unwrap().emissive, Some("#5a8cff"));
 }
 
 #[test]

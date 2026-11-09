@@ -329,7 +329,8 @@ fn frame(mb: &mut MeshBuilder, d: &D) {
 fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> (usize, crate::sluzba::HeavyCab) {
     let hwc = d.w / 2.0 - 0.03;
     let (zc, zb, top, ycb) = (d.zc, d.zb, d.cab_top, d.ycb);
-    let ywsb = ycb + 0.38 * (top - ycb);
+    // dolna krawędź szyby nad kołem przednim (TGL/Eurocargo ok. 1,4 m, TGM 4x4 ok. 1,6 m)
+    let ywsb = (ycb + 0.38 * (top - ycb)).max(2.0 * d.r + 0.6);
     let ybel = ywsb + 0.1;
     // szyba (MAN TGM, Scania P): ok. 1,1 m wysokości, kończy się ok. 0,3 m pod dachem
     let y_wt = (top - 0.32).max(ywsb + 0.6);

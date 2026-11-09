@@ -1022,7 +1022,7 @@
         "paintColor": "#17191b",
         "roofColor": "#17191b",
         "bumperColor": "#17191b",
-        "claddingBlack": 0.9,
+        "claddingBlack": 0.1,
         "weathering": 0.2
       }
     },
@@ -1081,7 +1081,7 @@
         "paintColor": "#bfc3c7",
         "roofColor": "#bfc3c7",
         "bumperColor": "#bfc3c7",
-        "claddingBlack": 0.9
+        "claddingBlack": 0.1
       }
     },
     {

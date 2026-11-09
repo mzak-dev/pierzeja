@@ -174,9 +174,10 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool, seed: u32) 
         let sl = yb.max(d.arch(z, d.zar));
         [[0.0, yb, z], [hx - 0.06, sl, z], [hx, sl + 0.06, z], [hx, ymid.max(sl + 0.1), z], [hx, sp.ytop - 0.05, z], [hx - 0.05, sp.ytop, z], [0.0, sp.ytop, z]]
     };
-    let mut zs = vec![sp.z_r, z_a];
+    // powłoka zamknięta aż do przodu zabudowy; przedział przelotowy to skrytka z żaluzjami po obu stronach
+    let mut zs = vec![sp.z_r, sp.z_f];
     let kick = d.kick_z(base);
-    zs.extend([kick, d.zar - d.arch_a, d.zar - d.arch_at, d.zar + d.arch_at, d.zar + d.arch_a].into_iter().filter(|&z| z > sp.z_r + 0.05 && z < z_a - 0.05));
+    zs.extend([kick, d.zar - d.arch_a, d.zar - d.arch_at, d.zar + d.arch_at, d.zar + d.arch_a].into_iter().filter(|&z| z > sp.z_r + 0.05 && z < sp.z_f - 0.05));
     zs.sort_by(|a, b| a.total_cmp(b));
     zs.dedup_by(|a, b| (*a - *b).abs() < 0.08);
     let rings: Vec<Vec<V3>> = zs.iter().map(|&z| full_ring(half(z))).collect();
@@ -210,10 +211,10 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool, seed: u32) 
             }
         }
     }
-    // przedział przelotowy: podłoga i most dachowy, bez ścian
+    // przedział przelotowy: jedna wysoka skrytka dostępna z obu stron
     if pass > 0.0 {
-        mb.bx(MatKey::Metal, [-hx, base, z_a], [hx, base + 0.06, sp.z_f]);
-        mb.bx(MatKey::Metal, [-hx, sp.ytop - 0.06, z_a], [hx, sp.ytop, sp.z_f]);
+        let yl0 = (base + 0.12).max(d.dep(z_a) + 0.06);
+        shutter(mb, hx, z_a + 0.03, sp.z_f - 0.03, yl0, sp.ytop - 0.14);
     }
 
     // tył: zderzak z lampami, skrytka tylna; boczne obrysówki nad dolną krawędzią

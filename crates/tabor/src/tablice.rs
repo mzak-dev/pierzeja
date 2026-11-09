@@ -32,11 +32,13 @@ pub(crate) fn plate(mb: &mut MeshBuilder, seed: u32, salt: f64, c: V3, nz: f64) 
         mb.quad(m, at(s0, y0, dz), at(s1, y0, dz), at(s1, y1, dz), at(s0, y1, dz), Some(n));
     };
     let (hw, hh) = (PLATE_W / 2.0, PLATE_H / 2.0);
+    // ciemna ramka (uchwyt tablicy), żeby tablica nie ginęła na białym zderzaku
+    rect(mb, MatKey::Plastic, -hw - 0.012, hw + 0.012, -hh - 0.012, hh + 0.012, 0.0005);
     rect(mb, MatKey::Plate, -hw, hw, -hh, hh, 0.001);
     rect(mb, MatKey::PlateBand, -hw + 0.006, -hw + 0.046, -hh + 0.006, hh - 0.006, 0.002);
     // znaki: 0,042 × 0,075 m co 0,052 m, odstęp po wyróżniku
     let letters = 2 + usize::from(hash01_seeded(seed, &[salt, 1.0]) < 0.45);
-    let mut s = -hw + 0.062;
+    let mut s = -hw + 0.094;
     for i in 0..7 {
         if i == letters {
             s += 0.022;

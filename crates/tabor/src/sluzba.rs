@@ -267,9 +267,9 @@ fn band_range(w: &Wall, z0: f64, z1: f64, y1: f64) -> Option<(f64, f64)> {
     best.filter(|b| b.1 > b.0).map(|b| (z(b.0), z(b.1)))
 }
 
-/// Pas na ścianie boczej (obie strony): stała wysokość na odcinku z `band_range`, dół przycięty do talii.
+/// Pas na ścianie boczej (obie strony) na odcinku `z0..z1` (z `band_range` całego zestawu pasów,
+/// żeby wszystkie kończyły się równo), stała wysokość, dół przycięty do talii.
 fn band(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1): (f64, f64), e: f64) {
-    let Some((z0, z1)) = band_range(w, z0, z1, y1) else { return };
     let pts: Vec<(f64, f64, f64, f64)> = w
         .breaks(z0, z1)
         .into_iter()
@@ -407,8 +407,11 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
     };
     let mut y = ytop;
     let band_top = ytop;
+    let range = band_range(&w, span.0, span.1, ytop);
     for (t, m) in stack.drain(..) {
-        band(mb, &w, m, span, (y - t, y), e_band);
+        if let Some(r) = range {
+            band(mb, &w, m, r, (y - t, y), e_band);
+        }
         y -= t;
     }
     let band_bot = y;
@@ -567,6 +570,13 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
     }
     if s == Svc::Straz {
         let number = format!("{:03} L {:02}", 1 + (hash01_seeded(seed, &[21.0]) * 998.0) as u32, 1 + (hash01_seeded(seed, &[22.0]) * 98.0) as u32);
+        if g.van {
+            // van: numer także na ścianie ładowni nad pasem i na tylnych drzwiach
+            let cell = 0.025;
+            side_text(mb, &w, a, &number, g.z_dw - 1.9, ytop + 0.1, cell, e_txt);
+            let wid = text_cols(&number) as f64 * cell;
+            text(mb, a, &number, [wid / 2.0, ytop + 0.1, g.zr - 0.006], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], cell, false);
+        }
         let hroof = (g.half)(g.roof_r + 0.5 * (g.roof_f - g.roof_r))[5][0];
         let cell = (0.2f64 / 7.0).min(1.7 * hroof / text_cols(&number) as f64);
         let mut placed = false;
@@ -577,8 +587,9 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
                 placed = true;
             }
         }
-        if !placed && !chevron_on {
-            // brak miejsca na dachu: numer na tylnej ściance, 15 cm
+        let _ = placed;
+        if !chevron_on && !g.van {
+            // numer także na tylnej ściance (klapie), 15 cm
             let cell = (0.15f64 / 7.0).min((ry1 - ry0) / 7.0).min(1.5 * ht / text_cols(&number) as f64);
             let wid = text_cols(&number) as f64 * cell;
             text(mb, a, &number, [wid / 2.0, (ry0 + ry1) / 2.0 - 3.5 * cell, g.zr - 0.006], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], cell, false);
@@ -603,7 +614,7 @@ fn lightbar(s: Svc, n: usize, lx: f64, d: f64) -> MeshData {
         let wd = (pitch - 0.012).clamp(0.02, 0.12);
         for i in 0..k {
             let x = -lx / 2.0 + 0.03 + pitch * (i as f64 + 0.5);
-            mb.quad(MatKey::GlassLit, [x - wd / 2.0, 0.015, z], [x + wd / 2.0, 0.015, z], [x + wd / 2.0, hgt - 0.015, z], [x - wd / 2.0, hgt - 0.015, z], Some([0.0, 0.0, nz]));
+            mb.quad(MatKey::Beacon, [x - wd / 2.0, 0.015, z], [x + wd / 2.0, 0.015, z], [x + wd / 2.0, hgt - 0.015, z], [x - wd / 2.0, hgt - 0.015, z], Some([0.0, 0.0, nz]));
         }
     };
     face(&mut mb, front, d / 2.0 + eps, 1.0);
@@ -612,11 +623,11 @@ fn lightbar(s: Svc, n: usize, lx: f64, d: f64) -> MeshData {
         for side in [1.0, -1.0] {
             let x = side * (lx / 2.0 + eps);
             let wd = (d / 2.0 - 0.02).max(0.03);
-            mb.quad(MatKey::GlassLit, [x, 0.015, -wd / 2.0], [x, 0.015, wd / 2.0], [x, hgt - 0.015, wd / 2.0], [x, hgt - 0.015, -wd / 2.0], Some([side, 0.0, 0.0]));
+            mb.quad(MatKey::Beacon, [x, 0.015, -wd / 2.0], [x, 0.015, wd / 2.0], [x, hgt - 0.015, wd / 2.0], [x, hgt - 0.015, -wd / 2.0], Some([side, 0.0, 0.0]));
         }
     }
     let (col, em) = lamp(s);
-    mb.build(vec![mat(MatKey::Metal, "Obudowa belki", "#1a1c1e", 0.5, 0.4, None), mat(MatKey::GlassLit, "Lampy błyskowe", col, 0.2, 0.0, Some(em))])
+    mb.build(vec![mat(MatKey::Metal, "Obudowa belki", "#1a1c1e", 0.5, 0.4, None), mat(MatKey::Beacon, "Lampy błyskowe", col, 0.2, 0.0, Some(em))])
 }
 
 // ---------------------------------------------------------------- pojazdy ciężkie
@@ -657,7 +668,8 @@ pub(crate) fn apply_heavy(mb: &mut MeshBuilder, p: &P, seed: u32, c: &HeavyCab) 
         let number = format!("{:03} L {:02}", 1 + (hash01_seeded(seed, &[21.0]) * 998.0) as u32, 1 + (hash01_seeded(seed, &[22.0]) * 98.0) as u32);
         let cell = fit_cell(&number, 0.15, 0.9 * (c.door.1 - c.door.0));
         let len = text_cols(&number) as f64 * cell;
-        let (zc, y0, x) = ((c.door.0 + c.door.1) / 2.0, c.ybel - 0.12 - 7.0 * cell, c.hwc + 0.01);
+        // pod klamką (klamka ok. 0,2 m pod linią okien)
+        let (zc, y0, x) = ((c.door.0 + c.door.1) / 2.0, c.ybel - 0.3 - 7.0 * cell, c.hwc + 0.01);
         text(mb, a, &number, [x, y0, zc + len / 2.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], cell, false);
         text(mb, a, &number, [-x, y0, zc - len / 2.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], cell, false);
     }

@@ -108,7 +108,7 @@ pub fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let yh = (p.f("hoodHeight") * h).min(yb + 0.04).clamp(clr + 0.5, h - 0.2);
     let c = (p.f("chamfer") + 0.06 * round).min(0.14);
     // osobówka: maska prawie płaska, wysokie czoło (współczesne auta); van: maska opada do grilla
-    let ynose = (yh - if kind == Kind::Van { 0.10 + 0.06 * round } else { 0.05 + 0.03 * round }).max(clr + 0.45);
+    let ynose = (yh - if kind == Kind::Van { 0.07 } else { 0.05 + 0.03 * round }).max(clr + 0.45);
     let sb = clr + 0.07; // dolna krawędź boku poza nadkolami
     let mid_base = sb + 0.20; // talia (górna krawędź okładziny), w nadkolach wyżej
     let tumble = p.f("tumblehome");
@@ -290,9 +290,12 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
 
     // zderzaki jako wysunięte bryły (kolor `bumperColor`)
     let bh = if van { 0.32 } else { 0.24 };
-    // zderzaki schodzą do spodu nadwozia (bez paska lakieru pod spodem)
-    mb.bx(MatKey::Bumper, [-hn * 0.985, clr + 0.01, zf - 0.06], [hn * 0.985, clr + 0.08 + bh, zf + 0.04]);
-    mb.bx(MatKey::Bumper, [-ht * 0.985, clr + 0.01, zr - 0.04], [ht * 0.985, clr + 0.08 + bh, zr + 0.06]);
+    // zderzaki schodzą do spodu nadwozia (bez paska lakieru pod spodem); w planie ścięte narożniki,
+    // nie szersze niż nadwozie przy progu
+    let (ya, yb2) = (clr + 0.01, clr + 0.08 + bh);
+    let (wf, wr) = (hn * if van { 0.985 } else { 0.95 }, ht * if van { 0.985 } else { 0.95 });
+    slab(mb, MatKey::Bumper, &[[-wf, zf - 0.06], [wf, zf - 0.06], [wf, zf], [wf - 0.1, zf + 0.04], [-wf + 0.1, zf + 0.04], [-wf, zf]], ya, yb2);
+    slab(mb, MatKey::Bumper, &[[-wr, zr], [-wr + 0.1, zr - 0.04], [wr - 0.1, zr - 0.04], [wr, zr], [wr, zr + 0.06], [-wr, zr + 0.06]], ya, yb2);
     // tablice UE na zderzakach (przód przed dolnym wlotem)
     plate(mb, seed, 7.0, [0.0, clr + 0.08 + bh / 2.0, zf + 0.044], 1.0);
     plate(mb, seed, 7.0, [0.0, clr + 0.08 + bh / 2.0, zr - 0.04], -1.0);
@@ -346,6 +349,9 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
     // tył: światła (w vanie pionowe pasy w narożach), pasek między nimi, szyba na pionowym tyle
     let zt = zr - 0.003;
     let (ly0, ly1, lx0, lx1) = if van { (clr + 0.45, clr + 1.05, 0.86 * ht, 0.985 * ht) } else { (ytail - 0.17, ytail - 0.035, 0.5 * ht, 0.97 * ht) };
+    // ciemna oprawa lamp tylnych (czytelne także na czerwonym lakierze)
+    let o = 0.015;
+    mirror(mb, MatKey::Plastic, &[[lx1 + o, ly0 - o, zt + 0.001], [lx0 - o, ly0 - o, zt + 0.001], [lx0 - o, ly1 + o, zt + 0.001], [lx1 + o, ly1 + o, zt + 0.001]], [0.0, 0.0, -1.0]);
     mirror(mb, MatKey::Taillight, &[[lx1, ly0, zt], [lx0, ly0, zt], [lx0, ly1, zt], [lx1, ly1, zt]], [0.0, 0.0, -1.0]);
     if !van {
         wrap(mb, MatKey::Taillight, (zr + 0.015, zr + 0.17), (zr + 0.015, zr + 0.17), (ly0 + 0.04, ly1));
@@ -425,6 +431,20 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
         mb.bx(MatKey::Plastic, [a.min(b), m[1] + lift, zm0], [a.max(b), m[1] + lift + hgt, zm1]);
         let xo = (m[0] + out + 0.001) * side;
         mb.quad(MatKey::Indicator, [xo, m[1] + lift + 0.01, zm0 + 0.01], [xo, m[1] + lift + 0.01, zm1 - 0.005], [xo, m[1] + lift + 0.035, zm1 - 0.005], [xo, m[1] + lift + 0.035, zm0 + 0.01], Some([side, 0.0, 0.0]));
+    }
+}
+
+/// Bryła pionowa: wypukły wielokąt w planie (x, z), od `y0` do `y1`.
+fn slab(mb: &mut MeshBuilder, mat: MatKey, pts: &[[f64; 2]], y0: f64, y1: f64) {
+    let at = |y: f64| -> Vec<V3> { pts.iter().map(|&[x, z]| [x, y, z]).collect() };
+    mb.poly(mat, &at(y1), Some([0.0, 1.0, 0.0])); // spód niewidoczny — pominięty
+    let _ = y0;
+    let n = pts.len();
+    let (cx, cz) = pts.iter().fold((0.0, 0.0), |a, p| (a.0 + p[0] / n as f64, a.1 + p[1] / n as f64));
+    for k in 0..n {
+        let ([xa, za], [xb, zb]) = (pts[k], pts[(k + 1) % n]);
+        let out = [(xa + xb) / 2.0 - cx, 0.0, (za + zb) / 2.0 - cz];
+        mb.quad(mat, [xa, y0, za], [xb, y0, zb], [xb, y1, zb], [xa, y1, za], Some(out));
     }
 }
 
