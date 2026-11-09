@@ -102,6 +102,21 @@ z boku ciała, twarze sztuczne.
 | Palce (rig Unity Humanoid, dopisane do rr_human) | — | ⏳ |
 | Kolor ubioru służbowego PSP | P2 | ❓ do sprawdzenia w Dz.U. 2021 poz. 1795 |
 
+## Runda 2 — pojazdy (2026-11-09)
+
+3 równoległych recenzentów (osobówki z wariantami służb, vany, ciężkie), arkusze przed/po. Wynik:
+**0 usterek P1** we wszystkich 19 modelach, werdykt „akceptowalny z uwagami”. Poprawione od razu (P2):
+
+- pasy oklejenia kończą się równo (jeden zakres dla całego zestawu pasów), van PSP ma numer operacyjny na ścianie ładowni i na tylnych drzwiach, osobówki PSP — numer na klapie;
+- ramka (uchwyt) tablicy — tablica nie ginie na białym zderzaku; zderzaki osobówek ze ściętymi narożnikami i nie szersze od nadwozia; cieńsza czarna okładzina w kombi i liftbacku; ciemna oprawa lamp tylnych;
+- lampy belek jako osobny materiał `Beacon` (emisyjny, nie szkło) — żółte nie wychodzą już brązowe;
+- przedział przelotowy zabudowy pożarniczej to zamknięta skrytka z żaluzjami (zamiast „wiszącego” mostu dachowego);
+- szyba lekkiej kabiny (PD) zaczyna się nad kołem (ok. 1,4 m), numer na drzwiach kabiny PSP pod klamką, wyższy nos vana.
+
+Zostały P2–P3 do kolejnych issue: nos vana bliżej Sprintera W907, okno w tylnych drzwiach furgonu Policji,
+STRAŻ POŻARNA na vanie (do sprawdzenia w zarządzeniu KG PSP), żuraw HDS bez podpór i haka, lampy obrysowe
+na dachu kabiny, trzecie okno kabiny brygadowej wygląda jak drzwi, numer na dachu SUV-a PSP czytany od przodu.
+
 ## Do decyzji użytkownika
 
 1. Budżet aut służb: 1800 trójkątów zamiast 1500 (napisy z przodu, z boków i z tyłu).
