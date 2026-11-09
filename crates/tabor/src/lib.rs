@@ -84,7 +84,7 @@ pub struct VehicleStats {
     pub track: f64,
     pub wheel_radius: f64,
     pub seats: usize,
-    /// Stacje lofta nadwozia (8–12).
+    /// Stacje lofta nadwozia (8–24).
     pub stations: usize,
 }
 

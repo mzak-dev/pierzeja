@@ -1,11 +1,12 @@
 //! Nadwozie osobówek i vana: reguła „ground” (osie) → zwisy → loft ze stacji wzdłuż Z.
-//! Każda stacja to pierścień z półprzekroju 7 wierzchołków (lustro po X → 12). Profil boczny
-//! (maska, szyba, dach, tył), nadkola i linia okien to funkcje z, próbkowane w stacjach.
+//! Każda stacja to półprzekrój (7 wierzchołków burty i dachu + 2 wnęki koła); loft buduje lewą
+//! połowę, prawa jest jej odbiciem trójkąt po trójkącie, więc nadwozie jest dokładnie lustrzane.
+//! Profil boczny (maska, szyba, dach, tył), nadkola i linia okien to funkcje z, próbkowane w stacjach.
 
 use crate::sluzba::{self, Hull};
 use crate::tablice::plate;
 use crate::{roll, P};
-use procedura_kit::mesh::{MatKey, MeshBuilder, MeshData, V3};
+use procedura_kit::mesh::{cross, len, sub, MatKey, MeshBuilder, MeshData, V3};
 
 pub struct Layout {
     pub wheelbase: f64,
@@ -92,8 +93,9 @@ pub fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let (hw, clr) = (w / 2.0 - 0.005, p.f("clearance")); // lusterka wystają poza `width`
     let (r, tw) = (p.f("wheelDiameter") / 2.0, p.f("tyreWidth"));
     let ra = r + p.f("wheelArchGap");
-    let (a, at) = (ra * 1.12, ra * 0.55); // pół-szerokość nadkola u podstawy i u góry (trapez)
-    let archtop = r + ra;
+    // nadkole: pół-ośmiokąt opisany na łuku o promieniu `ra`; pół-szerokości u podstawy, w połowie i u góry
+    let (a, am, at) = (ra * 1.12, ra * 0.9, ra * 0.55);
+    let (archtop, archmid) = (r + ra, r + 0.44 * ra);
 
     // reguła „ground”: osie wyznaczają wszystko; zwisy skalowane tak, by długość = `length`
     let (fo, ro) = (p.f("frontOverhang"), p.f("rearOverhang"));
@@ -107,8 +109,9 @@ pub fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let yb = (p.f("beltline") * h).max(archtop + 0.12).min(h - 0.3);
     let yh = (p.f("hoodHeight") * h).min(yb + 0.04).clamp(clr + 0.5, h - 0.2);
     let c = (p.f("chamfer") + 0.06 * round).min(0.14);
-    // osobówka: maska prawie płaska, wysokie czoło (współczesne auta); van: maska opada do grilla
-    let ynose = (yh - if kind == Kind::Van { 0.07 } else { 0.05 + 0.03 * round }).max(clr + 0.45);
+    // osobówka: maska prawie płaska, wysokie czoło (współczesne auta); van: krótka maska stromo
+    // opada do wysokiego grilla (Sprinter: ok. 1,35 m przy szybie, 1,05 m nad grillem)
+    let ynose = (yh - if kind == Kind::Van { 0.22 } else { 0.05 + 0.03 * round }).max(clr + 0.45);
     let sb = clr + 0.07; // dolna krawędź boku poza nadkolami
     let mid_base = sb + 0.20; // talia (górna krawędź okładziny), w nadkolach wyżej
     let tumble = p.f("tumblehome");
@@ -118,7 +121,8 @@ pub fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let van = kind == Kind::Van;
     let cowl = if van { zaf - 0.08 } else { zaf - a }.min(zf - 0.45);
     let ws_tan = p.f("windshieldAngle").to_radians().tan();
-    let y_wt = if van { h - 0.3 } else { h };
+    // van: szyba ma ok. 0,8 m wysokości; w wysokim dachu (H2/H3) nad nią jest czapa w kolorze nadwozia
+    let y_wt = if van { (yh + 0.8).min(h - 0.3) } else { h };
     let z_wt = cowl - (y_wt - yh) / ws_tan;
     let roof_f = if van { z_wt - 0.35 } else { z_wt };
     let (deck, mut ytail) = match kind {
@@ -159,67 +163,94 @@ pub fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let sill_at = |z: f64| {
         let arch = |za: f64| {
             let d = (z - za).abs();
-            if d <= at { archtop } else if d < a { lerp(archtop, sb, (d - at) / (a - at)) } else { sb }
+            if d <= at {
+                archtop
+            } else if d < am {
+                lerp(archtop, archmid, (d - at) / (am - at))
+            } else if d < a {
+                lerp(archmid.max(sb), sb, (d - am) / (a - am))
+            } else {
+                sb
+            }
         };
         arch(zaf).max(arch(zar))
     };
-    // zwężenie planu przy czole i tyle (roundness)
-    let (nfac, tfac) = (1.0 - 0.10 * round - 0.02, 1.0 - 0.08 * round - 0.02);
+    // plan: pełna szerokość między nadkolami, lekkie zwężenie do 13 cm przed końcem, dalej ścięty
+    // narożnik (im większe `roundness`, tym mocniej) — z góry auto nie jest prostokątem
+    // van ma tępy, szeroki przód (zwężenie 6%), osobówka wyraźnie ścięte narożniki
+    let (nmid, nfac) = if van { (0.985, 0.94) } else { (0.96 - 0.05 * round, 0.88 - 0.12 * round) };
+    // van: tylne drzwi na pełną szerokość, więc tył prawie prosty
+    let (tmid, tfac) = if van { (0.99, 0.97) } else { (0.97 - 0.04 * round, 0.91 - 0.10 * round) };
+    let zrn = (zr + 0.13).min(zar - a - 0.01);
+    let plan_f = [(zaf + a, 1.0), (zn.max(zaf + a + 0.01), nmid), (zf, nfac)];
+    let plan_r = [(zr, tfac), (zrn, tmid), (zar - a, 1.0)];
     let taper = |z: f64| {
         if z > zaf + a {
-            lerp(1.0, nfac, ((z - zaf - a) / (zf - zaf - a)).clamp(0.0, 1.0))
+            pl(&plan_f, z)
         } else if z < zar - a {
-            lerp(1.0, tfac, ((zar - a - z) / (zar - a - zr)).clamp(0.0, 1.0))
+            pl(&plan_r, z)
         } else {
             1.0
         }
     };
+    // szyby boczne: z przodu od 30% długości słupka A (niżej blacha), z tyłu do końca dachu
+    // (hatchback, kombi, SUV: słupek D lakierowany) albo 40% w głąb spadku (sedan, liftback: słupek C)
+    let z_sa = cowl - 0.3 * (cowl - z_wt);
+    let z_sg = if matches!(kind, Kind::Liftback | Kind::Sedan) { roof_r - 0.4 * (roof_r - zg) } else { roof_r };
 
     // półprzekrój w z: dno, próg, talia, linia okien, róg szyby, krawędź dachu, oś dachu
     let half = |z: f64| -> Half {
         let tz = t_at(z);
         let hz = hw * taper(z);
         let g = ((tz - yb) / (h - yb)).clamp(0.0, 1.0);
-        let hr = hz * (1.0 - tumble * g);
+        // bok najszerszy w talii, pochylony do linii okien (osobówka 4%, van 1,5%), wyżej tumblehome
+        let hb = hz * if kind == Kind::Van { 0.985 } else { 0.96 };
+        let hr = hb * (1.0 - tumble * g);
         let cc = c.min(0.3 * hr);
         let y4 = win_top(tz, cc);
         let bel = yb.min(y4 - 0.03);
         let sill = sill_at(z);
         let mid = mid_base.max(sill + 0.07).min(bel - 0.04);
         let sill = sill.min(mid - 0.02);
-        // próg schowany pod bok (osobówki mocniej), bok pionowy od talii do linii okien
+        // próg schowany pod bok (osobówki mocniej)
         let tuck = if kind == Kind::Van { 0.96 } else { 0.93 };
-        [[0.0, clr, z], [hz * tuck, sill, z], [hz, mid, z], [hz, bel, z], [hr, y4, z], [hr - cc, tz, z], [0.0, tz, z]]
+        [[0.0, clr, z], [hz * tuck, sill, z], [hz, mid, z], [hb, bel, z], [hr, y4, z], [hr - cc, tz, z], [0.0, tz, z]]
     };
-    let full = |z: f64| -> Vec<V3> {
+    // przekrój lofta: płaskie dno do wewnętrznej ściany wnęki koła, strop wnęki, dalej półprzekrój
+    let xi = (track / 2.0 - tw / 2.0 - 0.03).min(0.7 * hw);
+    let sect = |z: f64| -> [V3; 9] {
         let v = half(z);
-        let mut ring = v.to_vec();
-        ring.extend((1..=5).rev().map(|i| [-v[i][0], v[i][1], v[i][2]]));
-        ring
+        let yw = if v[1][1] > sb + 1e-6 { v[1][1] } else { clr };
+        [v[0], [xi, clr, z], [xi, yw, z], v[1], v[2], v[3], v[4], v[5], v[6]]
     };
 
-    // stacje: (z, priorytet przy scalaniu); max 12, bliższe niż 12 cm łączą się
-    let mut st: Vec<(f64, u8)> = vec![(zr, 3), (zf, 3), (zn, 2), (cowl, 2), (roof_f, 2), (z_peak, 2), (roof_r, 2)];
+    // stacje: (z, priorytet): 4 = końce, 3 = nadkola (nie łączą się ze sobą), 2 = profil.
+    // Stacja profilu bliżej niż 12 cm od sąsiada wpada w niego (wygrywa wyższy priorytet).
+    let mut st: Vec<(f64, u8)> = vec![(zr, 4), (zf, 4), (zn, 2), (cowl, 2), (roof_f, 2), (z_peak, 2), (roof_r, 2)];
+    st.push((zrn, 2));
     if van {
         st.extend([(z_dw, 2), (z_wt, 2)]);
+    } else {
+        st.extend([(z_sa, 2), (z_sg, 2)]);
     }
     for za in [zaf, zar] {
-        st.extend([(za - a, 1), (za - at, 1), (za + at, 1), (za + a, 1)]);
-    }
-    st.retain(|&(z, pr)| pr == 3 || (z > zr + 0.02 && z < zf - 0.02));
-    st.sort_by(|x, y| x.0.total_cmp(&y.0));
-    loop {
-        let (i, gap) = (0..st.len() - 1).map(|i| (i, st[i + 1].0 - st[i].0)).min_by(|x, y| x.1.total_cmp(&y.1)).unwrap();
-        if gap >= 0.12 && st.len() <= 12 {
-            break;
+        for d in [a, am, at] {
+            st.extend([(za - d, 3), (za + d, 3)]);
         }
+    }
+    st.retain(|&(z, pr)| pr == 4 || (z > zr + 0.02 && z < zf - 0.02));
+    st.sort_by(|x, y| x.0.total_cmp(&y.0));
+    while let Some(i) = (0..st.len() - 1)
+        .filter(|&i| st[i].1.min(st[i + 1].1) < 3 && st[i + 1].0 - st[i].0 < 0.12)
+        .min_by(|&i, &j| (st[i + 1].0 - st[i].0).total_cmp(&(st[j + 1].0 - st[j].0)))
+    {
         let (x, y) = (st[i], st[i + 1]);
         let z = if x.1 == y.1 { (x.0 + y.0) / 2.0 } else if x.1 > y.1 { x.0 } else { y.0 };
         st[i] = (z, x.1.max(y.1));
         st.remove(i + 1);
     }
     let zs: Vec<f64> = st.iter().map(|s| s.0).collect();
-    let rings: Vec<Vec<V3>> = zs.iter().map(|&z| full(z)).collect();
+    let secs: Vec<[V3; 9]> = zs.iter().map(|&z| sect(z)).collect();
 
     // materiały pasów: strefa (maska/szyba/dach/tylna szyba/pokrywa) × segment półprzekroju
     let roof_mat = if roll(seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
@@ -231,23 +262,42 @@ pub fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
         z if z > zg => Zone::RearGlass,
         _ => Zone::Deck,
     };
-    mb.loft_with(&rings, Some(MatKey::Paint), |i, s| {
+    // loft lewej połowy; prawa to odbicie trójkąt po trójkącie, więc nadwozie jest dokładnie lustrzane
+    let flip = |v: V3| [-v[0], v[1], v[2]];
+    for (i, w) in secs.windows(2).enumerate() {
         let zm = (zs[i] + zs[i + 1]) / 2.0;
         let zn = zone(zm);
         let cabin = zn != Zone::Hood && zn != Zone::Deck;
-        let side_glass = matches!(zn, Zone::Wind | Zone::RearGlass) || (zn == Zone::Roof && zm > z_dw);
-        match if s <= 5 { s } else { 11 - s } {
-            0 => MatKey::Plastic,
-            1 if cladding => MatKey::Plastic,
-            3 if side_glass => MatKey::Glass,
-            4 if cabin => roof_mat,
-            5 if matches!(zn, Zone::Wind | Zone::RearGlass) => MatKey::Glass,
-            5 if zn == Zone::Roof => roof_mat,
-            _ => MatKey::Paint,
+        let side_glass = if van { zn == Zone::Wind || (zn == Zone::Roof && zm > z_dw) } else { cabin && zm < z_sa && zm > z_sg };
+        // segment 0 (dno) to jeden czworokąt niżej; 1–2 to wnęka koła, dalej jak w półprzekroju
+        for s in 1..8usize {
+            let mat = match s.saturating_sub(2) {
+                0 => MatKey::Plastic,
+                1 if cladding => MatKey::Plastic,
+                3 if side_glass => MatKey::Glass,
+                4 if cabin => roof_mat,
+                5 if matches!(zn, Zone::Wind | Zone::RearGlass) => MatKey::Glass,
+                5 if zn == Zone::Roof => roof_mat,
+                _ => MatKey::Paint,
+            };
+            let (a, b, c, d) = (w[0][s], w[0][s + 1], w[1][s + 1], w[1][s]);
+            for t in [[a, b, c], [a, c, d]] {
+                if len(cross(sub(t[1], t[0]), sub(t[2], t[0]))) > 1e-9 {
+                    mb.poly(mat, &t, None);
+                    mb.poly(mat, &[flip(t[0]), flip(t[2]), flip(t[1])], None);
+                }
+            }
         }
-    });
+    }
+    mb.quad(MatKey::Plastic, [-xi, clr, zr], [xi, clr, zr], [xi, clr, zf], [-xi, clr, zf], Some([0.0, -1.0, 0.0]));
+    // zaślepki czoła i tyłu (bez zdublowanego punktu wnęki)
+    for (sec, dir) in [(&secs[0], -1.0), (&secs[secs.len() - 1], 1.0)] {
+        let l: Vec<V3> = sec.iter().enumerate().filter(|(k, _)| *k != 2).map(|(_, v)| *v).collect();
+        let ring: Vec<V3> = l.iter().copied().chain(l[1..l.len() - 1].iter().rev().map(|&v| flip(v))).collect();
+        mb.poly(MatKey::Paint, &ring, Some([0.0, 0.0, dir]));
+    }
 
-    details(mb, p, seed, &Ctx { kind, hw, h, clr, ynose, yf, zn, ytail, yb, zf, zr, cowl, roof_r, zg, z_dw, run }, &half, &taper);
+    details(mb, p, seed, &Ctx { kind, hw, h, clr, ynose, yf, zn, ytail, yb, zf, zr, cowl, z_dw, run, z_sg, zar }, &half, &taper);
     let hull = Hull { zs: &zs, half: &half, top: &t_at, van: kind == Kind::Van, h, yb, clr, ytail, zf, zn, zr, zg, cowl, roof_f, roof_r, z_dw };
     let lightbar = sluzba::apply(mb, p, seed, &hull);
     Layout { wheelbase: wb, track, stations: zs.len(), body_width: 2.0 * hw, lightbar }
@@ -267,15 +317,16 @@ struct Ctx {
     zf: f64,
     zr: f64,
     cowl: f64,
-    roof_r: f64,
-    zg: f64,
     z_dw: f64,
     run: f64,
+    /// Tylna granica szyb bocznych i tylna oś (szew tylnych drzwi nad nadkolem).
+    z_sg: f64,
+    zar: f64,
 }
 
 /// Zderzaki, grill, światła, szwy drzwi, klamki, słupek B, lusterka; van: zabudowa i tylne drzwi.
 fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -> Half, taper: &dyn Fn(f64) -> f64) {
-    let Ctx { kind, hw, h, clr, ynose, yf, zn, ytail, yb, zf, zr, cowl, roof_r, zg, z_dw, run } = *c;
+    let Ctx { kind, hw, h, clr, ynose, yf, zn, ytail, yb, zf, zr, cowl, z_dw, run, z_sg, zar, .. } = *c;
     // z czoła na wysokości y: pionowo do `yf`, wyżej pochylone do krawędzi maski
     let face_z = |y: f64| if y <= yf { zf } else { zf - (zf - zn) * ((y - yf) / (ynose - yf)).min(1.0) };
     let on_face = |pts: &[[f64; 2]], dz: f64| -> Vec<V3> { pts.iter().map(|&[x, y]| [x, y, face_z(y) + dz]).collect() };
@@ -319,6 +370,7 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
     let (y0, y1) = if van { (ynose - 0.20, ynose - 0.045) } else { (ynose - 0.165, ynose - 0.05) };
     let ym = (y0 + y1) / 2.0;
     let zl = 0.003;
+    let hn = hw * taper(face_z(ym)); // szerokość nadwozia tam, gdzie leżą lampy (czoło zwęża się ku przodowi)
     // ciemna oprawa pod lampą, żeby biały reflektor nie ginął na białym lakierze
     let sx0 = gw + 0.03; // pasek zaczyna się za grillem
     let (hx0, hx1) = if p.s("lampStyle") == "strip" { (sx0, 0.96 * hn) } else { (0.39 * hn, 0.96 * hn) };
@@ -332,16 +384,15 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
     };
     mirror(mb, MatKey::Headlight, &on_face(&lamp, zl), fwd);
     // zawinięcie lampy na bok nadwozia (płaszczyzna boku w z: `hw * taper(z)`)
-    let side_x = |z: f64| hw * taper(z) + 0.003;
+    let side_x = |z: f64, y: f64| side_at(&half(z), y) + 0.003;
     let wrap = |mb: &mut MeshBuilder, mat: MatKey, (za, zb): (f64, f64), (zc, zd): (f64, f64), (ya, yb2): (f64, f64)| {
-        mirror(mb, mat, &[[side_x(za), ya, za], [side_x(zb), ya, zb], [side_x(zd), yb2, zd], [side_x(zc), yb2, zc]], [1.0, 0.0, 0.0]);
+        // dwa trójkąty, nie czworokąt: pochylony bok daje czworokąt niepłaski, a `poly` odwraca kolejność
+        // wierzchołków po prawej stronie, więc przekątna wypadałaby inaczej niż po lewej
+        let q = [[side_x(za, ya), ya, za], [side_x(zb, ya), ya, zb], [side_x(zd, yb2), yb2, zd], [side_x(zc, yb2), yb2, zc]];
+        mirror(mb, mat, &[q[0], q[1], q[2]], [1.0, 0.0, 0.0]);
+        mirror(mb, mat, &[q[0], q[2], q[3]], [1.0, 0.0, 0.0]);
     };
-    if !van {
-        // przednia krawędź zawinięcia idzie po pochylonym czole
-        let (ya, yb2) = if p.s("lampStyle") == "strip" { (ym - 0.03, ym + 0.025) } else { (ym - 0.02, y1) };
-        let (fa, fb) = (face_z(ya) - 0.01, face_z(yb2) - 0.01);
-        wrap(mb, MatKey::Headlight, (fa - 0.13, fa), (fb - 0.13, fb), (ya, yb2));
-    }
+    // przód: bez zawinięcia na błotnik — ścięty narożnik sam odsłania lampę z boku
     // kierunkowskaz przedni: zewnętrzny dolny róg oprawy (pasek LED: koniec paska)
     let (ix0, iy0, iy1) = if p.s("lampStyle") == "strip" { (0.84 * hn, ym - 0.04, ym + 0.025) } else { (0.78 * hn, y0 - 0.012, y0 + 0.035) };
     mirror(mb, MatKey::Indicator, &on_face(&[[ix0, iy0], [0.955 * hn, iy0], [0.955 * hn, iy1], [ix0, iy1]], 0.004), fwd);
@@ -376,7 +427,7 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
 
     // drzwi: szwy z A/B/C, klamki, słupek B na szkle; van: tylko kabina + drzwi przesuwne
     let za = cowl - 0.12;
-    let zc = if van { z_dw } else { (roof_r + 0.2).max(zg + 0.2) };
+    let zc = if van { z_dw } else { (zar + 0.15).max(z_sg) };
     let zb = (za + zc) / 2.0 + 0.05;
     let d = 0.007;
     let seam_top = if van { 4 } else { 3 };
@@ -385,8 +436,9 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
         strip(mb, MatKey::Plastic, half, (z - d, z + d), (2, seam_top), 0.003);
     }
     let handle = |mb: &mut MeshBuilder, z: f64, sides: &[f64]| {
-        let bel = half(z)[3];
-        strip_quad_on(mb, MatKey::Plastic, bel[0] + 0.005, bel[1] - 0.09, bel[1] - 0.065, z - 0.07, z + 0.07, sides);
+        let v = half(z);
+        let (y0, y1) = (v[3][1] - 0.09, v[3][1] - 0.065);
+        strip_quad_on(mb, MatKey::Plastic, side_at(&v, y0) + 0.005, y0, y1, z - 0.07, z + 0.07, sides);
     };
     if van {
         handle(mb, zc + 0.14, &BOTH);
@@ -398,7 +450,12 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
         strip_quad_on(mb, MatKey::Plastic, half(z_dw - 0.7)[2][0] + 0.004, half(z_dw)[2][1] + 0.02, half(z_dw)[2][1] + 0.05, z_dw - 1.37, z_dw - 0.12, &RIGHT);
     } else {
         strip(mb, MatKey::Paint, half, (zb - 0.04, zb + 0.04), (3, 4), 0.004);
-        handle(mb, zb - 0.14, &BOTH);
+        // słupek C, gdy za tylnymi drzwiami jest jeszcze okno
+        if zc - z_sg > 0.25 {
+            strip(mb, MatKey::Paint, half, (zc - 0.08, zc + 0.01), (3, 4), 0.004);
+        }
+        // klamki przy tylnej krawędzi każdych drzwi
+        handle(mb, zb + 0.14, &BOTH);
         handle(mb, zc + 0.12, &BOTH);
     }
 
@@ -432,6 +489,11 @@ fn details(mb: &mut MeshBuilder, p: &P, seed: u32, c: &Ctx, half: &dyn Fn(f64) -
         let xo = (m[0] + out + 0.001) * side;
         mb.quad(MatKey::Indicator, [xo, m[1] + lift + 0.01, zm0 + 0.01], [xo, m[1] + lift + 0.01, zm1 - 0.005], [xo, m[1] + lift + 0.035, zm1 - 0.005], [xo, m[1] + lift + 0.035, zm0 + 0.01], Some([side, 0.0, 0.0]));
     }
+}
+
+/// Szerokość burty na wysokości `y` (bok jest pochylony między talią a linią okien).
+fn side_at(v: &Half, y: f64) -> f64 {
+    lerp(v[2][0], v[3][0], ((y - v[2][1]) / (v[3][1] - v[2][1]).max(1e-6)).clamp(0.0, 1.0))
 }
 
 /// Bryła pionowa: wypukły wielokąt w planie (x, z), od `y0` do `y1`.

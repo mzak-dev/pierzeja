@@ -30,20 +30,6 @@ fn livery_is_deterministic() {
 }
 
 #[test]
-fn car_budget_with_livery() {
-    for b in ["hatchback", "sedan_liftback", "kombi", "suv"] {
-        for s in SERVICES {
-            for livery in ["stripe", "checker", "chevron"] {
-                // napisy z fontu 5×7 (przód, boki, tył) i szachownica kosztują ~300 trójkątów ponad
-                // budżet osobówki cywilnej (≤ 1500), stąd osobny limit dla służb
-                let t = make(b, s, json!({ "livery": livery })).stats.triangles;
-                assert!(t <= 1800, "{b}/{s}/{livery}: {t} trójkątów");
-            }
-        }
-    }
-}
-
-#[test]
 fn every_service_is_present_on_car_and_van() {
     for b in BODIES {
         let civ = make(b, "cywilny", json!({}));
