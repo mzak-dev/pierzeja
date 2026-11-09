@@ -39,7 +39,7 @@ fn body_colors(s: Svc) -> Option<(&'static str, &'static str)> {
     match s {
         Svc::Cywilny => None,
         Svc::Policja => Some(("#a5a8a6", "#a5a8a6")), // ≈ RAL 9006
-        Svc::Medycy => Some(("#f1dd38", "#f1dd38")),  // RAL 1016
+        Svc::Medycy => Some(("#f1dd38", "#2b2d2f")),  // RAL 1016, zderzaki z czarnego tworzywa
         Svc::Straz => Some(("#ab2524", "#f7f9ef")),   // RAL 3000, zderzaki białe
         Svc::Techniczne => Some(("#f4f8f4", "#f4f8f4")),
     }
@@ -221,6 +221,21 @@ impl Wall<'_> {
         let l = |f: &dyn Fn(&Half) -> f64| f(&self.hs[i]) + (f(&self.hs[i + 1]) - f(&self.hs[i])) * t;
         (l(&|h| h[2][0]), l(&|h| h[2][1]), l(&|h| h[3][1]))
     }
+    /// x burty w (z, y): bok jest pochylony, więc idzie po łamanej talia → linia okien → róg szyby → dach.
+    fn x(&self, z: f64, y: f64) -> f64 {
+        let i = self.zs.windows(2).position(|w| z <= w[1]).unwrap_or(self.zs.len() - 2);
+        let (z0, z1) = (self.zs[i], self.zs[i + 1]);
+        let t = if z1 - z0 < 1e-9 { 0.0 } else { ((z - z0) / (z1 - z0)).clamp(0.0, 1.0) };
+        let p = |k: usize, c: usize| self.hs[i][k][c] + (self.hs[i + 1][k][c] - self.hs[i][k][c]) * t;
+        for k in 2..5 {
+            let (ya, yb) = (p(k, 1), p(k + 1, 1));
+            if y <= yb || k == 4 {
+                let u = if yb - ya < 1e-6 { 0.0 } else { ((y - ya) / (yb - ya)).clamp(0.0, 1.0) };
+                return p(k, 0) + (p(k + 1, 0) - p(k, 0)) * u;
+            }
+        }
+        unreachable!()
+    }
     fn breaks(&self, z0: f64, z1: f64) -> Vec<f64> {
         let mut v = vec![z0];
         v.extend(self.zs.iter().copied().filter(|&z| z > z0 + 1e-6 && z < z1 - 1e-6));
@@ -270,13 +285,13 @@ fn band_range(w: &Wall, z0: f64, z1: f64, y1: f64) -> Option<(f64, f64)> {
 /// Pas na ścianie boczej (obie strony) na odcinku `z0..z1` (z `band_range` całego zestawu pasów,
 /// żeby wszystkie kończyły się równo), stała wysokość, dół przycięty do talii.
 fn band(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1): (f64, f64), e: f64) {
-    let pts: Vec<(f64, f64, f64, f64)> = w
+    let pts: Vec<(f64, f64, f64, f64, f64)> = w
         .breaks(z0, z1)
         .into_iter()
         .map(|z| {
-            let (x, mid, _) = w.at(z);
-            let lo = y0.max(mid);
-            (z, x + e, lo, y1.max(lo))
+            let lo = y0.max(w.at(z).1);
+            let hi = y1.max(lo);
+            (z, w.x(z, lo) + e, lo, hi, w.x(z, hi) + e)
         })
         .collect();
     // ponytail: kolejne stacje o tej samej geometrii nie są scalane (tylko ~1 kwadrat na stację)
@@ -286,7 +301,7 @@ fn band(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1
             continue;
         }
         for side in [1.0, -1.0] {
-            mb.quad(m, sided(side, [a.1, a.2, a.0]), sided(side, [b.1, b.2, b.0]), sided(side, [b.1, b.3, b.0]), sided(side, [a.1, a.3, a.0]), Some([side, 0.0, 0.0]));
+            mb.quad(m, sided(side, [a.1, a.2, a.0]), sided(side, [b.1, b.2, b.0]), sided(side, [b.4, b.3, b.0]), sided(side, [a.4, a.3, a.0]), Some([side, 0.0, 0.0]));
         }
     }
 }
@@ -296,9 +311,9 @@ fn rect(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1
     if !w.fits(z0, z1, y0, y1) {
         return false;
     }
-    let (xa, xb) = (w.at(z0).0 + e, w.at(z1).0 + e);
+    let x = |z: f64, y: f64| w.x(z, y) + e;
     for side in [1.0, -1.0] {
-        mb.quad(m, sided(side, [xa, y0, z0]), sided(side, [xb, y0, z1]), sided(side, [xb, y1, z1]), sided(side, [xa, y1, z0]), Some([side, 0.0, 0.0]));
+        mb.quad(m, sided(side, [x(z0, y0), y0, z0]), sided(side, [x(z1, y0), y0, z1]), sided(side, [x(z1, y1), y1, z1]), sided(side, [x(z0, y1), y1, z0]), Some([side, 0.0, 0.0]));
     }
     true
 }
@@ -306,7 +321,7 @@ fn rect(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1
 /// Napis na bokach, czytelny od przodu do tyłu po obu stronach; `zc` = środek, `y0` = dół liter.
 fn side_text(mb: &mut MeshBuilder, w: &Wall, m: MatKey, s: &str, zc: f64, y0: f64, cell: f64, e: f64) {
     let len = text_cols(s) as f64 * cell;
-    let x = w.at(zc).0 + e;
+    let x = w.x(zc, y0) + e; // napis pionowy, oparty dołem o pochyloną burtę
     text(mb, m, s, [x, y0, zc + len / 2.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], cell, false);
     text(mb, m, s, [-x, y0, zc - len / 2.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], cell, false);
 }
@@ -400,7 +415,9 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
 
     // --- pasy boczne
     let mut stack: Vec<(f64, MatKey)> = match s {
-        Svc::Medycy => vec![(0.06, a), (0.08, b), (0.15, a)], // czerwony–niebieski–czerwony (Dz.U. 2026/227)
+        // decyzja użytkownika 2026-11-10 (zdjęcie ZRM na Sprinterze): niebieski nad czerwonym i czerwony
+        // pas pod dachem, zamiast czerwony–niebieski–czerwony (Dz.U. 2026/227)
+        Svc::Medycy => vec![(0.16, b), (0.20, a)],
         Svc::Straz => vec![(0.15, a)],
         _ if checker => vec![(0.25, b)],
         _ => vec![(0.20, a)],
@@ -420,7 +437,7 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
         let hr = 0.84 * (g.half)(g.zr)[2][0];
         let mut y = ytop;
         let stack: Vec<(f64, MatKey)> = match s {
-            Svc::Medycy => vec![(0.06, a), (0.08, b), (0.15, a)],
+            Svc::Medycy => vec![(0.16, b), (0.20, a)],
             Svc::Straz => vec![(0.15, a)],
             _ if checker => vec![(0.25, b)],
             _ => vec![(0.20, a)],
@@ -430,6 +447,22 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
             mb.quad(m, [hr, y - t, z], [-hr, y - t, z], [-hr, y, z], [hr, y, z], Some([0.0, 0.0, -1.0]));
             y -= t;
         }
+    }
+
+    // --- Medycy na vanie: czerwony pas pod dachem (boki do przedniej krawędzi dachu, tylne drzwi)
+    if s == Svc::Medycy && g.van {
+        let (y0, y1) = (g.h - 0.24, g.h - 0.06);
+        let br = w.breaks(g.zr + 0.05, g.roof_f);
+        for k in br.windows(2) {
+            for side in [1.0, -1.0] {
+                let q = |z: f64, y: f64| sided(side, [w.x(z, y) + e_band, y, z]);
+                // dwa trójkąty: burta przy dachu bywa skręcona, a `quad` po prawej stronie dzieli inną przekątną
+                mb.poly(a, &[q(k[0], y0), q(k[1], y0), q(k[1], y1)], Some([side, 0.0, 0.0]));
+                mb.poly(a, &[q(k[0], y0), q(k[1], y1), q(k[0], y1)], Some([side, 0.0, 0.0]));
+            }
+        }
+        let (z, hr) = (g.zr - 0.004, w.x(g.zr, y1) - 0.02);
+        mb.quad(a, [hr, y0, z], [-hr, y0, z], [-hr, y1, z], [hr, y1, z], Some([0.0, 0.0, -1.0]));
     }
 
     // --- wzór na pasie
@@ -502,7 +535,7 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
             let (yc, r) = (ytop + 0.26, 0.2);
             let zc = g.z_dw - 1.75;
             if zc - r > g.zr + 0.1 {
-                let x = w.at(zc).0 + e_det;
+                let x = w.x(zc, yc - r) + e_det;
                 for k in 0..12 {
                     let (t0, t1) = (2.0 * PI * k as f64 / 12.0, 2.0 * PI * (k + 1) as f64 / 12.0);
                     let q = |t: f64, rad: f64| [x, yc + rad * t.sin(), zc + rad * t.cos()];
