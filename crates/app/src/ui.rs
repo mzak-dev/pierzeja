@@ -4,6 +4,7 @@
 //! Akcje UI to `Cmd` wykonywane na końcu klatki — panele tylko je zgłaszają.
 
 use crate::editors::{polygon_editor, typology_map};
+use crate::anim;
 use crate::screens;
 use crate::theme::*;
 use crate::*;
@@ -37,6 +38,10 @@ pub enum Cmd {
     NewBuilding(String),
     NewStreet,
     CloseTab(usize),
+    /// Zamknięcie bez pytania (po decyzji w dialogu albo bez zmian).
+    CloseTabNow(usize),
+    /// Pokaż/ukryj inspektor (N).
+    Inspector,
     Tab(usize),
     Mcp,
     Editor,
@@ -249,6 +254,9 @@ pub fn ui(
             if i.consume_shortcut(&K::new(M::NONE, Key::G)) {
                 cmds.push(Cmd::Gizmos);
             }
+            if i.consume_shortcut(&K::new(M::NONE, Key::N)) {
+                cmds.push(Cmd::Inspector);
+            }
             if i.consume_shortcut(&K::new(M::COMMAND, Key::K)) {
                 cmds.push(Cmd::Palette);
             }
@@ -273,10 +281,15 @@ pub fn ui(
         Screen::Mcp => screens::mcp(&mut root, &mut view, &mut cmds),
     }
     palette(&ctx, &docs, &mut view, &mut cmds);
+    close_dialog(&ctx, &docs, &mut view, &mut cmds);
 
     for c in cmds {
         run(c, &ctx, &mut docs, &der, &mut view, &mut window, &mut exit);
     }
+    if view.item.is_some() {
+        view.last_item = view.item;
+    }
+    toast(&ctx, &view);
     // historia: zmiana zatwierdzana po puszczeniu myszy (przeciąganie suwaka = jeden krok)
     if !ctx.input(|i| i.pointer.any_down()) && ctx.memory(|m| m.focused().is_none()) {
         docs.commit();
@@ -338,8 +351,17 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
         Cmd::Screenshot => view.screenshot = true,
         Cmd::Export => {
             view.msg = match export_glb(docs.cur()) {
-                Ok(p) => format!("Zapisano {}", p.display()),
+                Ok(p) => {
+                    view.export_t0 = Some(ctx.input(|i| i.time));
+                    format!("Zapisano {}", p.display())
+                }
                 Err(e) => format!("Błąd zapisu: {e}"),
+            }
+        }
+        Cmd::Inspector => {
+            view.item = match view.item {
+                Some(_) => None,
+                None => Some(view.last_item.filter(|i| item_fits(mode, *i)).unwrap_or(home_of(mode).1)),
             }
         }
         Cmd::CopySpec => {
@@ -394,6 +416,17 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
         }
         Cmd::CloseTab(i) => {
             let i = if i == usize::MAX { docs.active } else { i };
+            if docs.tabs.get(i).is_some_and(|t| t.dirty()) {
+                view.confirm_close = Some(i);
+            } else {
+                run(Cmd::CloseTabNow(i), ctx, docs, der, view, window, exit);
+            }
+        }
+        Cmd::CloseTabNow(i) => {
+            view.confirm_close = None;
+            if i >= docs.tabs.len() {
+                return;
+            }
             docs.tabs.remove(i);
             if docs.tabs.is_empty() {
                 docs.tabs.push(Tab::new(Doc::building("familok")));
@@ -481,88 +514,120 @@ pub fn logo(p: &egui::Painter, r: egui::Rect, col: Color32, w: f32) {
     }
 }
 
-/// Przełącznik trybu edytora (Budynki / Pojazdy / Ludzie) z licznikiem kart.
-fn mode_pill(ui: &mut egui::Ui, f: Fam, n: usize, active: bool) -> egui::Response {
-    let (icon, enabled) = match f {
-        Fam::Budynki => (ic::BUILDINGS, true),
-        Fam::Pojazdy => (ic::CAR, true),
-        Fam::Ludzie => (ic::USER, true),
-    };
-    let font = egui::FontId::proportional(13.5);
-    let tw = ui.fonts_mut(|g| g.layout_no_wrap(f.label().into(), font.clone(), TEXT).size().x);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(tw + 78.0, 30.0), Sense::click());
-    let col = f.color();
-    let p = ui.painter();
-    if active {
-        p.rect(rect, 15, col.gamma_multiply(0.16), Stroke::new(1.0, col.gamma_multiply(0.8)), egui::StrokeKind::Inside);
-    } else if resp.hovered() {
-        p.rect_filled(rect, 15, HOVER);
+fn fam_icon(f: Fam) -> &'static str {
+    match f {
+        Fam::Budynki => ic::HOUSE,
+        Fam::Pojazdy => ic::TRUCK,
+        Fam::Ludzie => ic::USER,
     }
-    let fg = if active { col } else if enabled { DIM } else { FAINT };
-    p.text(rect.left_center() + Vec2::new(14.0, 0.0), Align2::LEFT_CENTER, icon, egui::FontId::proportional(15.0), fg);
-    p.text(rect.left_center() + Vec2::new(36.0, 0.0), Align2::LEFT_CENTER, f.label(), font, if active { TEXT } else { fg });
-    p.text(rect.right_center() - Vec2::new(12.0, 0.0), Align2::RIGHT_CENTER, n, mono(11.0), fg);
-    if enabled { resp } else { resp.on_hover_text("Niedostępne") }
 }
 
-fn tab_chip(ui: &mut egui::Ui, name: &str, active: bool, dirty: bool) -> (bool, bool) {
-    let font = egui::FontId::proportional(13.5);
+/// Przełącznik trybu (Budynki / Pojazdy / Ludzie): jedna pigułka przesuwa się pod aktywny tryb (150 ms),
+/// aktywny pokazuje nazwę, pozostałe tylko ikonę i licznik kart.
+fn mode_segment(ui: &mut egui::Ui, docs: &Docs, view: &View, cmds: &mut Vec<Cmd>) {
+    let cur = docs.cur().mode.fam();
+    let editor = view.screen == Screen::Editor;
+    let font = egui::FontId::proportional(13.0);
+    Frame::new().fill(anim::hex(0x141414)).stroke(Stroke::new(1.0, anim::hex(0x2a2a2a))).corner_radius(8).inner_margin(3).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let slide = anim::Slide::begin(ui);
+        let mut target = None;
+        for (k, f) in [Fam::Budynki, Fam::Pojazdy, Fam::Ludzie].into_iter().enumerate() {
+            let on = f == cur && editor;
+            let n = docs.tabs.iter().filter(|t| t.doc.mode.fam() == f).count().to_string();
+            let name_w = ui.fonts_mut(|g| g.layout_no_wrap(f.label().into(), font.clone(), TEXT).size().x) + 7.0;
+            let cnt_w = ui.fonts_mut(|g| g.layout_no_wrap(n.clone(), mono(10.0), TEXT).size().x);
+            let ctx = ui.ctx().clone();
+            let shown = anim::ease(&ctx, egui::Id::new(("mode-name", k)), on as u8 as f32, anim::FAST);
+            let w = 10.0 + 16.0 + 7.0 + name_w * shown + cnt_w + 10.0;
+            let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 30.0), Sense::click());
+            if on {
+                target = Some(rect);
+            }
+            let h = anim::ease(&ctx, resp.id.with("hov"), resp.hovered() as u8 as f32, anim::FAST);
+            let r = anim::scaled(rect, anim::press(&ctx, &resp));
+            let fg = anim::mix(anim::hex(0xc4c4c4), TEXT, h.max(shown));
+            let p = ui.painter().with_clip_rect(rect);
+            p.text(r.left_center() + Vec2::new(10.0, 0.0), Align2::LEFT_CENTER, fam_icon(f), egui::FontId::proportional(16.0), anim::mix(fg, f.color(), shown));
+            if shown > 0.01 {
+                p.text(r.left_center() + Vec2::new(33.0, 0.0), Align2::LEFT_CENTER, f.label(), font.clone(), fg.gamma_multiply(shown));
+            }
+            p.text(r.right_center() - Vec2::new(10.0, 0.0), Align2::RIGHT_CENTER, n, mono(10.0), anim::hex(0xa0a0a0));
+            if resp.on_hover_text(format!("{} (Ctrl {})", f.label(), k + 1)).clicked() {
+                cmds.push(Cmd::Fam(f));
+            }
+        }
+        if let Some(t) = target {
+            let acc = cur.color();
+            slide.end(ui, egui::Id::new("mode-pill"), t, |r| {
+                vec![egui::Shape::rect_filled(r, 6, anim::hex(0x2b2b2b)), egui::Shape::line_segment([r.left_bottom() + Vec2::new(4.0, -1.0), r.right_bottom() + Vec2::new(-4.0, -1.0)], Stroke::new(2.0, acc))]
+            });
+        }
+    });
+}
+
+/// Karta dokumentu: ikona trybu, nazwa (wielokropek), kropka niezapisanych zmian, ×; tło przenika się 150 ms.
+fn tab_chip(ui: &mut egui::Ui, name: &str, fam: Fam, active: bool, dirty: bool) -> (bool, bool) {
+    let font = egui::FontId::proportional(13.0);
     let tw = ui.fonts_mut(|f| f.layout_no_wrap(name.into(), font.clone(), TEXT).size().x);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(tw + 58.0, 30.0), Sense::click());
+    let w = (10.0 + 14.0 + 7.0 + tw + if dirty { 14.0 } else { 0.0 } + 4.0 + 27.0).clamp(96.0, 168.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 30.0), Sense::click());
+    let ctx = ui.ctx().clone();
+    let on = anim::ease(&ctx, resp.id.with("on"), active as u8 as f32, anim::FAST);
+    let h = anim::ease(&ctx, resp.id.with("hov"), (resp.hovered() && !active) as u8 as f32, anim::FAST);
+    let bg = anim::mix(anim::mix(BAR2, HOVER, h), anim::hex(0x2b2b2b), on);
     let p = ui.painter();
-    if active {
-        p.rect(rect, 6, ACTIVE, Stroke::new(1.0, BORDER_HI), egui::StrokeKind::Inside);
-    } else if resp.hovered() {
-        p.rect_filled(rect, 6, HOVER);
+    p.rect(rect, 6, bg, Stroke::new(1.0, anim::mix(BAR2, BORDER_HI, on)), egui::StrokeKind::Inside);
+    let x = egui::Rect::from_center_size(rect.right_center() - Vec2::new(15.0, 0.0), Vec2::splat(24.0));
+    p.text(rect.left_center() + Vec2::new(10.0, 0.0), Align2::LEFT_CENTER, fam_icon(fam), egui::FontId::proportional(14.0), fam.color());
+    let col = anim::mix(DIM, TEXT, on.max(h));
+    let room = x.left() - 4.0 - (rect.left() + 31.0) - if dirty { 14.0 } else { 0.0 };
+    let clip = p.with_clip_rect(egui::Rect::from_x_y_ranges(rect.left()..=rect.left() + 31.0 + room, rect.y_range()));
+    let g = clip.layout_no_wrap(name.into(), font, col);
+    let gw = g.size().x.min(room);
+    clip.galley(egui::pos2(rect.left() + 31.0, rect.center().y - g.size().y / 2.0), g, col);
+    if tw > room {
+        // wielokropek nad uciętą nazwą
+        let e = egui::Rect::from_min_size(egui::pos2(rect.left() + 31.0 + gw - 12.0, rect.top() + 4.0), Vec2::new(12.0, 22.0));
+        clip.rect_filled(e, 0, bg);
+        clip.text(e.left_center(), Align2::LEFT_CENTER, "…", egui::FontId::proportional(13.0), col);
     }
-    p.text(rect.left_center() + Vec2::new(14.0, 0.0), Align2::LEFT_CENTER, name, font, if active { TEXT } else { DIM });
     if dirty {
-        p.circle_filled(rect.left_center() + Vec2::new(14.0 + tw + 10.0, 0.0), 3.5, ACCENT);
+        p.circle_filled(egui::pos2(rect.left() + 31.0 + gw + 9.0, rect.center().y), 3.5, anim::hex(0xe0e0e0));
     }
-    let x = egui::Rect::from_center_size(rect.right_center() - Vec2::new(15.0, 0.0), Vec2::splat(18.0));
     let over_x = resp.hover_pos().is_some_and(|h| x.contains(h));
     if over_x {
-        p.rect_filled(x, 4, BORDER_HI);
+        p.rect_filled(x, 4, anim::hex(0x333333));
     }
-    p.text(x.center(), Align2::CENTER_CENTER, ic::X, egui::FontId::proportional(11.0), DIM);
+    p.text(x.center(), Align2::CENTER_CENTER, ic::X, egui::FontId::proportional(11.0), if over_x { TEXT } else { anim::hex(0xa8a8a8) });
     let close = (resp.clicked() && over_x) || resp.middle_clicked();
+    let resp = resp.on_hover_text(if dirty { format!("{name} — niezapisane zmiany") } else { name.to_string() });
     (resp.clicked() && !close, close)
 }
 
+fn vsep(ui: &mut egui::Ui, h: f32) {
+    let r = ui.available_rect_before_wrap();
+    ui.add_space(4.0);
+    ui.painter().vline(ui.cursor().left(), r.center().y - h / 2.0..=r.center().y + h / 2.0, Stroke::new(1.0, BORDER));
+    ui.add_space(5.0);
+}
+
 fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window, cmds: &mut Vec<Cmd>) {
-    egui::Panel::top("title").exact_size(44.0).resizable(false).frame(Frame::new().fill(BG).inner_margin(Margin::symmetric(10, 0))).show(root, |ui| {
+    egui::Panel::top("title").exact_size(40.0).resizable(false).frame(Frame::new().fill(BAR2).inner_margin(Margin { left: 10, right: 0, top: 0, bottom: 0 })).show(root, |ui| {
+        let full = ui.max_rect();
+        ui.painter().hline(full.x_range(), full.bottom(), Stroke::new(1.0, LINE));
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
-            static ICON: std::sync::OnceLock<egui::TextureHandle> = std::sync::OnceLock::new();
-            let icon = ICON.get_or_init(|| texture(ui.ctx(), "icon", include_bytes!("../assets/icon.png")));
-            ui.add(egui::Image::new((icon.id(), Vec2::splat(26.0))));
-            ui.add_space(6.0);
-            ui.label(RichText::new("Procedura").family(bold()).size(15.0));
-            ui.label(RichText::new("Suite").size(15.0).color(DIM));
-            ui.add_space(12.0);
-            let cur_fam = docs.cur().mode.fam();
-            for f in [Fam::Budynki, Fam::Pojazdy, Fam::Ludzie] {
-                let n = docs.tabs.iter().filter(|t| t.doc.mode.fam() == f).count();
-                if mode_pill(ui, f, n, f == cur_fam && view.screen == Screen::Editor).clicked() {
-                    cmds.push(Cmd::Fam(f));
-                }
-            }
-            ui.add_space(8.0);
-            icon_btn(ui, ic::FLOPPY_DISK, false, "Zapis projektu (.pzj) — jeszcze nie ma formatu pliku");
-            let t = &docs.tabs[docs.active];
-            if icon_btn(ui, ic::ARROW_COUNTER_CLOCKWISE, false, &format!("Cofnij (Ctrl+Z) · {} kroków", t.undo.len())).clicked() {
-                cmds.push(Cmd::Undo);
-            }
-            if icon_btn(ui, ic::ARROW_CLOCKWISE, false, "Ponów (Ctrl+Y)").clicked() {
-                cmds.push(Cmd::Redo);
-            }
-            ui.add_space(8.0);
-            let y = ui.max_rect().y_range();
-            ui.painter().vline(ui.cursor().left(), y.min + 12.0..=y.max - 12.0, Stroke::new(1.0, BORDER));
-            ui.add_space(10.0);
+            let (lr, _) = ui.allocate_exact_size(Vec2::new(32.0, 20.0), Sense::hover());
+            logo(ui.painter(), lr.shrink2(Vec2::new(1.0, 2.0)), anim::hex(0xf0f0f0), 2.0);
+            ui.add_space(2.0);
+            ui.label(RichText::new("ProceduraSuite").family(bold()).size(14.0));
+            ui.add_space(4.0);
+            mode_segment(ui, docs, view, cmds);
+            vsep(ui, 20.0);
             let cur_fam = docs.cur().mode.fam();
             for (i, t) in docs.tabs.iter().enumerate().filter(|(_, t)| t.doc.mode.fam() == cur_fam) {
-                let (open, close) = tab_chip(ui, &t.doc.name, i == docs.active && view.screen == Screen::Editor, !t.undo.is_empty() || t.doc != t.committed);
+                let (open, close) = tab_chip(ui, &t.doc.name, cur_fam, i == docs.active && view.screen == Screen::Editor, t.dirty());
                 if open {
                     cmds.push(Cmd::Tab(i));
                 }
@@ -570,43 +635,37 @@ fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window,
                     cmds.push(Cmd::CloseTab(i));
                 }
             }
-            if icon_btn(ui, ic::PLUS, view.screen == Screen::Start, "Nowy dokument").clicked() {
+            if icon_btn(ui, ic::PLUS, view.screen == Screen::Start, &format!("Nowy dokument — {}", cur_fam.label())).clicked() {
                 cmds.push(Cmd::Start);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 2.0;
+                ui.spacing_mut().item_spacing.x = 0.0;
                 // w przeglądarce nie ma okna do zamknięcia/minimalizacji
                 if !crate::WEB {
-                    let close = icon_btn(ui, ic::X, false, "");
-                    if close.hovered() {
-                        ui.painter().rect_filled(close.rect, 6, Color32::from_rgb(0xc4, 0x2b, 0x1c));
-                        ui.painter().text(close.rect.center(), Align2::CENTER_CENTER, ic::X, egui::FontId::proportional(17.0), Color32::WHITE);
-                    }
-                    if close.clicked() {
+                    if win_btn(ui, ic::X, "Zamknij aplikację", true).clicked() {
                         cmds.push(Cmd::Quit);
                     }
-                    if icon_btn(ui, if view.maximized { ic::COPY_SIMPLE } else { ic::SQUARE }, false, "").clicked() {
+                    if win_btn(ui, if view.maximized { ic::COPY_SIMPLE } else { ic::SQUARE }, "Maksymalizuj", false).clicked() {
                         cmds.push(Cmd::Maximize);
                     }
-                    if icon_btn(ui, ic::MINUS, false, "").clicked() {
+                    if win_btn(ui, ic::MINUS, "Minimalizuj", false).clicked() {
                         cmds.push(Cmd::Minimize);
                     }
                 }
-                ui.add_space(10.0);
-                ui.label(RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).font(mono(12.0)).color(DIM));
-                icon_btn(ui, ic::QUESTION, false, "Mysz: lewy — narzędzie z paska widoku, prawy — obrót, środkowy — przesunięcie, kółko — zoom\nF — kadruj · G — gizmo edycji · Ctrl+Z/Ctrl+Y — cofnij/ponów · Ctrl+K — polecenia · Ctrl+Shift+N — nowa ulica");
+                ui.add_space(4.0);
+                ui.label(RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).font(mono(12.0)).color(anim::hex(0xa8a8a8)));
                 ui.add_space(8.0);
-                // pole „Szukaj poleceń” (otwiera paletę)
-                let (r, resp) = ui.allocate_exact_size(Vec2::new(270.0, 30.0), Sense::click());
-                ui.painter().rect(r, 6, INPUT, Stroke::new(1.0, if resp.hovered() { BORDER_HI } else { BORDER }), egui::StrokeKind::Inside);
-                ui.painter().text(r.left_center() + Vec2::new(12.0, 0.0), Align2::LEFT_CENTER, ic::MAGNIFYING_GLASS, egui::FontId::proportional(14.0), DIM);
-                ui.painter().text(r.left_center() + Vec2::new(34.0, 0.0), Align2::LEFT_CENTER, "Szukaj poleceń", egui::FontId::proportional(13.5), FAINT);
-                let k = egui::Rect::from_center_size(r.right_center() - Vec2::new(34.0, 0.0), Vec2::new(52.0, 20.0));
-                ui.painter().rect(k, 4, Color32::TRANSPARENT, Stroke::new(1.0, BORDER_HI), egui::StrokeKind::Inside);
-                ui.painter().text(k.center(), Align2::CENTER_CENTER, "Ctrl K", mono(11.0), DIM);
+                // lupa „Szukaj poleceń” (otwiera paletę)
+                let (r, resp) = ui.allocate_exact_size(Vec2::new(30.0, 28.0), Sense::click());
+                let h = anim::ease(ui.ctx(), resp.id.with("hov"), resp.hovered() as u8 as f32, anim::FAST);
+                let rr = anim::scaled(r, anim::press(ui.ctx(), &resp));
+                ui.painter().rect(rr, 6, anim::mix(BAR2, HOVER, h), Stroke::new(1.0, anim::hex(0x5c5c5c)), egui::StrokeKind::Inside);
+                ui.painter().text(rr.center(), Align2::CENTER_CENTER, ic::MAGNIFYING_GLASS, egui::FontId::proportional(14.0), anim::mix(anim::hex(0xc4c4c4), TEXT, h));
+                let resp = resp.on_hover_text("Szukaj poleceń (Ctrl K)\nMysz: lewy — narzędzie z paska widoku, prawy — obrót, środkowy — przesunięcie, kółko — zoom\nF — kadruj · G — gizmo edycji · N — inspektor · Ctrl+1/2/3 — tryb · Ctrl+Z/Ctrl+Y — cofnij/ponów · Ctrl+Shift+N — nowa ulica");
                 if resp.clicked() {
                     cmds.push(Cmd::Palette);
                 }
+                ui.add_space(8.0);
                 // reszta paska: przeciąganie okna, dwuklik — maksymalizacja
                 let drag = ui.allocate_response(ui.available_size(), Sense::click_and_drag());
                 if drag.drag_started() && !crate::WEB {
@@ -620,46 +679,114 @@ fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window,
     });
 }
 
+/// Przycisk okna 44×40 (kwadratowy, przy krawędzi); zamknięcie podświetla się na czerwono.
+fn win_btn(ui: &mut egui::Ui, icon: &str, tip: &str, danger: bool) -> egui::Response {
+    let (r, resp) = ui.allocate_exact_size(Vec2::new(44.0, 40.0), Sense::click());
+    let h = anim::ease(ui.ctx(), resp.id.with("hov"), resp.hovered() as u8 as f32, anim::FAST);
+    let bg = if danger { Color32::from_rgb(0xc4, 0x2b, 0x1c) } else { HOVER };
+    ui.painter().rect_filled(r, 0, anim::mix(BAR2, bg, h));
+    ui.painter().text(r.center(), Align2::CENTER_CENTER, icon, egui::FontId::proportional(14.0), anim::mix(anim::hex(0xc4c4c4), Color32::WHITE, h));
+    resp.on_hover_text(tip)
+}
+
 // ------------------------------------------------------------------ wstążka
 
+/// Rząd menu (34 px: zapis/cofnij/ponów + zakładki trybu) i wstążka (76 px: grupy narzędzi + eksport).
+/// Zmiana trybu lub zakładki przenika zawartość (150 ms).
 fn ribbon(root: &mut egui::Ui, docs: &Docs, view: &View, cmds: &mut Vec<Cmd>) {
-    egui::Panel::top("ribbon").resizable(false).frame(Frame::new().fill(BAR).inner_margin(Margin { left: 12, right: 14, top: 4, bottom: 6 }).stroke(Stroke::NONE)).show(root, |ui| {
-        ui.horizontal(|ui| {
+    let fam = docs.cur().mode.fam();
+    egui::Panel::top("menu").exact_size(34.0).resizable(false).frame(Frame::new().fill(BAR2).inner_margin(Margin::symmetric(8, 0))).show(root, |ui| {
+        ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            for (t, label) in ribbon_tabs(docs.cur().mode.fam()) {
-                let on = view.ribbon == t;
-                let rt = RichText::new(label).size(14.0).color(if on { TEXT } else { DIM });
-                let b = egui::Button::new(if on { rt.family(bold()) } else { rt }).fill(if on { ACTIVE } else { Color32::TRANSPARENT }).stroke(Stroke::NONE).min_size(Vec2::new(0.0, 28.0));
-                if ui.add(b).clicked() {
-                    cmds.push(Cmd::Ribbon(t));
+            icon_btn(ui, ic::FLOPPY_DISK, false, "Zapis projektu (.pzj) — jeszcze nie ma formatu pliku");
+            let t = &docs.tabs[docs.active];
+            if icon_btn(ui, ic::ARROW_COUNTER_CLOCKWISE, false, &format!("Cofnij (Ctrl Z) · {} kroków", t.undo.len())).clicked() {
+                cmds.push(Cmd::Undo);
+            }
+            if icon_btn(ui, ic::ARROW_CLOCKWISE, false, "Ponów (Ctrl Y)").clicked() {
+                cmds.push(Cmd::Redo);
+            }
+            vsep(ui, 18.0);
+            let fade = anim::appear(ui.ctx(), egui::Id::new(("menu-fade", fam)), anim::FAST);
+            ui.scope(|ui| {
+                ui.set_opacity(fade);
+                for (t, label) in ribbon_tabs(fam) {
+                    let on = view.ribbon == t;
+                    let font = egui::FontId::proportional(14.0);
+                    let w = ui.fonts_mut(|f| f.layout_no_wrap(label.into(), font.clone(), TEXT).size().x) + 20.0;
+                    let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
+                    let ctx = ui.ctx().clone();
+                    let o = anim::ease(&ctx, resp.id.with("on"), on as u8 as f32, anim::FAST);
+                    let h = anim::ease(&ctx, resp.id.with("hov"), resp.hovered() as u8 as f32, anim::FAST);
+                    let rr = anim::scaled(r, anim::press(&ctx, &resp));
+                    ui.painter().rect_filled(rr, 6, anim::mix(anim::mix(BAR2, anim::hex(0x262626), h), ACTIVE, o));
+                    ui.painter().text(rr.center(), Align2::CENTER_CENTER, label, font, anim::mix(anim::hex(0xc8c8c8), TEXT, o));
+                    if resp.clicked() {
+                        cmds.push(Cmd::Ribbon(t));
+                    }
                 }
-            }
-        });
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            for (group, buttons) in ribbon_def(view.ribbon, docs.cur(), view) {
-                ribbon_group(ui, group, |ui| {
-                    for b in buttons {
-                        if ribbon_btn(ui, b.icon, b.label, b.on, b.enabled).clicked() {
-                            cmds.push(b.cmd);
-                        }
-                    }
-                });
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                ui.add_space(4.0);
-                ui.vertical(|ui| {
-                    ui.add_space(10.0);
-                    if pill(ui, ic::DOWNLOAD_SIMPLE, "Eksport GLB", false).on_hover_text(format!("Zapis do {}", out_dir().display())).clicked() {
-                        cmds.push(Cmd::Export);
-                    }
-                });
             });
         });
     });
-    // linia pod wstążką
-    let y = root.available_rect_before_wrap().top();
-    root.painter().hline(root.max_rect().x_range(), y, Stroke::new(1.0, BORDER));
+    egui::Panel::top("ribbon").exact_size(76.0).resizable(false).frame(Frame::new().fill(BAR2).inner_margin(Margin { left: 6, right: 10, top: 0, bottom: 0 })).show(root, |ui| {
+        let full = ui.max_rect();
+        ui.painter().hline(full.x_range(), full.bottom(), Stroke::new(1.0, LINE));
+        ui.horizontal_centered(|ui| {
+            let fade = anim::appear(ui.ctx(), egui::Id::new(("ribbon-fade", fam, format!("{:?}", view.ribbon))), anim::FAST);
+            ui.scope(|ui| {
+                ui.set_opacity(fade);
+                for (group, buttons) in ribbon_def(view.ribbon, docs.cur(), view) {
+                    ribbon_group(ui, group, |ui| {
+                        for b in buttons {
+                            if ribbon_btn(ui, b.icon, b.label, b.on, b.enabled).clicked() {
+                                cmds.push(b.cmd);
+                            }
+                        }
+                    });
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| export_button(ui, fam, view, cmds));
+        });
+    });
+}
+
+/// Przycisk eksportu wg mocka: wypełnienie postępu w kolorze trybu, kręciołek, potem ptaszek (1,2 s).
+/// ponytail: eksport jest synchroniczny (kilka ms), więc postęp to krótki przebieg 240 ms po zapisie;
+/// prawdziwy postęp i „Anuluj”, gdy eksport trafi do wątku w tle.
+fn export_button(ui: &mut egui::Ui, fam: Fam, view: &View, cmds: &mut Vec<Cmd>) {
+    let now = ui.input(|i| i.time);
+    let el = view.export_t0.map(|t| (now - t) as f32);
+    let (pct, run, done) = match el {
+        Some(e) if e < anim::MED => (e / anim::MED, true, false),
+        Some(e) if e < anim::MED + 1.2 => (1.0, false, true),
+        _ => (0.0, false, false),
+    };
+    if run || done {
+        ui.ctx().request_repaint();
+    }
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(168.0, 36.0), Sense::click());
+    let h = anim::ease(ui.ctx(), resp.id.with("hov"), resp.hovered() as u8 as f32, anim::FAST);
+    let r = anim::scaled(rect, anim::press(ui.ctx(), &resp));
+    let p = ui.painter();
+    p.rect(r, 6, anim::mix(anim::hex(0x222222), HOVER, h), Stroke::new(1.0, if done { OK } else { anim::hex(0x6b6b6b) }), egui::StrokeKind::Inside);
+    if pct > 0.0 && !done {
+        let f = egui::Rect::from_min_size(r.min, Vec2::new(r.width() * anim::ease_out(pct), r.height()));
+        p.rect_filled(f, 6, fam.color().gamma_multiply(0.25));
+    }
+    let (label, col) = if run { ("Eksport…", TEXT) } else if done { ("Zapisano", OK) } else { ("Eksport GLB", TEXT) };
+    let g = p.layout_no_wrap(label.into(), egui::FontId::new(14.0, bold()), col);
+    let x0 = r.center().x - (g.size().x + 24.0) / 2.0;
+    let ic_c = egui::pos2(x0 + 8.0, r.center().y);
+    if run {
+        anim::spinner(p, ic_c, 6.5, col, 2.0);
+    } else {
+        p.text(ic_c, Align2::CENTER_CENTER, if done { ic::CHECK } else { ic::DOWNLOAD_SIMPLE }, egui::FontId::proportional(16.0), col);
+    }
+    p.galley(egui::pos2(x0 + 24.0, r.center().y - g.size().y / 2.0), g, col);
+    let tip = if crate::WEB { "Pobranie pliku .glb".to_string() } else { format!("Zapis do {}", out_dir().display()) };
+    if resp.on_hover_text(tip).clicked() && !run {
+        cmds.push(Cmd::Export);
+    }
 }
 
 // ------------------------------------------------------------------ pasek dolny
@@ -686,67 +813,91 @@ const VSECTIONS: [(&str, &str, &str); 7] = [
     ("Materiał", ic::SWATCHES, "material"),
 ];
 
-fn chip(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>, on: bool) -> egui::Response {
-    ui.add(egui::Button::new(text).min_size(Vec2::new(0.0, 28.0)).fill(if on { ACTIVE } else { PANEL }).stroke(Stroke::new(1.0, if on { Color32::from_rgb(0x6a, 0x6a, 0x6a) } else { BORDER })))
+/// Etap generatora wg mocka: kółko stanu (✓ gotowy, obręcz — bieżący, puste — dalej) i nazwa.
+fn step_chip(ui: &mut egui::Ui, label: &str, k: usize, cur: Option<usize>, acc: Color32) -> egui::Response {
+    let font = egui::FontId::proportional(13.0);
+    let tw = ui.fonts_mut(|f| f.layout_no_wrap(label.into(), font.clone(), TEXT).size().x);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(tw + 41.0, 26.0), Sense::click());
+    let ctx = ui.ctx().clone();
+    let on = anim::ease(&ctx, resp.id.with("on"), (cur == Some(k)) as u8 as f32, anim::FAST);
+    let h = anim::ease(&ctx, resp.id.with("hov"), resp.hovered() as u8 as f32, anim::FAST);
+    let r = anim::scaled(rect, anim::press(&ctx, &resp));
+    let p = ui.painter();
+    p.rect(r, 5, anim::mix(anim::mix(BAR2, anim::hex(0x242424), h), anim::hex(0x262626), on), Stroke::new(1.0, anim::mix(BAR2, anim::hex(0x3a3a3a), on)), egui::StrokeKind::Inside);
+    let c = r.left_center() + Vec2::new(16.0, 0.0);
+    let done = cur.is_some_and(|c| k < c);
+    if done {
+        p.circle_filled(c, 6.0, acc);
+        p.text(c, Align2::CENTER_CENTER, ic::CHECK, egui::FontId::proportional(8.5), anim::hex(0x141414));
+    } else {
+        p.circle_stroke(c, 5.25, Stroke::new(1.5, anim::mix(anim::hex(0x6a6a6a), acc, on)));
+    }
+    p.text(r.left_center() + Vec2::new(29.0, 0.0), Align2::LEFT_CENTER, label, font, anim::mix(anim::hex(0xc8c8c8), TEXT, on.max(h)));
+    resp
 }
 
 fn bottom_bar(root: &mut egui::Ui, docs: &Docs, der: &Derived, view: &View, fps: f64, cmds: &mut Vec<Cmd>) {
     let doc = docs.cur();
     let street = doc.mode == Mode::Street;
-    egui::Panel::bottom("status").exact_size(if street { 62.0 } else { 46.0 }).resizable(false).frame(Frame::new().fill(BG).inner_margin(Margin::symmetric(14, 0))).show(root, |ui| {
+    let acc = doc.mode.fam().color();
+    egui::Panel::bottom("status").exact_size(if street { 62.0 } else { 36.0 }).resizable(false).frame(Frame::new().fill(BAR2).inner_margin(Margin::symmetric(10, 0))).show(root, |ui| {
         let full = ui.max_rect();
-        ui.painter().hline(full.x_range(), full.top(), Stroke::new(1.0, BORDER));
+        ui.painter().hline(full.x_range(), full.top(), Stroke::new(1.0, LINE));
         ui.horizontal_centered(|ui| {
-            // stan (z prawej), reszta paska dla okruszków/linijki
-            let status_w = 300.0;
+            ui.spacing_mut().item_spacing.x = 4.0;
+            // stan (z prawej), reszta paska dla etapów/linijki
+            let status_w = 340.0;
             let left_w = (ui.available_width() - status_w).max(100.0);
             ui.allocate_ui_with_layout(Vec2::new(left_w, full.height()), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 if street {
                     parcel_ruler(ui, der, view, cmds);
-                } else if doc.mode == Mode::Vehicle {
-                    let cur = VSECTIONS.iter().position(|s| view.item == Some(Item::Veh(s.2)));
-                    for (k, (label, icon, id)) in VSECTIONS.iter().enumerate() {
-                        let after = cur.is_some_and(|c| k > c);
-                        let rt = RichText::new(format!("{icon}  {label}")).size(13.5).color(if after { FAINT } else { TEXT });
-                        if chip(ui, rt, cur == Some(k)).clicked() {
-                            cmds.push(Cmd::Item(Item::Veh(id)));
-                        }
+                    return;
+                }
+                let steps: Vec<(&str, Cmd, bool)> = match doc.mode {
+                    Mode::Vehicle => VSECTIONS.iter().map(|(l, _, id)| (*l, Cmd::Item(Item::Veh(id)), view.item == Some(Item::Veh(id)))).collect(),
+                    Mode::Human => crate::human::HSECTIONS.iter().map(|(l, _, id)| (*l, Cmd::Item(Item::Hum(id)), view.item == Some(Item::Hum(id)))).collect(),
+                    Mode::Building => SECTIONS.iter().map(|(l, _, item, all)| (*l, Cmd::Item(*item), view.item.is_some_and(|i| all.contains(&i)))).collect(),
+                    _ => {
+                        ui.label(RichText::new(der.info.lines().next().unwrap_or("")).color(DIM));
+                        return;
                     }
-                } else if doc.mode == Mode::Human {
-                    let cur = crate::human::HSECTIONS.iter().position(|s| view.item == Some(Item::Hum(s.2)));
-                    for (k, (label, icon, id)) in crate::human::HSECTIONS.iter().enumerate() {
-                        let after = cur.is_some_and(|c| k > c);
-                        let rt = RichText::new(format!("{icon}  {label}")).size(13.5).color(if after { FAINT } else { TEXT });
-                        if chip(ui, rt, cur == Some(k)).clicked() {
-                            cmds.push(Cmd::Item(Item::Hum(id)));
-                        }
+                };
+                ui.label(RichText::new("Etapy").size(12.0).color(anim::hex(0xa8a8a8)));
+                ui.add_space(2.0);
+                let fade = anim::appear(ui.ctx(), egui::Id::new(("steps-fade", doc.mode.fam())), anim::FAST);
+                ui.set_opacity(fade);
+                let cur = steps.iter().position(|s| s.2);
+                for (k, (label, cmd, _)) in steps.into_iter().enumerate() {
+                    if step_chip(ui, label, k, cur, acc).clicked() {
+                        cmds.push(cmd);
                     }
-                } else if doc.mode == Mode::Building {
-                    let cur = SECTIONS.iter().position(|s| view.item.is_some_and(|i| s.3.contains(&i)));
-                    for (k, (label, icon, item, _)) in SECTIONS.iter().enumerate() {
-                        let after = cur.is_some_and(|c| k > c);
-                        let rt = RichText::new(format!("{icon}  {label}")).size(13.5).color(if after { FAINT } else { TEXT });
-                        if chip(ui, rt, cur == Some(k)).clicked() {
-                            cmds.push(Cmd::Item(*item));
-                        }
-                    }
-                } else {
-                    ui.label(RichText::new(der.info.lines().next().unwrap_or("")).color(DIM));
                 }
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if fps > 0.0 && !street {
-                    ui.label(RichText::new(format!("{fps:.0} fps")).font(mono(12.0)).color(DIM));
-                    ui.label(RichText::new("·").color(FAINT));
+                ui.spacing_mut().item_spacing.x = 16.0;
+                let txt = anim::hex(0xa8a8a8);
+                let fps = if fps > 0.0 && !street { format!(" · {fps:.0} fps") } else { String::new() };
+                ui.label(RichText::new(format!("{} tri{fps}", thousands(der.tris))).font(mono(12.0)).color(txt));
+                if !crate::WEB {
+                    let mcp = ui
+                        .horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            let (d, _) = ui.allocate_exact_size(Vec2::splat(6.0), Sense::hover());
+                            ui.painter().circle_filled(d.center(), 3.0, OK);
+                            ui.add(egui::Label::new(RichText::new("MCP · stdio").size(12.0).color(txt)).sense(Sense::click()))
+                        })
+                        .inner
+                        .on_hover_text("Serwer MCP — szczegóły");
+                    if mcp.clicked() {
+                        cmds.push(Cmd::Mcp);
+                    }
                 }
-                ui.label(RichText::new(format!("{} tri", thousands(der.tris))).font(mono(12.0)).color(DIM));
-                let mcp = ui.add(egui::Label::new(RichText::new("MCP · stdio").size(13.0).color(DIM)).sense(Sense::click())).on_hover_text("Serwer MCP — szczegóły");
-                if mcp.clicked() {
-                    cmds.push(Cmd::Mcp);
-                }
-                if !view.msg.is_empty() {
-                    ui.add(egui::Label::new(RichText::new(&view.msg).size(12.0).color(FAINT)).truncate());
-                }
+                let seed = match doc.mode {
+                    Mode::Building | Mode::Vehicle | Mode::Human => doc.seed,
+                    Mode::Street => doc.street_seed,
+                    _ => doc.scene_seed,
+                };
+                ui.label(RichText::new(format!("seed {seed}")).font(mono(12.0)).color(txt));
             });
         });
     });
@@ -920,7 +1071,7 @@ fn editor_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
         });
         if let Some(item) = view.item {
             let (icon, title, keys) = item_info(item);
-            floating(ctx, "inspector", insp, insp_w, |ui| {
+            inspector(ctx, view.item, insp, insp_w, |ui| {
                 panel_header(ui, Some(icon), title, |ui| {
                     if icon_btn(ui, ic::X, false, "").clicked() {
                         view.item = None;
@@ -1014,7 +1165,7 @@ fn vehicle_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mu
     });
     if let Some(Item::Veh(g)) = view.item {
         let (icon, title) = if g == "typ" { (ic::CHART_SCATTER, "Typ".to_string()) } else { (ic::CAR, td.groups.iter().find(|x| x.id == g).map_or(g.to_string(), |x| x.label.clone())) };
-        floating(ctx, "inspector", insp, insp_w, |ui| {
+        inspector(ctx, view.item, insp, insp_w, |ui| {
             panel_header(ui, Some(icon), &title, |ui| {
                 if icon_btn(ui, ic::X, false, "").clicked() {
                     view.item = None;
@@ -1305,7 +1456,7 @@ fn street_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
         return;
     }
     let (icon, title, _) = item_info(item);
-    floating(ctx, "inspector", insp, insp_w, |ui| {
+    inspector(ctx, view.item, insp, insp_w, |ui| {
         panel_header(ui, Some(icon), title, |ui| {
             if icon_btn(ui, ic::X, false, "").clicked() {
                 view.item = None;
@@ -1427,23 +1578,17 @@ fn viewport_toolbar(ctx: &egui::Context, docs: &mut Docs, view: &mut View, cmds:
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 if mode == Mode::Street {
-                    for (v, label) in [(SView::Elewacja, "Elewacja"), (SView::Perspektywa, "Perspektywa"), (SView::Plan, "Plan")] {
-                        let on = view.sview == v;
-                        let b = egui::Button::new(RichText::new(label).size(14.0).color(if on { TEXT } else { DIM })).fill(if on { ACTIVE } else { Color32::TRANSPARENT }).stroke(Stroke::NONE).min_size(Vec2::new(0.0, 30.0));
-                        if ui.add(b).clicked() && !on {
-                            view.sview = v;
-                            view.reframe = true;
-                        }
+                    if let Some(v) = seg_buttons(ui, "seg-sview", &[(SView::Elewacja, "Elewacja", ""), (SView::Perspektywa, "Perspektywa", ""), (SView::Plan, "Plan", "")], view.sview, 92.0) {
+                        view.sview = v;
+                        view.reframe = true;
                     }
                     sep(ui);
                     if icon_btn(ui, ic::ARROWS_OUT_CARDINAL, false, "Przesuwanie: lewy przycisk").clicked() {
                         view.drag = Drag::Pan;
                     }
                 } else {
-                    for (d, icon, tip) in [(Drag::Orbit, ic::ARROWS_CLOCKWISE, "Obrót"), (Drag::Pan, ic::ARROWS_OUT_CARDINAL, "Przesuwanie"), (Drag::Zoom, ic::MAGNIFYING_GLASS, "Przybliżanie")] {
-                        if icon_btn(ui, icon, view.drag == d, tip).clicked() {
-                            view.drag = d;
-                        }
+                    if let Some(d) = seg_buttons(ui, "seg-drag", &[(Drag::Orbit, ic::ARROWS_CLOCKWISE, "Obrót"), (Drag::Pan, ic::ARROWS_OUT_CARDINAL, "Przesuwanie"), (Drag::Zoom, ic::MAGNIFYING_GLASS, "Przybliżanie")], view.drag, 32.0) {
+                        view.drag = d;
                     }
                 }
                 if icon_btn(ui, ic::CORNERS_OUT, false, "Kadruj (F)").clicked() {
@@ -1482,6 +1627,13 @@ fn viewport_toolbar(ctx: &egui::Context, docs: &mut Docs, view: &mut View, cmds:
                 if mode.scene().is_none() && toggle(ui, &mut on, "Wariacje").on_hover_text("Losowy rozrzut parametrów wokół typologii").changed() {
                     *v = if on { def } else { 0.0 };
                 }
+                if view.item.is_none() {
+                    ui.add_space(4.0);
+                    let b = egui::Button::new(RichText::new("Inspektor").size(13.0)).fill(anim::hex(0x242424)).stroke(Stroke::new(1.0, anim::hex(0x6b6b6b))).min_size(Vec2::new(0.0, 30.0));
+                    if ui.add(b).on_hover_text("Pokaż Inspektor (N)").clicked() {
+                        cmds.push(Cmd::Inspector);
+                    }
+                }
                 ui.add_space(6.0);
             });
         });
@@ -1493,6 +1645,113 @@ fn sep(ui: &mut egui::Ui) {
     let r = ui.available_rect_before_wrap();
     ui.painter().vline(r.left(), r.top() + 4.0..=r.top() + 26.0, Stroke::new(1.0, BORDER_HI));
     ui.add_space(6.0);
+}
+
+// ------------------------------------------------------------------ nakładki: toast, dialog, segment
+
+/// Czy element inspektora należy do trybu dokumentu (N przywraca ostatni tylko w tym samym trybie).
+fn item_fits(mode: Mode, i: Item) -> bool {
+    match i {
+        Item::Veh(_) => mode == Mode::Vehicle,
+        Item::Hum(_) => mode == Mode::Human,
+        _ => mode.fam() == Fam::Budynki,
+    }
+}
+
+/// Toast w prawym dolnym rogu widoku: wjazd z dołu (240 ms), znika po 3 s. Pokazuje każdy nowy `view.msg`.
+fn toast(ctx: &egui::Context, view: &View) {
+    if view.msg.is_empty() {
+        return;
+    }
+    let now = ctx.input(|i| i.time);
+    let t0 = ctx.data_mut(|d| {
+        let s = d.get_temp_mut_or_insert_with::<(String, f64)>(egui::Id::new("toast"), || (String::new(), now));
+        if s.0 != view.msg {
+            *s = (view.msg.clone(), now);
+        }
+        s.1
+    });
+    let dt = (now - t0) as f32;
+    let hold = 3.0;
+    if dt > hold + anim::FAST {
+        return;
+    }
+    ctx.request_repaint();
+    let inn = anim::ease_out(anim::lerp_t(dt, 0.0, anim::MED));
+    let out = 1.0 - anim::lerp_t(dt, hold, hold + anim::FAST);
+    let vp = if view.viewport.is_positive() { view.viewport } else { ctx.viewport_rect() };
+    let err = view.msg.starts_with("Błąd");
+    egui::Area::new("toast".into()).pivot(Align2::RIGHT_BOTTOM).fixed_pos(egui::pos2(vp.right() - 18.0, vp.bottom() - 70.0 + (1.0 - inn) * 12.0)).order(egui::Order::Foreground).interactable(false).show(ctx, |ui| {
+        ui.set_opacity(inn.min(out));
+        Frame::new().fill(BAR2).stroke(Stroke::new(1.0, BORDER_HI)).corner_radius(8).inner_margin(Margin::symmetric(16, 12)).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                ui.label(RichText::new(if err { ic::WARNING } else { ic::CHECK }).size(16.0).color(if err { anim::hex(0xffa3a3) } else { OK }));
+                ui.label(RichText::new(&view.msg).size(13.0));
+            });
+        });
+    });
+}
+
+/// „Zapisać zmiany w …?” przy zamykaniu karty z niezapisanymi zmianami (przyciemnienie + fade 150 ms).
+/// ponytail: „Zapisz” wyłączone, dopóki nie ma formatu projektu `.pzj`.
+fn close_dialog(ctx: &egui::Context, docs: &Docs, view: &mut View, cmds: &mut Vec<Cmd>) {
+    let Some(i) = view.confirm_close else { return };
+    let Some(t) = docs.tabs.get(i) else {
+        view.confirm_close = None;
+        return;
+    };
+    let a = anim::appear(ctx, egui::Id::new("close-dlg"), anim::FAST);
+    let r = egui::Modal::new("close-dlg".into()).backdrop_color(Color32::from_black_alpha((128.0 * a) as u8)).frame(Frame::new().fill(anim::hex(0x202020)).stroke(Stroke::new(1.0, BORDER_HI)).corner_radius(10).inner_margin(22)).show(ctx, |ui| {
+        ui.set_opacity(a);
+        ui.set_width(376.0);
+        ui.spacing_mut().item_spacing.y = 12.0;
+        ui.label(RichText::new(format!("Zapisać zmiany w {}?", t.doc.name)).family(bold()).size(17.0));
+        ui.label(RichText::new("Zmiany z tej karty przepadną, jeśli jej nie zapiszesz.").size(13.5).color(anim::hex(0xc0c0c0)));
+        ui.horizontal(|ui| {
+            ui.add_enabled(false, egui::Button::new(RichText::new("Zapisz").family(bold())).min_size(Vec2::new(0.0, 34.0))).on_disabled_hover_text("Format projektu .pzj jeszcze nie istnieje");
+            if ui.add(egui::Button::new("Nie zapisuj").min_size(Vec2::new(0.0, 34.0))).clicked() {
+                cmds.push(Cmd::CloseTabNow(i));
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.add(egui::Button::new("Anuluj").min_size(Vec2::new(0.0, 34.0))).clicked() {
+                    view.confirm_close = None;
+                }
+            });
+        });
+    });
+    if r.should_close() {
+        view.confirm_close = None;
+    }
+}
+
+/// Segment przycisków z przesuwanym podświetleniem (150 ms) — widok ulicy, narzędzie myszy.
+fn seg_buttons<T: PartialEq + Copy>(ui: &mut egui::Ui, id: &str, items: &[(T, &str, &str)], cur: T, w: f32) -> Option<T> {
+    let mut picked = None;
+    let slide = anim::Slide::begin(ui);
+    let mut target = None;
+    ui.spacing_mut().item_spacing.x = 0.0;
+    for &(v, label, tip) in items {
+        let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 30.0), Sense::click());
+        let on = v == cur;
+        if on {
+            target = Some(rect);
+        }
+        let h = anim::ease(ui.ctx(), resp.id.with("hov"), resp.hovered() as u8 as f32, anim::FAST);
+        let r = anim::scaled(rect, anim::press(ui.ctx(), &resp));
+        let col = anim::mix(anim::hex(0xc4c4c4), TEXT, h.max(on as u8 as f32));
+        let icon = label.chars().count() == 1;
+        ui.painter().text(r.center(), Align2::CENTER_CENTER, label, egui::FontId::proportional(if icon { 15.0 } else { 13.0 }), col);
+        let resp = if tip.is_empty() { resp } else { resp.on_hover_text(tip) };
+        if resp.clicked() && !on {
+            picked = Some(v);
+        }
+    }
+    ui.spacing_mut().item_spacing.x = 4.0;
+    if let Some(t) = target {
+        slide.end(ui, egui::Id::new(id), t, |r| vec![egui::Shape::rect_filled(r, 6, anim::hex(0x2e2e2e))]);
+    }
+    picked
 }
 
 // ------------------------------------------------------------------ Ctrl+K

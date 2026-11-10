@@ -4,6 +4,7 @@
 //! środkowy — przesunięcie, kółko — przybliżenie, F — kadruj, Ctrl+Z/Ctrl+Y — cofnij/ponów,
 //! Ctrl+K — szukaj poleceń.
 
+mod anim;
 mod editors;
 mod gizmos;
 mod human;
@@ -91,6 +92,7 @@ fn initial_state() -> (Docs, View) {
     let m = setting("PIERZEJA_MODE", "mode").unwrap_or_default();
     let arch = |default: &str| setting("PIERZEJA_ARCHETYPE", "archetype").unwrap_or_else(|| default.into());
     view.gizmos = setting("PIERZEJA_GIZMO", "gizmo").as_deref() != Some("0");
+    anim::REDUCED.store(setting("PIERZEJA_REDUCED_MOTION", "reduced").is_some_and(|v| v == "1"), std::sync::atomic::Ordering::Relaxed);
     match m.as_str() {
         "" | "loading" => view.screen = Screen::Loading,
         "start" => view.screen = Screen::Start,
@@ -174,7 +176,7 @@ pub enum Mode {
 }
 
 /// Tryb edytora (ProceduraSuite): zestaw dokumentów jednego generatora.
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Fam {
     Budynki,
     Pojazdy,
@@ -410,6 +412,10 @@ impl Tab {
     pub fn new(doc: Doc) -> Tab {
         Tab { committed: doc.clone(), doc, undo: Vec::new(), redo: Vec::new() }
     }
+    /// Niezapisane zmiany (kropka na karcie, pytanie przy zamykaniu).
+    pub fn dirty(&self) -> bool {
+        !self.undo.is_empty() || self.doc != self.committed
+    }
 }
 
 #[derive(Resource)]
@@ -494,7 +500,7 @@ pub enum RibbonTab {
 }
 
 /// Element wstążki otwierający inspektor.
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Item {
     Typologia,
     Segmenty,
@@ -572,6 +578,12 @@ pub struct View {
     pub gz_dims: bool,
     pub gz_anchors: bool,
     pub gz_skeleton: bool,
+    /// Ostatnio otwarty element inspektora (klawisz N przywraca zamknięty inspektor).
+    pub last_item: Option<Item>,
+    /// Czas startu eksportu (`i.time`) — animacja przycisku eksportu.
+    pub export_t0: Option<f64>,
+    /// Karta z niezapisanymi zmianami czekająca na decyzję w dialogu zamknięcia.
+    pub confirm_close: Option<usize>,
 }
 
 impl Default for View {
@@ -602,6 +614,9 @@ impl Default for View {
             gz_dims: true,
             gz_anchors: true,
             gz_skeleton: true,
+            last_item: None,
+            export_t0: None,
+            confirm_close: None,
         }
     }
 }

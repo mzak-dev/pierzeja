@@ -1,6 +1,7 @@
 //! Ekran startowy (grafika = żywy podgląd 3D, presety, karty) i ekran serwera MCP
 //! (placeholder: wbudowany serwer HTTP jeszcze nie istnieje, MCP działa jako stdio).
 
+use crate::anim::{ease_back, ease_out, hex, lerp_t};
 use crate::theme::*;
 use crate::ui::{logo, Cmd};
 use crate::{out_dir, Docs, Fam, View};
@@ -152,9 +153,10 @@ pub fn start(root: &mut egui::Ui, docs: &Docs, cmds: &mut Vec<Cmd>) {
 
 fn list_row(ui: &mut egui::Ui, swatch: Option<Color32>, icon: Option<&str>, name: &str, right: &str) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 34.0), Sense::click());
+    let h = crate::anim::ease(ui.ctx(), resp.id.with("hov"), resp.hovered() as u8 as f32, crate::anim::FAST);
     let p = ui.painter();
-    if resp.hovered() {
-        p.rect_filled(r, 6, Color32::from_rgba_unmultiplied(0xff, 0xff, 0xff, 14));
+    if h > 0.0 {
+        p.rect_filled(r, 6, Color32::from_rgba_unmultiplied(0xff, 0xff, 0xff, (14.0 * h) as u8));
     }
     let x = r.left() + 16.0;
     if let Some(c) = swatch {
@@ -277,20 +279,6 @@ const LOAD_STEPS: [&str; 10] = [
 ];
 /// Czas animacji [s]: 10 kroków po 0,5 s (jak w mocku); potem ekran startowy.
 const LOAD_SECS: f32 = 5.0;
-
-fn lerp_t(p: f32, a: f32, b: f32) -> f32 {
-    ((p - a) / (b - a)).clamp(0.0, 1.0)
-}
-fn ease_out(x: f32) -> f32 {
-    1.0 - (1.0 - x).powi(3)
-}
-fn ease_back(x: f32) -> f32 {
-    let (c1, x) = (1.6f32, x - 1.0);
-    1.0 + (c1 + 1.0) * x.powi(3) + c1 * x * x
-}
-fn hex(h: u32) -> Color32 {
-    Color32::from_rgb((h >> 16) as u8, (h >> 8) as u8, h as u8)
-}
 
 /// Pierwsze ładowanie edytora: miasto wyrasta, wjeżdża pojazd służb, pojawia się człowiek; trzy paski trybów.
 pub fn loading(root: &mut egui::Ui, cmds: &mut Vec<Cmd>) {

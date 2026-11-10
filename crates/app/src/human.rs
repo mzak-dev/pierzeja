@@ -111,7 +111,7 @@ pub fn panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut Vi
     });
     let Some(Item::Hum(g)) = view.item else { return };
     let (icon, title) = if g == "typ" { (ic::CHART_SCATTER, "Typ".to_string()) } else { (ic::PERSON_SIMPLE, td.groups.iter().find(|x| x.id == g).map_or(g.to_string(), |x| x.label.clone())) };
-    floating(ctx, "inspector", insp, insp_w, |ui| {
+    inspector(ctx, view.item, insp, insp_w, |ui| {
         panel_header(ui, Some(icon), &title, |ui| {
             if icon_btn(ui, ic::X, false, "").clicked() {
                 view.item = None;
