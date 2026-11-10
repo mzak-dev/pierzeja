@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pierzeja-core.workspace = true
+tabor-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 godot = "0.5"

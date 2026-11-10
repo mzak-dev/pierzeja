@@ -76,6 +76,37 @@ pub enum MatKey {
     Ground,
     Road,
     Sidewalk,
+    // Pojazdy (Tabor); `ALL` zostaje listą materiałów budynku.
+    Paint,
+    RoofPaint,
+    Bumper,
+    Plastic,
+    Tyre,
+    Rim,
+    Headlight,
+    Taillight,
+    /// Kierunkowskazy (pomarańczowe, Regulamin EKG ONZ nr 48).
+    Indicator,
+    /// Tablica rejestracyjna: tło i niebieski pasek UE.
+    Plate,
+    PlateBand,
+    /// Lampy błyskowe belek świetlnych (emisyjne, nie szkło).
+    Beacon,
+    // Ludzie (Tłum): sloty zgodne z CharacterLibrary (Skin/Top/Bottom/Shoes) + dodatki.
+    Skin,
+    Top,
+    Bottom,
+    Shoes,
+    Hair,
+    Outer,
+    HiVis,
+    Helmet,
+    Face,
+    // Tłum: taśmy odblaskowe i napisy, białko oka, akcent (krawat, biały pas, taśma żółta), zarost.
+    Reflective,
+    Eye,
+    Detail,
+    Stubble,
 }
 
 impl MatKey {
@@ -102,6 +133,31 @@ impl MatKey {
             MatKey::Ground => "ground",
             MatKey::Road => "road",
             MatKey::Sidewalk => "sidewalk",
+            MatKey::Paint => "paint",
+            MatKey::RoofPaint => "roofPaint",
+            MatKey::Bumper => "bumper",
+            MatKey::Plastic => "plastic",
+            MatKey::Tyre => "tyre",
+            MatKey::Rim => "rim",
+            MatKey::Headlight => "headlight",
+            MatKey::Taillight => "taillight",
+            MatKey::Indicator => "indicator",
+            MatKey::Plate => "plate",
+            MatKey::PlateBand => "plateBand",
+            MatKey::Beacon => "beacon",
+            MatKey::Skin => "Skin",
+            MatKey::Top => "Top",
+            MatKey::Bottom => "Bottom",
+            MatKey::Shoes => "Shoes",
+            MatKey::Hair => "Hair",
+            MatKey::Outer => "Outer",
+            MatKey::HiVis => "HiVis",
+            MatKey::Helmet => "Helmet",
+            MatKey::Face => "Face",
+            MatKey::Reflective => "Reflective",
+            MatKey::Eye => "Eye",
+            MatKey::Detail => "Detail",
+            MatKey::Stubble => "Stubble",
         }
     }
 }
@@ -146,6 +202,10 @@ pub struct MeshData {
 }
 
 impl MeshData {
+    /// Pusta siatka (węzły-kotwice w GLB).
+    pub fn empty() -> MeshData {
+        MeshData { parts: vec![], materials: vec![], bounds: Bounds { min: [0.0; 3], max: [0.0; 3] } }
+    }
     pub fn material(&self, k: MatKey) -> Option<&MaterialSpec> {
         self.materials.iter().find(|m| m.key == k)
     }
@@ -183,6 +243,51 @@ impl MeshData {
             })
             .collect();
         MeshData { parts, materials: self.materials.clone(), bounds: Bounds { min: lo, max: hi } }
+    }
+}
+
+/// Przekształcenie afiniczne 3×4: obrót (macierz wierszowa) + przesunięcie.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Xform {
+    pub m: [[f64; 3]; 3],
+    pub t: V3,
+}
+
+impl Xform {
+    pub const fn identity() -> Xform {
+        Xform { m: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], t: [0.0; 3] }
+    }
+    pub fn translate(t: V3) -> Xform {
+        Xform { t, ..Xform::identity() }
+    }
+    pub fn rot_x(a: f64) -> Xform {
+        let (s, c) = a.sin_cos();
+        Xform { m: [[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]], t: [0.0; 3] }
+    }
+    pub fn rot_y(a: f64) -> Xform {
+        let (s, c) = a.sin_cos();
+        Xform { m: [[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]], t: [0.0; 3] }
+    }
+    pub fn rot_z(a: f64) -> Xform {
+        let (s, c) = a.sin_cos();
+        Xform { m: [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], t: [0.0; 3] }
+    }
+    /// Złożenie: najpierw `rhs`, potem `self` (`self ∘ rhs`).
+    pub fn mul(&self, rhs: &Xform) -> Xform {
+        let mut m = [[0.0; 3]; 3];
+        for (i, row) in m.iter_mut().enumerate() {
+            for (j, v) in row.iter_mut().enumerate() {
+                *v = (0..3).map(|k| self.m[i][k] * rhs.m[k][j]).sum();
+            }
+        }
+        Xform { m, t: self.point(rhs.t) }
+    }
+    /// Sam obrót (normalne, kierunki).
+    pub fn dir(&self, v: V3) -> V3 {
+        std::array::from_fn(|i| self.m[i][0] * v[0] + self.m[i][1] * v[1] + self.m[i][2] * v[2])
+    }
+    pub fn point(&self, v: V3) -> V3 {
+        add(self.dir(v), self.t)
     }
 }
 
@@ -270,6 +375,65 @@ impl MeshBuilder {
 
     pub fn quad(&mut self, mat: MatKey, a: V3, b: V3, c: V3, d: V3, want: Option<V3>) {
         self.poly(mat, &[a, b, c, d], want);
+    }
+
+
+    /// Pas między kolejnymi pierścieniami (zamkniętymi, tej samej długości) w „flat shading”.
+    /// Pierścień to pętla CCW w płaszczyźnie XY patrząc z +Z, kolejne pierścienie rosną w +Z;
+    /// wtedy normalne wychodzą na zewnątrz. `caps` = zaślepki pierwszego i ostatniego pierścienia.
+    /// ponytail: zaślepka to wachlarz od pierwszego wierzchołka, więc pierścienie muszą być wypukłe
+    pub fn loft(&mut self, mat: MatKey, rings: &[Vec<V3>], caps: bool) {
+        self.loft_with(rings, caps.then_some(mat), |_, _| mat);
+    }
+
+    /// Jak `loft`, materiał pasa wybiera `pick(przedział, segment pierścienia)`; zaślepki (jeśli `Some`) mają własny.
+    pub fn loft_with(&mut self, rings: &[Vec<V3>], caps: Option<MatKey>, pick: impl Fn(usize, usize) -> MatKey) {
+        for (i, w) in rings.windows(2).enumerate() {
+            let n = w[0].len();
+            assert_eq!(n, w[1].len(), "pierścienie lofta muszą mieć tyle samo wierzchołków");
+            for s in 0..n {
+                let (a, b, c, d) = (w[0][s], w[0][(s + 1) % n], w[1][(s + 1) % n], w[1][s]);
+                let mat = pick(i, s);
+                // dwa trójkąty zamiast płaskiego czworokąta: niepłaskie ściany dostają własne normalne
+                for tri in [[a, b, c], [a, c, d]] {
+                    if len(cross(sub(tri[1], tri[0]), sub(tri[2], tri[0]))) > 1e-9 {
+                        self.poly(mat, &tri, None);
+                    }
+                }
+            }
+        }
+        if let (Some(cap), true) = (caps, rings.len() >= 2) {
+            let centroid = |r: &Vec<V3>| scale(r.iter().fold([0.0; 3], |a, &p| add(a, p)), 1.0 / r.len() as f64);
+            let (first, last) = (&rings[0], &rings[rings.len() - 1]);
+            let (c0, c1) = (centroid(first), centroid(&rings[1]));
+            let (e0, e1) = (centroid(last), centroid(&rings[rings.len() - 2]));
+            self.poly(cap, first, Some(sub(c0, c1)));
+            self.poly(cap, last, Some(sub(e0, e1)));
+        }
+    }
+
+    /// Dołącza kopię gotowej siatki przekształconą `x` (materiały po `MatKey`).
+    pub fn push(&mut self, m: &MeshData, x: &Xform) {
+        let (mut lo, mut hi) = (self.min, self.max);
+        for part in &m.parts {
+            let mat = part.material.expect("materiał części");
+            let b = self.buf(mat);
+            let base = (b.positions.len() / 3) as u32;
+            for v in part.positions.chunks_exact(3) {
+                let p = x.point([v[0] as f64, v[1] as f64, v[2] as f64]);
+                for k in 0..3 {
+                    lo[k] = lo[k].min(p[k]);
+                    hi[k] = hi[k].max(p[k]);
+                }
+                b.positions.extend(p.map(|c| c as f32));
+            }
+            for v in part.normals.chunks_exact(3) {
+                b.normals.extend(x.dir([v[0] as f64, v[1] as f64, v[2] as f64]).map(|c| c as f32));
+            }
+            b.uvs.extend(&part.uvs);
+            b.indices.extend(part.indices.iter().map(|i| i + base));
+        }
+        (self.min, self.max) = (lo, hi);
     }
 
     /// Prostopadłościan wyrównany do osi.

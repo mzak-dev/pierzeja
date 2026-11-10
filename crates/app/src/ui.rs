@@ -17,6 +17,12 @@ use pierzeja_core::ParamKind;
 #[derive(Clone, PartialEq, Debug)]
 pub enum Cmd {
     Item(Item),
+    Fam(Fam),
+    NewVehicle(String),
+    NewHuman(String),
+    Pose(String),
+    /// Gizmo edycji w widoku: włącz/wyłącz wszystkie (G).
+    Gizmos,
     Reseed,
     Mode(Mode),
     Night,
@@ -73,6 +79,8 @@ pub fn item_info(i: Item) -> (&'static str, &'static str, &'static [&'static str
         Item::Gzyms => (ic::ARCHIVE, "Linia gzymsu", &[]),
         Item::Parcel => (ic::RULER, "Działka", &[]),
         Item::Scena => (ic::DOTS_NINE, "Scena", &[]),
+        Item::Veh(_) => (ic::CAR, "Pojazd", &[]),
+        Item::Hum(_) => (ic::PERSON_SIMPLE, "Człowiek", &[]),
     }
 }
 
@@ -97,10 +105,20 @@ pub fn ribbon_def(tab: RibbonTab, doc: &Doc, view: &View) -> Vec<(&'static str, 
         b
     };
     let sel = |i: Item, label: &'static str| Rb { label, ..it(i) };
-    let street = doc.mode != Mode::Building;
+    let street = doc.mode.is_street();
+    let veh = doc.mode == Mode::Vehicle;
+    let v = |id: &'static str, icon: &'static str, label: &'static str| Rb { enabled: veh, ..rb(icon, label, Cmd::Item(Item::Veh(id)), view.item == Some(Item::Veh(id))) };
     match tab {
+        RibbonTab::Czlowiek => crate::human::ribbon(doc, view),
+        RibbonTab::Pojazd => vec![
+            ("Generuj", vec![v("typ", ic::CHART_SCATTER, "Typ"), Rb { enabled: veh, ..rb(ic::DICE_FIVE, "Losuj", Cmd::Reseed, false) }]),
+            ("Nadwozie", vec![v("bryla", ic::BOUNDING_BOX, "Bryła"), v("sylwetka", ic::SHAPES, "Sylwetka"), v("zabudowa", ic::TRUCK, "Zabudowa")]),
+            ("Koła i podwozie", vec![v("podwozie", ic::CIRCLE_NOTCH, "Podwozie")]),
+            ("Wyposażenie", vec![v("sluzba", ic::SIREN, "Służba")]),
+            ("Wykończenie", vec![v("material", ic::SWATCHES, "Materiał")]),
+        ],
         RibbonTab::Plik => vec![
-            ("Dokument", vec![rb(ic::PLUS, "Nowy", Cmd::Start, false), rb(ic::ROAD_HORIZON, "Nowa ulica", Cmd::NewStreet, false), Rb { enabled: false, ..rb(ic::FOLDER_OPEN, "Otwórz…", Cmd::Start, false) }, Rb { enabled: false, ..rb(ic::FLOPPY_DISK, "Zapisz", Cmd::Start, false) }]),
+            ("Dokument", vec![rb(ic::PLUS, "Nowy", Cmd::Start, false), rb(ic::ROAD_HORIZON, "Nowa ulica", Cmd::NewStreet, false), rb(ic::CAR, "Nowy pojazd", Cmd::NewVehicle(tabor_core::data().default_archetype.clone()), false), rb(ic::PERSON_SIMPLE, "Nowy człowiek", Cmd::NewHuman(tlum_core::data().default_archetype.clone()), false), Rb { enabled: false, ..rb(ic::FOLDER_OPEN, "Otwórz…", Cmd::Start, false) }, Rb { enabled: false, ..rb(ic::FLOPPY_DISK, "Zapisz", Cmd::Start, false) }]),
             ("Karta", vec![rb(ic::ARROW_COUNTER_CLOCKWISE, "Cofnij", Cmd::Undo, false), rb(ic::ARROW_CLOCKWISE, "Ponów", Cmd::Redo, false), rb(ic::X, "Zamknij", Cmd::CloseTab(usize::MAX), false)]),
             ("Integracje", vec![rb(ic::PLUGS_CONNECTED, "Serwer MCP", Cmd::Mcp, false)]),
         ],
@@ -137,7 +155,24 @@ pub fn ribbon_def(tab: RibbonTab, doc: &Doc, view: &View) -> Vec<(&'static str, 
     }
 }
 
-const RIBBON_TABS: [(RibbonTab, &str); 5] = [(RibbonTab::Plik, "Plik"), (RibbonTab::Budynek, "Budynek"), (RibbonTab::Ulica, "Ulica"), (RibbonTab::Render, "Render"), (RibbonTab::Eksport, "Eksport")];
+fn ribbon_tabs(f: Fam) -> Vec<(RibbonTab, &'static str)> {
+    match f {
+        Fam::Pojazdy => vec![(RibbonTab::Plik, "Plik"), (RibbonTab::Pojazd, "Pojazd"), (RibbonTab::Render, "Render"), (RibbonTab::Eksport, "Eksport")],
+        Fam::Ludzie => vec![(RibbonTab::Plik, "Plik"), (RibbonTab::Czlowiek, "Człowiek"), (RibbonTab::Render, "Render"), (RibbonTab::Eksport, "Eksport")],
+        _ => vec![(RibbonTab::Plik, "Plik"), (RibbonTab::Budynek, "Budynek"), (RibbonTab::Ulica, "Ulica"), (RibbonTab::Render, "Render"), (RibbonTab::Eksport, "Eksport")],
+    }
+}
+
+/// Zakładka wstążki i element inspektora startowy dla dokumentu.
+fn home_of(mode: Mode) -> (RibbonTab, Item) {
+    match mode {
+        Mode::Vehicle => (RibbonTab::Pojazd, Item::Veh("bryla")),
+        Mode::Human => (RibbonTab::Czlowiek, Item::Hum("cialo")),
+        Mode::Building => (RibbonTab::Budynek, Item::Kondygnacje),
+        Mode::Street => (RibbonTab::Ulica, Item::Gzyms),
+        _ => (RibbonTab::Ulica, Item::Scena),
+    }
+}
 
 fn plural(n: usize, one: &str, few: &str, many: &str) -> String {
     let w = if n == 1 {
@@ -203,6 +238,14 @@ pub fn ui(
             if i.consume_shortcut(&K::new(M::COMMAND | M::SHIFT, Key::N)) {
                 cmds.push(Cmd::NewStreet);
             }
+            for (k, f) in [(Key::Num1, Fam::Budynki), (Key::Num2, Fam::Pojazdy), (Key::Num3, Fam::Ludzie)] {
+                if i.consume_shortcut(&K::new(M::COMMAND, k)) {
+                    cmds.push(Cmd::Fam(f));
+                }
+            }
+            if i.consume_shortcut(&K::new(M::NONE, Key::G)) {
+                cmds.push(Cmd::Gizmos);
+            }
             if i.consume_shortcut(&K::new(M::COMMAND, Key::K)) {
                 cmds.push(Cmd::Palette);
             }
@@ -222,6 +265,7 @@ pub fn ui(
             view.viewport = vp3d;
             editor_panels(&ctx, &mut docs, &der, &mut view, cam.as_ref(), &mut cmds);
         }
+        Screen::Loading => screens::loading(&mut root, &mut cmds),
         Screen::Start => screens::start(&mut root, &docs, &mut cmds),
         Screen::Mcp => screens::mcp(&mut root, &mut view, &mut cmds),
     }
@@ -262,13 +306,13 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             let s = new_seed();
             let d = docs.cur_mut();
             match mode {
-                Mode::Building => d.seed = s,
+                Mode::Building | Mode::Vehicle | Mode::Human => d.seed = s,
                 Mode::Street => d.street_seed = s,
                 _ => d.scene_seed = s,
             }
         }
         Cmd::Mode(m) => {
-            if mode == Mode::Building {
+            if matches!(mode, Mode::Building | Mode::Vehicle | Mode::Human) {
                 docs.open(Doc::street(m));
             } else {
                 docs.cur_mut().mode = m;
@@ -278,6 +322,8 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             view.screen = Screen::Editor;
         }
         Cmd::Night => view.night = !view.night,
+        Cmd::Gizmos => view.gizmos = !view.gizmos,
+        Cmd::Pose(p) => docs.cur_mut().pose = p,
         Cmd::Shadows => view.shadows = !view.shadows,
         Cmd::Preset(p) => {
             view.preset = Some(p);
@@ -297,6 +343,8 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             let d = docs.cur();
             let s = match d.mode.scene() {
                 Some(k) => serde_json::to_string_pretty(&d.scene_spec(k)),
+                None if d.mode == Mode::Vehicle => serde_json::to_string_pretty(&d.vehicle_spec()),
+                None if d.mode == Mode::Human => serde_json::to_string_pretty(&d.human_spec()),
                 None if d.mode == Mode::Street => serde_json::to_string_pretty(&d.street_spec()),
                 None => serde_json::to_string_pretty(&d.spec()),
             };
@@ -313,6 +361,28 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
         Cmd::NewBuilding(a) => {
             docs.open(Doc::building(&a));
             (view.screen, view.ribbon, view.item) = (Screen::Editor, RibbonTab::Budynek, Some(Item::Kondygnacje));
+        }
+        Cmd::Fam(f) => match f {
+            _ => {
+                match docs.tabs.iter().rposition(|t| t.doc.mode.fam() == f) {
+                    Some(i) => docs.active = i,
+                    None if f == Fam::Pojazdy => docs.open(Doc::vehicle(&tabor_core::data().default_archetype)),
+                    None if f == Fam::Ludzie => docs.open(Doc::human(&tlum_core::data().default_archetype)),
+                    None => docs.open(Doc::building("familok")),
+                }
+                view.screen = Screen::Editor;
+                (view.ribbon, view.item) = (home_of(docs.cur().mode).0, Some(home_of(docs.cur().mode).1));
+            }
+        },
+        Cmd::NewVehicle(a) => {
+            docs.open(Doc::vehicle(&a));
+            view.screen = Screen::Editor;
+            (view.ribbon, view.item) = (RibbonTab::Pojazd, Some(Item::Veh("bryla")));
+        }
+        Cmd::NewHuman(a) => {
+            docs.open(Doc::human(&a));
+            view.screen = Screen::Editor;
+            (view.ribbon, view.item) = (RibbonTab::Czlowiek, Some(Item::Hum("cialo")));
         }
         Cmd::NewStreet => {
             docs.open(Doc::street(Mode::Street));
@@ -333,10 +403,15 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
         Cmd::Tab(i) => {
             docs.active = i;
             view.screen = Screen::Editor;
-            let street = docs.cur().mode != Mode::Building;
-            if street != (view.ribbon == RibbonTab::Ulica) {
-                view.ribbon = if street { RibbonTab::Ulica } else { RibbonTab::Budynek };
-                view.item = Some(if street { Item::Gzyms } else { Item::Kondygnacje });
+            let (rib, item) = home_of(docs.cur().mode);
+            let ok = match docs.cur().mode {
+                Mode::Vehicle => view.ribbon == RibbonTab::Pojazd,
+                Mode::Human => view.ribbon == RibbonTab::Czlowiek,
+                Mode::Building => view.ribbon == RibbonTab::Budynek,
+                _ => view.ribbon == RibbonTab::Ulica,
+            };
+            if !ok {
+                (view.ribbon, view.item) = (rib, Some(item));
             }
         }
         Cmd::Mcp => view.screen = Screen::Mcp,
@@ -344,7 +419,7 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
         Cmd::Undo => docs.undo(),
         Cmd::Redo => docs.redo(),
         Cmd::Archetype(a) => {
-            if mode == Mode::Building {
+            if matches!(mode, Mode::Building | Mode::Vehicle | Mode::Human) {
                 docs.cur_mut().source = Source::Archetype(a);
             } else {
                 run(Cmd::NewBuilding(a), ctx, docs, der, view, window, exit);
@@ -402,6 +477,30 @@ pub fn logo(p: &egui::Painter, r: egui::Rect, col: Color32, w: f32) {
     }
 }
 
+/// Przełącznik trybu edytora (Budynki / Pojazdy / Ludzie) z licznikiem kart.
+fn mode_pill(ui: &mut egui::Ui, f: Fam, n: usize, active: bool) -> egui::Response {
+    let (icon, enabled) = match f {
+        Fam::Budynki => (ic::BUILDINGS, true),
+        Fam::Pojazdy => (ic::CAR, true),
+        Fam::Ludzie => (ic::USER, true),
+    };
+    let font = egui::FontId::proportional(13.5);
+    let tw = ui.fonts_mut(|g| g.layout_no_wrap(f.label().into(), font.clone(), TEXT).size().x);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(tw + 78.0, 30.0), Sense::click());
+    let col = f.color();
+    let p = ui.painter();
+    if active {
+        p.rect(rect, 15, col.gamma_multiply(0.16), Stroke::new(1.0, col.gamma_multiply(0.8)), egui::StrokeKind::Inside);
+    } else if resp.hovered() {
+        p.rect_filled(rect, 15, HOVER);
+    }
+    let fg = if active { col } else if enabled { DIM } else { FAINT };
+    p.text(rect.left_center() + Vec2::new(14.0, 0.0), Align2::LEFT_CENTER, icon, egui::FontId::proportional(15.0), fg);
+    p.text(rect.left_center() + Vec2::new(36.0, 0.0), Align2::LEFT_CENTER, f.label(), font, if active { TEXT } else { fg });
+    p.text(rect.right_center() - Vec2::new(12.0, 0.0), Align2::RIGHT_CENTER, n, mono(11.0), fg);
+    if enabled { resp } else { resp.on_hover_text("Niedostępne") }
+}
+
 fn tab_chip(ui: &mut egui::Ui, name: &str, active: bool, dirty: bool) -> (bool, bool) {
     let font = egui::FontId::proportional(13.5);
     let tw = ui.fonts_mut(|f| f.layout_no_wrap(name.into(), font.clone(), TEXT).size().x);
@@ -434,8 +533,17 @@ fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window,
             let icon = ICON.get_or_init(|| texture(ui.ctx(), "icon", include_bytes!("../assets/icon.png")));
             ui.add(egui::Image::new((icon.id(), Vec2::splat(26.0))));
             ui.add_space(6.0);
-            ui.label(RichText::new("Pierzeja").family(bold()).size(15.0));
-            ui.add_space(14.0);
+            ui.label(RichText::new("Procedura").family(bold()).size(15.0));
+            ui.label(RichText::new("Suite").size(15.0).color(DIM));
+            ui.add_space(12.0);
+            let cur_fam = docs.cur().mode.fam();
+            for f in [Fam::Budynki, Fam::Pojazdy, Fam::Ludzie] {
+                let n = docs.tabs.iter().filter(|t| t.doc.mode.fam() == f).count();
+                if mode_pill(ui, f, n, f == cur_fam && view.screen == Screen::Editor).clicked() {
+                    cmds.push(Cmd::Fam(f));
+                }
+            }
+            ui.add_space(8.0);
             icon_btn(ui, ic::FLOPPY_DISK, false, "Zapis projektu (.pzj) — jeszcze nie ma formatu pliku");
             let t = &docs.tabs[docs.active];
             if icon_btn(ui, ic::ARROW_COUNTER_CLOCKWISE, false, &format!("Cofnij (Ctrl+Z) · {} kroków", t.undo.len())).clicked() {
@@ -448,7 +556,8 @@ fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window,
             let y = ui.max_rect().y_range();
             ui.painter().vline(ui.cursor().left(), y.min + 12.0..=y.max - 12.0, Stroke::new(1.0, BORDER));
             ui.add_space(10.0);
-            for (i, t) in docs.tabs.iter().enumerate() {
+            let cur_fam = docs.cur().mode.fam();
+            for (i, t) in docs.tabs.iter().enumerate().filter(|(_, t)| t.doc.mode.fam() == cur_fam) {
                 let (open, close) = tab_chip(ui, &t.doc.name, i == docs.active && view.screen == Screen::Editor, !t.undo.is_empty() || t.doc != t.committed);
                 if open {
                     cmds.push(Cmd::Tab(i));
@@ -478,7 +587,7 @@ fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window,
                 }
                 ui.add_space(10.0);
                 ui.label(RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).font(mono(12.0)).color(DIM));
-                icon_btn(ui, ic::QUESTION, false, "Mysz: lewy — narzędzie z paska widoku, prawy — obrót, środkowy — przesunięcie, kółko — zoom\nF — kadruj · Ctrl+Z/Ctrl+Y — cofnij/ponów · Ctrl+K — polecenia · Ctrl+Shift+N — nowa ulica");
+                icon_btn(ui, ic::QUESTION, false, "Mysz: lewy — narzędzie z paska widoku, prawy — obrót, środkowy — przesunięcie, kółko — zoom\nF — kadruj · G — gizmo edycji · Ctrl+Z/Ctrl+Y — cofnij/ponów · Ctrl+K — polecenia · Ctrl+Shift+N — nowa ulica");
                 ui.add_space(8.0);
                 // pole „Szukaj poleceń” (otwiera paletę)
                 let (r, resp) = ui.allocate_exact_size(Vec2::new(270.0, 30.0), Sense::click());
@@ -510,7 +619,7 @@ fn ribbon(root: &mut egui::Ui, docs: &Docs, view: &View, cmds: &mut Vec<Cmd>) {
     egui::Panel::top("ribbon").resizable(false).frame(Frame::new().fill(BAR).inner_margin(Margin { left: 12, right: 14, top: 4, bottom: 6 }).stroke(Stroke::NONE)).show(root, |ui| {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            for (t, label) in RIBBON_TABS {
+            for (t, label) in ribbon_tabs(docs.cur().mode.fam()) {
                 let on = view.ribbon == t;
                 let rt = RichText::new(label).size(14.0).color(if on { TEXT } else { DIM });
                 let b = egui::Button::new(if on { rt.family(bold()) } else { rt }).fill(if on { ACTIVE } else { Color32::TRANSPARENT }).stroke(Stroke::NONE).min_size(Vec2::new(0.0, 28.0));
@@ -559,6 +668,17 @@ const SECTIONS: [(&str, &str, Item, &[Item]); 7] = [
     ("Materiał", ic::SWATCHES, Item::Material, &[Item::Material]),
 ];
 
+/// Okruszki pojazdu: etykieta, ikona, id wektora Tabora.
+const VSECTIONS: [(&str, &str, &str); 7] = [
+    ("Typ", ic::CHART_SCATTER, "typ"),
+    ("Bryła", ic::BOUNDING_BOX, "bryla"),
+    ("Sylwetka", ic::SHAPES, "sylwetka"),
+    ("Podwozie", ic::CIRCLE_NOTCH, "podwozie"),
+    ("Zabudowa", ic::TRUCK, "zabudowa"),
+    ("Służba", ic::SIREN, "sluzba"),
+    ("Materiał", ic::SWATCHES, "material"),
+];
+
 fn chip(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>, on: bool) -> egui::Response {
     ui.add(egui::Button::new(text).min_size(Vec2::new(0.0, 28.0)).fill(if on { ACTIVE } else { PANEL }).stroke(Stroke::new(1.0, if on { Color32::from_rgb(0x6a, 0x6a, 0x6a) } else { BORDER })))
 }
@@ -576,6 +696,24 @@ fn bottom_bar(root: &mut egui::Ui, docs: &Docs, der: &Derived, view: &View, fps:
             ui.allocate_ui_with_layout(Vec2::new(left_w, full.height()), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 if street {
                     parcel_ruler(ui, der, view, cmds);
+                } else if doc.mode == Mode::Vehicle {
+                    let cur = VSECTIONS.iter().position(|s| view.item == Some(Item::Veh(s.2)));
+                    for (k, (label, icon, id)) in VSECTIONS.iter().enumerate() {
+                        let after = cur.is_some_and(|c| k > c);
+                        let rt = RichText::new(format!("{icon}  {label}")).size(13.5).color(if after { FAINT } else { TEXT });
+                        if chip(ui, rt, cur == Some(k)).clicked() {
+                            cmds.push(Cmd::Item(Item::Veh(id)));
+                        }
+                    }
+                } else if doc.mode == Mode::Human {
+                    let cur = crate::human::HSECTIONS.iter().position(|s| view.item == Some(Item::Hum(s.2)));
+                    for (k, (label, icon, id)) in crate::human::HSECTIONS.iter().enumerate() {
+                        let after = cur.is_some_and(|c| k > c);
+                        let rt = RichText::new(format!("{icon}  {label}")).size(13.5).color(if after { FAINT } else { TEXT });
+                        if chip(ui, rt, cur == Some(k)).clicked() {
+                            cmds.push(Cmd::Item(Item::Hum(id)));
+                        }
+                    }
                 } else if doc.mode == Mode::Building {
                     let cur = SECTIONS.iter().position(|s| view.item.is_some_and(|i| s.3.contains(&i)));
                     for (k, (label, icon, item, _)) in SECTIONS.iter().enumerate() {
@@ -646,7 +784,7 @@ fn parcel_ruler(ui: &mut egui::Ui, der: &Derived, view: &View, cmds: &mut Vec<Cm
 
 // ------------------------------------------------------------------ panele edytora
 
-fn tree_row(ui: &mut egui::Ui, depth: usize, caret: Option<bool>, eye: Option<bool>, label: &str, value: &str, selected: bool) -> (egui::Response, bool) {
+pub(crate) fn tree_row(ui: &mut egui::Ui, depth: usize, caret: Option<bool>, eye: Option<bool>, label: &str, value: &str, selected: bool) -> (egui::Response, bool) {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::click());
     let p = ui.painter();
     if selected {
@@ -674,7 +812,11 @@ fn tree_row(ui: &mut egui::Ui, depth: usize, caret: Option<bool>, eye: Option<bo
 }
 
 fn param_field(ui: &mut egui::Ui, doc: &mut Doc, der: &Derived, key: &str) {
-    let Some(def) = data().param(key) else { return };
+    param_field_in(ui, data(), doc, der, key);
+}
+
+pub(crate) fn param_field_in(ui: &mut egui::Ui, ds: &procedura_kit::data::Dataset, doc: &mut Doc, der: &Derived, key: &str) {
+    let Some(def) = ds.param(key) else { return };
     let modified = doc.overrides.contains_key(key);
     let cur = doc.overrides.get(key).or(der.resolved.get(key)).cloned().unwrap_or(Value::Null);
     let mut new: Option<Value> = None;
@@ -720,11 +862,11 @@ fn readonly(ui: &mut egui::Ui, label: &str, value: String) {
     });
 }
 
-fn body<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+pub(crate) fn body<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     Frame::new().inner_margin(Margin { left: 10, right: 12, top: 8, bottom: 10 }).show(ui, add).inner
 }
 
-fn footer_link(ui: &mut egui::Ui, text: &str, enabled: bool) -> bool {
+pub(crate) fn footer_link(ui: &mut egui::Ui, text: &str, enabled: bool) -> bool {
     hline(ui);
     let mut clicked = false;
     Frame::new().inner_margin(Margin { left: 12, right: 12, top: 8, bottom: 10 }).show(ui, |ui| {
@@ -767,7 +909,7 @@ fn editor_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
                     cmds.push(Cmd::Item(Item::Typologia));
                 }
             });
-            typology_map(ui, doc, &der.weights, 200.0);
+            typology_map(ui, doc, data(), ACCENT, &der.weights, 200.0);
         });
         if let Some(item) = view.item {
             let (icon, title, keys) = item_info(item);
@@ -786,8 +928,8 @@ fn editor_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
                 }
             });
         }
-        // wymiar wysokości: kropka na okapie, linia do etykiety nad dachem
-        if let Some(s) = &der.stats {
+        // wymiar wysokości: kropka na okapie, linia do etykiety nad dachem (przy włączonych gizmo zastępują go wymiary z `gizmos`)
+        if let Some(s) = der.stats.as_ref().filter(|_| !view.gizmos) {
             let (min, max) = der.bounds;
             let cx = (min.x + max.x) / 2.0 - (max.x - min.x) * 0.12;
             if let (Some(a), Some(b)) = (proj(Vec3::new(cx, s.height_walls as f32, max.z)), proj(Vec3::new(cx, s.height_total as f32 + 2.5, max.z))) {
@@ -797,6 +939,10 @@ fn editor_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
                 dim_label(&p, b, &format!("{:.1} m", s.height_total), ACCENT);
             }
         }
+    } else if mode == Mode::Vehicle {
+        vehicle_panels(ctx, docs, der, view, left, insp, insp_w, &proj, cmds);
+    } else if mode == Mode::Human {
+        crate::human::panels(ctx, docs, der, view, left, insp, insp_w, cmds);
     } else {
         street_panels(ctx, docs, der, view, left, insp, insp_w, cmds);
         if mode == Mode::Street && view.cornice_show && view.sview != SView::Plan {
@@ -808,10 +954,114 @@ fn editor_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut
     {
         gizmo(ctx, vp, g, cmds);
     }
+    if view.gizmos && (mode.fam() != Fam::Budynki || mode == Mode::Building) {
+        crate::gizmos::draw(ctx, docs, der, view, &proj);
+    }
     viewport_toolbar(ctx, docs, view, cmds);
 }
 
-fn dim_label(p: &egui::Painter, at: Pos2, text: &str, border: Color32) {
+/// Panele pojazdu: przeglądarka wektorów, mapa typów (rok × klasa) i inspektor wektora Tabora.
+#[allow(clippy::too_many_arguments)]
+fn vehicle_panels(ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut View, left: Pos2, insp: Pos2, insp_w: f32, proj: &dyn Fn(Vec3) -> Option<Pos2>, cmds: &mut Vec<Cmd>) {
+    let vp = view.viewport;
+    let doc = docs.cur_mut();
+    let td = tabor_core::data();
+    let accent = Fam::Pojazdy.color();
+    let tree = floating(ctx, "browser", left, 290.0, |ui| {
+        panel_header(ui, None, "Przeglądarka", |ui| {
+            ui.label(RichText::new(format!("1 pojazd {}", ic::CARET_DOWN)).size(12.5).color(DIM));
+        });
+        ui.add_space(4.0);
+        ui.spacing_mut().item_spacing.y = 0.0;
+        tree_row(ui, 0, Some(true), Some(view.building), &doc.name, "", false);
+        for g in &td.groups {
+            let Some(id) = VSECTIONS.iter().map(|s| s.2).find(|s| *s == g.id) else { continue };
+            let n = td.params.iter().filter(|p| p.group == g.id && doc.overrides.contains_key(&p.key)).count();
+            let val = if n > 0 { format!("{n} zm.") } else { String::new() };
+            if tree_row(ui, 1, None, None, &g.label, &val, view.item == Some(Item::Veh(id))).0.clicked() {
+                cmds.push(Cmd::Item(Item::Veh(id)));
+            }
+        }
+        for line in der.info.lines().skip(1) {
+            let (name, val) = line.trim_start_matches("• ").split_once(" — ").unwrap_or((line, ""));
+            tree_row(ui, 2, None, None, name, val, false);
+        }
+        let (r, eye) = tree_row(ui, 1, None, Some(!view.night), "Słońce", if view.night { "noc" } else { "dzień" }, false);
+        if eye || r.clicked() {
+            cmds.push(Cmd::Night);
+        }
+        ui.add_space(6.0);
+    });
+    let cur = match &doc.source {
+        Source::Archetype(a) => td.archetype(a).map_or(a.clone(), |x| x.short.clone()),
+        Source::Cursor(y, _) => format!("Mapa {y:.0}"),
+        Source::Weights(_) => "Mieszanka".into(),
+    };
+    floating(ctx, "typology", egui::pos2(left.x, tree.response.rect.bottom() + 12.0), 290.0, |ui| {
+        panel_header(ui, None, "Typ pojazdu", |ui| {
+            if ui.add(egui::Label::new(RichText::new(format!("{cur} {}", ic::CARET_DOWN)).size(12.5).color(DIM)).sense(Sense::click())).clicked() {
+                cmds.push(Cmd::Item(Item::Veh("typ")));
+            }
+        });
+        typology_map(ui, doc, td, accent, &der.weights, 170.0);
+    });
+    if let Some(Item::Veh(g)) = view.item {
+        let (icon, title) = if g == "typ" { (ic::CHART_SCATTER, "Typ".to_string()) } else { (ic::CAR, td.groups.iter().find(|x| x.id == g).map_or(g.to_string(), |x| x.label.clone())) };
+        floating(ctx, "inspector", insp, insp_w, |ui| {
+            panel_header(ui, Some(icon), &title, |ui| {
+                if icon_btn(ui, ic::X, false, "").clicked() {
+                    view.item = None;
+                }
+            });
+            let keys: Vec<&str> = td.params.iter().filter(|p| p.group == g).map(|p| p.key.as_str()).collect();
+            egui::ScrollArea::vertical().max_height(vp.height() - 220.0).show(ui, |ui| {
+                body(ui, |ui| {
+                    if g == "typ" {
+                        prop_row(ui, "Typ", false, None, |ui| {
+                            egui::ComboBox::from_id_salt("vtyp").width(124.0).truncate().selected_text(&cur).show_ui(ui, |ui| {
+                                for a in &td.archetypes {
+                                    if ui.selectable_label(doc.source == Source::Archetype(a.id.clone()), format!("{} ({}–{})", a.name, a.years[0], a.years[1])).on_hover_text(&a.description).clicked() {
+                                        doc.source = Source::Archetype(a.id.clone());
+                                    }
+                                }
+                            });
+                        });
+                        let mut seed = doc.seed as f64;
+                        if prop_row(ui, "Ziarno", false, None, |ui| num_field(ui, &mut seed, 0.0..=99_999.0, 1.0, 0, "#", false)).changed() {
+                            doc.seed = seed as u32;
+                        }
+                        prop_row(ui, "Wariacja", doc.variation > 0.0, Some("Losowy rozrzut parametrów wokół typu"), |ui| {
+                            let m = doc.variation > 0.0;
+                            num_field(ui, &mut doc.variation, 0.0..=1.0, 0.01, 2, "×", m)
+                        });
+                    }
+                    for k in &keys {
+                        param_field_in(ui, td, doc, der, k);
+                    }
+                });
+            });
+            if !keys.is_empty() && footer_link(ui, "Przywróć typ", keys.iter().any(|k| doc.overrides.contains_key(*k))) {
+                keys.iter().for_each(|k| _ = doc.overrides.remove(*k));
+            }
+        });
+    }
+    // wymiary: wysokość przy tyle, długość pod pojazdem (przy włączonych gizmo zastępują je wymiary z `gizmos`)
+    if view.gizmos {
+        return;
+    }
+    let (min, max) = der.bounds;
+    let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Background, "dims".into())).with_clip_rect(vp);
+    if let (Some(a), Some(b)) = (proj(Vec3::new(max.x + 0.3, min.y, min.z - 0.1)), proj(Vec3::new(max.x + 0.3, max.y, min.z - 0.1))) {
+        p.line_segment([a, b], Stroke::new(1.5, accent));
+        dim_label(&p, b, &format!("{:.2} m", max.y - min.y), accent);
+    }
+    if let (Some(a), Some(b)) = (proj(Vec3::new(max.x + 0.3, min.y, min.z)), proj(Vec3::new(max.x + 0.3, min.y, max.z))) {
+        p.line_segment([a, b], Stroke::new(1.5, accent));
+        dim_label(&p, a.lerp(b, 0.5) + Vec2::new(0.0, 30.0), &format!("{:.2} m", max.z - min.z), accent);
+    }
+}
+
+pub(crate) fn dim_label(p: &egui::Painter, at: Pos2, text: &str, border: Color32) {
     let g = p.layout_no_wrap(text.into(), mono(12.5), Color32::WHITE);
     let r = egui::Rect::from_center_size(at - Vec2::new(0.0, 12.0), g.size() + Vec2::new(16.0, 8.0));
     p.rect(r, 4, Color32::from_rgb(0x18, 0x18, 0x18), Stroke::new(1.0, border), egui::StrokeKind::Inside);
@@ -1192,7 +1442,16 @@ fn viewport_toolbar(ctx: &egui::Context, docs: &mut Docs, view: &mut View, cmds:
                 if icon_btn(ui, ic::CORNERS_OUT, false, "Kadruj (F)").clicked() {
                     cmds.push(Cmd::Frame);
                 }
-                if mode != Mode::Street {
+                if matches!(mode, Mode::Vehicle | Mode::Human) {
+                    for (pr, label) in [(Preset::Side, "Bok"), (Preset::Front, "Przód"), (Preset::Top, "Góra"), (Preset::Iso, "Perspektywa")] {
+                        let b = egui::Button::new(RichText::new(label).size(14.0).color(DIM)).fill(Color32::TRANSPARENT).stroke(Stroke::NONE).min_size(Vec2::new(0.0, 30.0));
+                        if ui.add(b).clicked() {
+                            cmds.push(Cmd::Preset(pr));
+                        }
+                    }
+                    sep(ui);
+                }
+                if !matches!(mode, Mode::Street | Mode::Vehicle | Mode::Human) {
                     for (p, icon, tip) in [(Preset::Front, ic::SQUARE, "Widok z frontu"), (Preset::Iso, ic::CUBE, "Izometria")] {
                         if icon_btn(ui, icon, false, tip).clicked() {
                             cmds.push(Cmd::Preset(p));
@@ -1206,6 +1465,10 @@ fn viewport_toolbar(ctx: &egui::Context, docs: &mut Docs, view: &mut View, cmds:
                     cmds.push(Cmd::Shadows);
                 }
                 sep(ui);
+                if matches!(mode, Mode::Building | Mode::Vehicle | Mode::Human) {
+                    crate::gizmos::toolbar_button(ui, mode, view, cmds);
+                    sep(ui);
+                }
                 let doc = docs.cur_mut();
                 let (v, def) = if mode == Mode::Street { (&mut doc.street_var, 0.35) } else { (&mut doc.variation, 0.35) };
                 let mut on = *v > 0.0;
@@ -1232,7 +1495,7 @@ fn palette(ctx: &egui::Context, docs: &Docs, view: &mut View, cmds: &mut Vec<Cmd
     let d = data();
     let doc = docs.cur();
     let mut all: Vec<(String, Cmd)> = Vec::new();
-    for (t, tl) in RIBBON_TABS {
+    for (t, tl) in ribbon_tabs(doc.mode.fam()) {
         for (_, bs) in ribbon_def(t, doc, view) {
             for b in bs.into_iter().filter(|b| b.enabled) {
                 all.push((format!("{tl} › {}", b.label), b.cmd));
@@ -1245,7 +1508,20 @@ fn palette(ctx: &egui::Context, docs: &Docs, view: &mut View, cmds: &mut Vec<Cmd
             all.push((format!("Typ: {}", a.name), Cmd::Archetype(a.id.clone())));
         }
     }
-    if doc.mode != Mode::Building {
+    for a in &tabor_core::data().archetypes {
+        all.push((format!("Nowy pojazd: {} ({}–{})", a.name, a.years[0], a.years[1]), Cmd::NewVehicle(a.id.clone())));
+        if doc.mode == Mode::Vehicle {
+            all.push((format!("Typ pojazdu: {}", a.name), Cmd::Archetype(a.id.clone())));
+        }
+    }
+    for a in &tlum_core::data().archetypes {
+        all.push((format!("Nowy człowiek: {}", a.name), Cmd::NewHuman(a.id.clone())));
+        if doc.mode == Mode::Human {
+            all.push((format!("Typ postaci: {}", a.name), Cmd::Archetype(a.id.clone())));
+        }
+    }
+    all.push(("Gizmo edycji (G)".into(), Cmd::Gizmos));
+    if doc.mode.is_street() {
         for c in &d.city_profiles {
             all.push((format!("Profil ulicy: {}", c.name), Cmd::Profile(c.id.clone())));
         }

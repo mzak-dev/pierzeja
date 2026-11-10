@@ -1,0 +1,1 @@
+{ "archetype": "kombi", "seed": 3, "overrides": { "service": "policja", "wheelbase": 2.8, "seats": 2 } }

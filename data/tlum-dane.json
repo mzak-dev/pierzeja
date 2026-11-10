@@ -1,0 +1,3682 @@
+{
+ "format": "tlum-dane/1",
+ "opis": "Dane referencyjne generatora Tłum: parametry, archetypy (oś year = rok urodzenia, oś scale = formalność stroju 0→1), szkielet rr_human i tabele wyglądu/ubioru/mundurów. Liczby z raportu Generatory ludzi i pojazdów low poly; verified=true to [Ź], false to [S].",
+ "defaultArchetype": "przechodzien_dorosly",
+ "mapYears": [
+  1930,
+  2022
+ ],
+ "eras": [
+  {
+   "from": 1930,
+   "to": 1956,
+   "label": "Seniorzy (65+)"
+  },
+  {
+   "from": 1956,
+   "to": 1976,
+   "label": "Roczniki 1956–1976"
+  },
+  {
+   "from": 1976,
+   "to": 1996,
+   "label": "Roczniki 1976–1996"
+  },
+  {
+   "from": 1996,
+   "to": 2022,
+   "label": "Młodzież i dzieci"
+  }
+ ],
+ "groups": [
+  {
+   "id": "cialo",
+   "label": "Ciało",
+   "description": "Wzrost, proporcje (ułamki wzrostu), BMI, postawa, wiek, płeć."
+  },
+  {
+   "id": "glowa",
+   "label": "Głowa",
+   "description": "Karnacja, fryzura, kolor i siwizna włosów, zarost, okulary."
+  },
+  {
+   "id": "ubior",
+   "label": "Ubiór",
+   "description": "Dziewięć slotów od ciała na zewnątrz: typ i kolor."
+  },
+  {
+   "id": "akcesoria",
+   "label": "Akcesoria",
+   "description": "Kamizelki funkcyjne, pomoce w chodzeniu, wyposażenie."
+  },
+  {
+   "id": "sezon",
+   "label": "Sezon",
+   "description": "Temperatura i opad sterujące doborem warstw."
+  },
+  {
+   "id": "material",
+   "label": "Materiał",
+   "description": "Zużycie i wzór munduru (okresy przejściowe)."
+  }
+ ],
+ "params": [
+  {
+   "key": "height",
+   "group": "cialo",
+   "kind": "number",
+   "label": "Wzrost",
+   "min": 0.9,
+   "max": 2.05,
+   "step": 0.01,
+   "default": 1.78,
+   "jitter": 0.03,
+   "unit": "m",
+   "hint": "Wroński (rocznik), NCD-RisC (dzieci); rr_human ma 1,78 m."
+  },
+  {
+   "key": "shoulderWidth",
+   "group": "cialo",
+   "kind": "number",
+   "label": "Barki / wzrost",
+   "min": 0.2,
+   "max": 0.34,
+   "step": 0.001,
+   "default": 0.294,
+   "jitter": 0.01,
+   "unit": "× wzrostu",
+   "hint": "Biodeltoid CIOP: K 0,270, M 0,294."
+  },
+  {
+   "key": "hipWidth",
+   "group": "cialo",
+   "kind": "number",
+   "label": "Biodra / wzrost",
+   "min": 0.17,
+   "max": 0.27,
+   "step": 0.001,
+   "default": 0.215,
+   "jitter": 0.01,
+   "unit": "× wzrostu",
+   "hint": "Szerokość biodrowa CIOP: K 0,237, M 0,215."
+  },
+  {
+   "key": "crotchHeight",
+   "group": "cialo",
+   "kind": "number",
+   "label": "Krocze / wzrost",
+   "min": 0.44,
+   "max": 0.54,
+   "step": 0.001,
+   "default": 0.516,
+   "jitter": 0.005,
+   "unit": "× wzrostu",
+   "hint": "CIOP: ≈0,51–0,52 u obu płci; wiek skraca nogi, płeć nie."
+  },
+  {
+   "key": "bmi",
+   "group": "cialo",
+   "kind": "number",
+   "label": "BMI",
+   "min": 14,
+   "max": 40,
+   "step": 0.1,
+   "default": 23.5,
+   "jitter": 1.5,
+   "hint": "Masa = BMI × wzrost² (EHIS 2019)."
+  },
+  {
+   "key": "posture",
+   "group": "cialo",
+   "kind": "enum",
+   "label": "Postawa",
+   "options": [
+    {
+     "value": "prosta",
+     "label": "Prosta"
+    },
+    {
+     "value": "pochylona",
+     "label": "Pochylona"
+    },
+    {
+     "value": "kifoza",
+     "label": "Kifoza"
+    }
+   ],
+   "default": "prosta",
+   "jitter": 0,
+   "hint": "Kifoza ~10% w 55–64, ~25% w 65–74, ~40% w 75+ [S]."
+  },
+  {
+   "key": "age",
+   "group": "cialo",
+   "kind": "int",
+   "label": "Wiek",
+   "min": 3,
+   "max": 90,
+   "step": 1,
+   "default": 35,
+   "jitter": 0,
+   "unit": "lat",
+   "hint": "Steruje długością nóg i tułowia, nie wielkością głowy."
+  },
+  {
+   "key": "sex",
+   "group": "cialo",
+   "kind": "number",
+   "label": "Płeć (0 = K, 1 = M)",
+   "min": 0,
+   "max": 1,
+   "step": 0.05,
+   "default": 0.5,
+   "jitter": 0,
+   "hint": "Różnicuje szerokości barków i bioder, nie długość nóg."
+  },
+  {
+   "key": "skinTone",
+   "group": "glowa",
+   "kind": "int",
+   "label": "Karnacja (skala Monka)",
+   "min": 1,
+   "max": 10,
+   "step": 1,
+   "default": 3,
+   "jitter": 0,
+   "unit": "MST",
+   "hint": "Hex w sekcji palety.monk."
+  },
+  {
+   "key": "hairStyle",
+   "group": "glowa",
+   "kind": "enum",
+   "label": "Fryzura",
+   "options": [
+    {
+     "value": "lysy",
+     "label": "Lysy"
+    },
+    {
+     "value": "buzz",
+     "label": "Buzz"
+    },
+    {
+     "value": "fade",
+     "label": "Fade"
+    },
+    {
+     "value": "krotkie_klasyczne",
+     "label": "Krotkie klasyczne"
+    },
+    {
+     "value": "medium",
+     "label": "Medium"
+    },
+    {
+     "value": "dlugie",
+     "label": "Dlugie"
+    },
+    {
+     "value": "kok",
+     "label": "Kok"
+    },
+    {
+     "value": "lysiejacy",
+     "label": "Lysiejacy"
+    },
+    {
+     "value": "bob",
+     "label": "Bob"
+    },
+    {
+     "value": "kucyk",
+     "label": "Kucyk"
+    }
+   ],
+   "default": "krotkie_klasyczne",
+   "jitter": 0
+  },
+  {
+   "key": "hairColor",
+   "group": "glowa",
+   "kind": "color",
+   "label": "Kolor włosów",
+   "default": "#5A3F2A",
+   "jitter": 0.04
+  },
+  {
+   "key": "greyRatio",
+   "group": "glowa",
+   "kind": "number",
+   "label": "Siwizna",
+   "min": 0,
+   "max": 1,
+   "step": 0.01,
+   "default": 0.0,
+   "jitter": 0.05,
+   "hint": "Miesza kolor bazowy z paletą siwą [S]."
+  },
+  {
+   "key": "beard",
+   "group": "glowa",
+   "kind": "enum",
+   "label": "Zarost",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "kilkudniowy",
+     "label": "Kilkudniowy"
+    },
+    {
+     "value": "krotka_broda",
+     "label": "Krotka broda"
+    },
+    {
+     "value": "pelna_broda",
+     "label": "Pelna broda"
+    },
+    {
+     "value": "wasy",
+     "label": "Wasy"
+    },
+    {
+     "value": "kozia",
+     "label": "Kozia"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "glasses",
+   "group": "glowa",
+   "kind": "enum",
+   "label": "Okulary",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "korekcyjne",
+     "label": "Korekcyjne"
+    },
+    {
+     "value": "przeciwsloneczne",
+     "label": "Przeciwsloneczne"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "legwearType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Rajstopy / legginsy",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "rajstopy",
+     "label": "Rajstopy"
+    },
+    {
+     "value": "legginsy",
+     "label": "Legginsy"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "legwearColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Rajstopy / legginsy — kolor",
+   "default": "#1C1C1E",
+   "jitter": 0.03
+  },
+  {
+   "key": "upperBaseType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Góra — warstwa bazowa",
+   "options": [
+    {
+     "value": "tshirt",
+     "label": "Tshirt"
+    },
+    {
+     "value": "koszula",
+     "label": "Koszula"
+    },
+    {
+     "value": "polo",
+     "label": "Polo"
+    },
+    {
+     "value": "golf",
+     "label": "Golf"
+    },
+    {
+     "value": "koszulka_ratownicza",
+     "label": "Koszulka ratownicza"
+    }
+   ],
+   "default": "tshirt",
+   "jitter": 0
+  },
+  {
+   "key": "upperBaseColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Góra — warstwa bazowa — kolor",
+   "default": "#ECEBE6",
+   "jitter": 0.03
+  },
+  {
+   "key": "upperMidType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Góra — warstwa środkowa",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "sweter",
+     "label": "Sweter"
+    },
+    {
+     "value": "bluza",
+     "label": "Bluza"
+    },
+    {
+     "value": "bluza_kaptur",
+     "label": "Bluza kaptur"
+    },
+    {
+     "value": "polar",
+     "label": "Polar"
+    },
+    {
+     "value": "marynarka",
+     "label": "Marynarka"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "upperMidColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Góra — warstwa środkowa — kolor",
+   "default": "#4A4C50",
+   "jitter": 0.03
+  },
+  {
+   "key": "outerType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Okrycie wierzchnie",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "kurtka_lekka",
+     "label": "Kurtka lekka"
+    },
+    {
+     "value": "puchowka",
+     "label": "Puchowka"
+    },
+    {
+     "value": "plaszcz",
+     "label": "Plaszcz"
+    },
+    {
+     "value": "parka",
+     "label": "Parka"
+    },
+    {
+     "value": "kamizelka",
+     "label": "Kamizelka"
+    },
+    {
+     "value": "kurtka_robocza",
+     "label": "Kurtka robocza"
+    },
+    {
+     "value": "kurtka_ratownicza",
+     "label": "Kurtka ratownicza"
+    },
+    {
+     "value": "ubranie_specjalne",
+     "label": "Ubranie specjalne"
+    },
+    {
+     "value": "kurtka_mundurowa",
+     "label": "Kurtka mundurowa"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "outerColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Okrycie wierzchnie — kolor",
+   "default": "#1C1C1E",
+   "jitter": 0.03
+  },
+  {
+   "key": "lowerType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Dół",
+   "options": [
+    {
+     "value": "spodnie",
+     "label": "Spodnie"
+    },
+    {
+     "value": "jeansy",
+     "label": "Jeansy"
+    },
+    {
+     "value": "szorty",
+     "label": "Szorty"
+    },
+    {
+     "value": "spodnica",
+     "label": "Spodnica"
+    },
+    {
+     "value": "dres",
+     "label": "Dres"
+    },
+    {
+     "value": "bojowki",
+     "label": "Bojowki"
+    },
+    {
+     "value": "spodnie_robocze",
+     "label": "Spodnie robocze"
+    },
+    {
+     "value": "spodnie_mundurowe",
+     "label": "Spodnie mundurowe"
+    },
+    {
+     "value": "spodnie_ubranie_specjalne",
+     "label": "Spodnie ubranie specjalne"
+    }
+   ],
+   "default": "jeansy",
+   "jitter": 0
+  },
+  {
+   "key": "lowerColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Dół — kolor",
+   "default": "#24324F",
+   "jitter": 0.03
+  },
+  {
+   "key": "feetType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Obuwie",
+   "options": [
+    {
+     "value": "sneakersy",
+     "label": "Sneakersy"
+    },
+    {
+     "value": "sandaly",
+     "label": "Sandaly"
+    },
+    {
+     "value": "botki",
+     "label": "Botki"
+    },
+    {
+     "value": "buty_zimowe",
+     "label": "Buty zimowe"
+    },
+    {
+     "value": "polbuty",
+     "label": "Polbuty"
+    },
+    {
+     "value": "buty_robocze",
+     "label": "Buty robocze"
+    },
+    {
+     "value": "buty_mundurowe",
+     "label": "Buty mundurowe"
+    },
+    {
+     "value": "buty_strazackie",
+     "label": "Buty strazackie"
+    }
+   ],
+   "default": "sneakersy",
+   "jitter": 0
+  },
+  {
+   "key": "feetColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Obuwie — kolor",
+   "default": "#ECEBE6",
+   "jitter": 0.03
+  },
+  {
+   "key": "headType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Nakrycie głowy",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "czapka_daszek",
+     "label": "Czapka daszek"
+    },
+    {
+     "value": "czapka_zimowa",
+     "label": "Czapka zimowa"
+    },
+    {
+     "value": "kaptur",
+     "label": "Kaptur"
+    },
+    {
+     "value": "kask_budowlany",
+     "label": "Kask budowlany"
+    },
+    {
+     "value": "helm_psp",
+     "label": "Helm psp"
+    },
+    {
+     "value": "czapka_mundurowa",
+     "label": "Czapka mundurowa"
+    },
+    {
+     "value": "czapka_policji_rd",
+     "label": "Czapka policji rd"
+    },
+    {
+     "value": "kaszkiet",
+     "label": "Kaszkiet"
+    },
+    {
+     "value": "beret",
+     "label": "Beret"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "headColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Nakrycie głowy — kolor",
+   "default": "#1C1C1E",
+   "jitter": 0.03
+  },
+  {
+   "key": "neckFaceType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Szyja / twarz",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "szalik",
+     "label": "Szalik"
+    },
+    {
+     "value": "krawat",
+     "label": "Krawat"
+    },
+    {
+     "value": "maseczka",
+     "label": "Maseczka"
+    },
+    {
+     "value": "chusta",
+     "label": "Chusta"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "neckFaceColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Szyja / twarz — kolor",
+   "default": "#4A4C50",
+   "jitter": 0.03
+  },
+  {
+   "key": "carryType",
+   "group": "ubior",
+   "kind": "enum",
+   "label": "Noszone",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "plecak",
+     "label": "Plecak"
+    },
+    {
+     "value": "torba",
+     "label": "Torba"
+    },
+    {
+     "value": "wozek",
+     "label": "Wozek"
+    },
+    {
+     "value": "parasol",
+     "label": "Parasol"
+    },
+    {
+     "value": "torba_medyczna",
+     "label": "Torba medyczna"
+    },
+    {
+     "value": "aparat_oddechowy",
+     "label": "Aparat oddechowy"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "carryColor",
+   "group": "ubior",
+   "kind": "color",
+   "label": "Noszone — kolor",
+   "default": "#1C1C1E",
+   "jitter": 0.03
+  },
+  {
+   "key": "vest",
+   "group": "akcesoria",
+   "kind": "enum",
+   "label": "Kamizelka",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "kam_niebieska",
+     "label": "Kam niebieska"
+    },
+    {
+     "value": "kdr_bialo_niebieska",
+     "label": "Kdr bialo niebieska"
+    },
+    {
+     "value": "odblask_zolta",
+     "label": "Odblask zolta"
+    },
+    {
+     "value": "odblask_pomaranczowa",
+     "label": "Odblask pomaranczowa"
+    },
+    {
+     "value": "kamizelka_policji",
+     "label": "Kamizelka policji"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0,
+   "hint": "Kamizelki funkcyjne to akcesoria, nie archetypy."
+  },
+  {
+   "key": "walkingAid",
+   "group": "akcesoria",
+   "kind": "enum",
+   "label": "Pomoc w chodzeniu",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "laska",
+     "label": "Laska"
+    },
+    {
+     "value": "balkonik",
+     "label": "Balkonik"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "gear",
+   "group": "akcesoria",
+   "kind": "enum",
+   "label": "Wyposażenie",
+   "options": [
+    {
+     "value": "brak",
+     "label": "Brak"
+    },
+    {
+     "value": "pas_sluzbowy",
+     "label": "Pas sluzbowy"
+    },
+    {
+     "value": "pas_bialy",
+     "label": "Pas bialy"
+    },
+    {
+     "value": "pas_narzedziowy",
+     "label": "Pas narzedziowy"
+    },
+    {
+     "value": "radiotelefon",
+     "label": "Radiotelefon"
+    }
+   ],
+   "default": "brak",
+   "jitter": 0
+  },
+  {
+   "key": "temperature",
+   "group": "sezon",
+   "kind": "number",
+   "label": "Temperatura",
+   "min": -25,
+   "max": 40,
+   "step": 0.5,
+   "default": 15,
+   "jitter": 0,
+   "unit": "°C",
+   "hint": "Wyznacza docelowe clo (model Schiavon + dodatek outer)."
+  },
+  {
+   "key": "rain",
+   "group": "sezon",
+   "kind": "number",
+   "label": "Opad",
+   "min": 0,
+   "max": 1,
+   "step": 0.05,
+   "default": 0.0,
+   "jitter": 0,
+   "hint": "Parasol ~35%, kaptur ~25% przy deszczu [S]."
+  },
+  {
+   "key": "wear",
+   "group": "material",
+   "kind": "number",
+   "label": "Zużycie",
+   "min": 0,
+   "max": 1,
+   "step": 0.05,
+   "default": 0.2,
+   "jitter": 0.1,
+   "hint": "Przyciemnienie / spranie kolorów."
+  },
+  {
+   "key": "uniformEra",
+   "group": "material",
+   "kind": "enum",
+   "label": "Wzór munduru",
+   "options": [
+    {
+     "value": "aktualny",
+     "label": "Aktualny"
+    },
+    {
+     "value": "stary",
+     "label": "Stary"
+    }
+   ],
+   "default": "aktualny",
+   "jitter": 0,
+   "hint": "Okresy przejściowe: PRM do 31.12.2030, PSP ok. 10.2033, Policja do 31.12.2032."
+  }
+ ],
+ "defaults": {
+  "height": 1.78,
+  "shoulderWidth": 0.294,
+  "hipWidth": 0.215,
+  "crotchHeight": 0.516,
+  "bmi": 23.5,
+  "posture": "prosta",
+  "age": 35,
+  "sex": 0.5,
+  "skinTone": 3,
+  "hairStyle": "krotkie_klasyczne",
+  "hairColor": "#5A3F2A",
+  "greyRatio": 0.0,
+  "beard": "brak",
+  "glasses": "brak",
+  "legwearType": "brak",
+  "legwearColor": "#1C1C1E",
+  "upperBaseType": "tshirt",
+  "upperBaseColor": "#ECEBE6",
+  "upperMidType": "brak",
+  "upperMidColor": "#4A4C50",
+  "outerType": "brak",
+  "outerColor": "#1C1C1E",
+  "lowerType": "jeansy",
+  "lowerColor": "#24324F",
+  "feetType": "sneakersy",
+  "feetColor": "#ECEBE6",
+  "headType": "brak",
+  "headColor": "#1C1C1E",
+  "neckFaceType": "brak",
+  "neckFaceColor": "#4A4C50",
+  "carryType": "brak",
+  "carryColor": "#1C1C1E",
+  "vest": "brak",
+  "walkingAid": "brak",
+  "gear": "brak",
+  "temperature": 15,
+  "rain": 0.0,
+  "wear": 0.2,
+  "uniformEra": "aktualny"
+ },
+ "archetypes": [
+  {
+   "id": "przechodzien_dorosly",
+   "name": "Przechodzień dorosły",
+   "short": "Dorosły",
+   "years": [
+    1975,
+    2005
+   ],
+   "map": {
+    "year": 1988,
+    "scale": 0.25
+   },
+   "description": "Dorosły 30–45 lat w stroju codziennym (casual_basic): T-shirt, jeansy, sneakersy.",
+   "features": [
+    "wzrost M 178,3 / K 165,1 (P50)",
+    "BMI ~25",
+    "casual 45% w grupie 30–44"
+   ],
+   "sources": [
+    {
+     "title": "Wroński 2023 — wzrost dorosłych w Polsce 1920–1996 (World Inequality Lab)",
+     "url": "https://wid.world/document/adult-height-in-poland-1920-1996-world-inequality-lab-working-paper-2023-11",
+     "verified": true
+    },
+    {
+     "title": "Atlas miar człowieka CIOP-PIB 2023 (P5/P50/P95)",
+     "url": "https://www.ciop.pl/CIOPPortalWAR/file/96353/Atlas_miar_czlowieka.pdf",
+     "verified": true
+    },
+    {
+     "title": "Eurostat EHIS 2019 — BMI wg wieku i płci (hlth_ehis_bm1e)",
+     "url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_ehis_bm1e?geo=PL&time=2019&isced11=TOTAL&unit=PC&format=JSON&lang=en",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 38,
+    "bmi": 25,
+    "hairColor": "#7A5A3A",
+    "upperBaseType": "tshirt",
+    "upperBaseColor": "#4A4C50",
+    "lowerType": "jeansy",
+    "lowerColor": "#46658F",
+    "feetType": "sneakersy",
+    "feetColor": "#ECEBE6",
+    "sex": 0.85
+   }
+  },
+  {
+   "id": "senior",
+   "name": "Senior",
+   "short": "Senior",
+   "years": [
+    1930,
+    1960
+   ],
+   "map": {
+    "year": 1950,
+    "scale": 0.45
+   },
+   "description": "Osoba 65+: pochylona postawa, siwe włosy, okulary, płaszcz i kaszkiet (senior_classic).",
+   "features": [
+    "wzrost M 174,7 (rocznik 1956), −2–5 cm osiadania [S]",
+    "siwizna 0,6–1,0",
+    "okulary 70% [S]",
+    "paleta brązów i beżów ×1,6"
+   ],
+   "sources": [
+    {
+     "title": "Wroński 2023 — wzrost dorosłych w Polsce 1920–1996 (World Inequality Lab)",
+     "url": "https://wid.world/document/adult-height-in-poland-1920-1996-world-inequality-lab-working-paper-2023-11",
+     "verified": true
+    },
+    {
+     "title": "Eurostat EHIS 2019 — BMI wg wieku i płci (hlth_ehis_bm1e)",
+     "url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_ehis_bm1e?geo=PL&time=2019&isced11=TOTAL&unit=PC&format=JSON&lang=en",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "height": 1.72,
+    "age": 72,
+    "bmi": 27.5,
+    "posture": "pochylona",
+    "greyRatio": 0.8,
+    "glasses": "korekcyjne",
+    "hairColor": "#8F8B85",
+    "upperBaseType": "koszula",
+    "upperBaseColor": "#BFA98A",
+    "upperMidType": "sweter",
+    "upperMidColor": "#5B4636",
+    "outerType": "plaszcz",
+    "outerColor": "#5B4636",
+    "lowerType": "spodnie",
+    "lowerColor": "#4A4C50",
+    "feetType": "polbuty",
+    "feetColor": "#2B2B2E",
+    "headType": "kaszkiet",
+    "headColor": "#5B4636",
+    "sex": 0.85
+   }
+  },
+  {
+   "id": "nastolatek",
+   "name": "Nastolatek",
+   "short": "Nastolatek",
+   "years": [
+    2000,
+    2015
+   ],
+   "map": {
+    "year": 2010,
+    "scale": 0.15
+   },
+   "description": "15–17 lat: bluza z kapturem, szerokie spodnie, plecak (teen_streetwear).",
+   "features": [
+    "wzrost chłopców 15 l. 173,9, 17 l. 179,1",
+    "szczupły (BMI ~20)",
+    "bluza z kapturem ×3, plecak ×3 [S]"
+   ],
+   "sources": [
+    {
+     "title": "NCD-RisC 2020 — wzrost dzieci i młodzieży, Polska",
+     "url": "https://www.ncdrisc.org/downloads/bmi-height-2020/height/by_country/NCD_RisC_Lancet_2020_height_child_adolescent_Poland.csv",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "height": 1.72,
+    "age": 16,
+    "bmi": 20,
+    "sex": 0.8,
+    "hairStyle": "fade",
+    "hairColor": "#3B2A1E",
+    "upperBaseType": "tshirt",
+    "upperBaseColor": "#1C1C1E",
+    "upperMidType": "bluza_kaptur",
+    "upperMidColor": "#7D7F82",
+    "lowerType": "bojowki",
+    "lowerColor": "#5B5E3C",
+    "feetType": "sneakersy",
+    "feetColor": "#E9E9EA",
+    "carryType": "plecak",
+    "carryColor": "#1C1C1E"
+   }
+  },
+  {
+   "id": "dziecko",
+   "name": "Dziecko",
+   "short": "Dziecko",
+   "years": [
+    2012,
+    2023
+   ],
+   "map": {
+    "year": 2018,
+    "scale": 0.1
+   },
+   "description": "Dziecko ok. 8 lat: nasycone kolory, plecak szkolny (child_casual).",
+   "features": [
+    "wzrost 7 l. 124–126, 9 l. 136–137 cm",
+    "kolory nasycone ×4, czerń ×0,4 [S]",
+    "proporcja głowy wg kanonu: 6 głów"
+   ],
+   "sources": [
+    {
+     "title": "NCD-RisC 2020 — wzrost dzieci i młodzieży, Polska",
+     "url": "https://www.ncdrisc.org/downloads/bmi-height-2020/height/by_country/NCD_RisC_Lancet_2020_height_child_adolescent_Poland.csv",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "height": 1.3,
+    "age": 8,
+    "bmi": 16,
+    "sex": 0.5,
+    "shoulderWidth": 0.25,
+    "hipWidth": 0.2,
+    "crotchHeight": 0.47,
+    "hairStyle": "krotkie_klasyczne",
+    "hairColor": "#9C7A4E",
+    "upperBaseType": "tshirt",
+    "upperBaseColor": "#F4C430",
+    "upperMidType": "bluza",
+    "upperMidColor": "#2E5EAA",
+    "lowerType": "jeansy",
+    "lowerColor": "#46658F",
+    "feetType": "sneakersy",
+    "feetColor": "#D7263D",
+    "carryType": "plecak",
+    "carryColor": "#3BAA5C"
+   }
+  },
+  {
+   "id": "robotnik",
+   "name": "Robotnik",
+   "short": "Robotnik",
+   "years": [
+    1965,
+    1995
+   ],
+   "map": {
+    "year": 1982,
+    "scale": 0.5
+   },
+   "description": "Pracownik budowlany/drogowy: kurtka robocza i spodnie, kask, buty robocze (work_construction).",
+   "features": [
+    "work_* ×1,7 dla M [S]",
+    "kask budowlany tylko w archetypach work_*",
+    "odzież EN ISO 20471 klasa 1–3"
+   ],
+   "sources": [
+    {
+     "title": "EN ISO 20471 — odzież ostrzegawcza (3M UK, Marina Textil)",
+     "url": "https://www.3m.co.uk/3M/en_GB/scotchlite-uk/resources/standards/",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 42,
+    "bmi": 27,
+    "sex": 0.95,
+    "beard": "kilkudniowy",
+    "wear": 0.5,
+    "upperBaseType": "tshirt",
+    "upperBaseColor": "#3A3B3D",
+    "outerType": "kurtka_robocza",
+    "outerColor": "#FF6A00",
+    "lowerType": "spodnie_robocze",
+    "lowerColor": "#3A3B3D",
+    "feetType": "buty_robocze",
+    "feetColor": "#6B4F3F",
+    "headType": "kask_budowlany",
+    "headColor": "#F4F4F0",
+    "vest": "odblask_pomaranczowa"
+   }
+  },
+  {
+   "id": "biznes",
+   "name": "Biznes",
+   "short": "Biznes",
+   "years": [
+    1970,
+    2000
+   ],
+   "map": {
+    "year": 1985,
+    "scale": 0.8
+   },
+   "description": "Strój formalny: koszula, marynarka, krawat, półbuty (formal / smart_casual).",
+   "features": [
+    "formalność 3 z 3",
+    "krawat wyklucza bluzę z kapturem, T-shirt, dres",
+    "części stroju różnią się o ≤ 1 stopień formalności [S]"
+   ],
+   "sources": [
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 36,
+    "bmi": 24,
+    "hairColor": "#3B2A1E",
+    "upperBaseType": "koszula",
+    "upperBaseColor": "#ECEBE6",
+    "upperMidType": "marynarka",
+    "upperMidColor": "#1F2A44",
+    "lowerType": "spodnie",
+    "lowerColor": "#1F2A44",
+    "feetType": "polbuty",
+    "feetColor": "#1C1C1E",
+    "neckFaceType": "krawat",
+    "neckFaceColor": "#6E2233",
+    "sex": 0.9
+   }
+  },
+  {
+   "id": "policjant_prewencji",
+   "name": "Policjant prewencji",
+   "short": "Policja",
+   "years": [
+    1980,
+    2000
+   ],
+   "map": {
+    "year": 1990,
+    "scale": 0.95
+   },
+   "description": "Granatowy mundur, półgolf, kamizelka z numerem na czarnej taśmie, czapka mundurowa.",
+   "features": [
+    "granat `#1F2340`, srebro `#C0C4C8`",
+    "gwiazda ⌀ 76 mm, srebrny napis POLICJA",
+    "kolor kamizelki ostrzegawczej niepotwierdzony"
+   ],
+   "sources": [
+    {
+     "title": "Dz.U. 2024 poz. 1953 — umundurowanie Policji",
+     "url": "https://eli.gov.pl/eli/DU/2024/1953/ogl/pol/pdf",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 33,
+    "bmi": 25,
+    "sex": 0.9,
+    "hairStyle": "buzz",
+    "hairColor": "#3B2A1E",
+    "vest": "kamizelka_policji",
+    "gear": "pas_sluzbowy",
+    "upperBaseType": "golf",
+    "upperBaseColor": "#1F2340",
+    "outerType": "kurtka_mundurowa",
+    "outerColor": "#1F2340",
+    "lowerType": "spodnie_mundurowe",
+    "lowerColor": "#1F2340",
+    "feetType": "buty_mundurowe",
+    "feetColor": "#111111",
+    "headType": "czapka_mundurowa",
+    "headColor": "#1F2340"
+   }
+  },
+  {
+   "id": "policjant_ruchu_drogowego",
+   "name": "Policjant ruchu drogowego",
+   "short": "Policja RD",
+   "years": [
+    1980,
+    2000
+   ],
+   "map": {
+    "year": 1988,
+    "scale": 0.95
+   },
+   "description": "Mundur granatowy, czapka z białym denkiem, biały pas główny; nowe kurtki softshell.",
+   "features": [
+    "białe denko i biały pas `#F4F8F4`",
+    "okres przejściowy dla starych wzorów do 31.12.2032"
+   ],
+   "sources": [
+    {
+     "title": "Kwartalnik Policyjny 2/2025 — umundurowanie (ruch drogowy)",
+     "url": "https://kwartalnik.csp.edu.pl/download/21/41942/KP2-2025Umundurowanie.pdf",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 35,
+    "bmi": 25,
+    "sex": 0.9,
+    "hairStyle": "buzz",
+    "hairColor": "#3B2A1E",
+    "gear": "pas_bialy",
+    "vest": "odblask_zolta",
+    "upperBaseType": "golf",
+    "upperBaseColor": "#1F2340",
+    "outerType": "kurtka_mundurowa",
+    "outerColor": "#1F2340",
+    "lowerType": "spodnie_mundurowe",
+    "lowerColor": "#1F2340",
+    "feetType": "buty_mundurowe",
+    "feetColor": "#111111",
+    "headType": "czapka_policji_rd",
+    "headColor": "#F2F4F2"
+   }
+  },
+  {
+   "id": "ratownik_medyczny",
+   "name": "Ratownik medyczny",
+   "short": "Ratownik",
+   "years": [
+    1980,
+    2000
+   ],
+   "map": {
+    "year": 1990,
+    "scale": 0.9
+   },
+   "description": "Odzież fluorescencyjna czerwona (EN ISO 20471, klasa 2) z czarnymi wstawkami i pasami odblaskowymi, torba medyczna.",
+   "features": [
+    "czerwień fluo `#FF3A2A`–`#FF4F2E`",
+    "wstawki `#141414`, odblask `#C8CCD0`",
+    "≥ 0,13 m² odblasku",
+    "obuwie czarne"
+   ],
+   "sources": [
+    {
+     "title": "Dz.U. 2025 poz. 1768 — ubiór Państwowego Ratownictwa Medycznego",
+     "url": "https://eli.gov.pl/eli/DU/2025/1768/ogl/pol/pdf",
+     "verified": true
+    },
+    {
+     "title": "EN ISO 20471 — odzież ostrzegawcza (3M UK, Marina Textil)",
+     "url": "https://www.3m.co.uk/3M/en_GB/scotchlite-uk/resources/standards/",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 32,
+    "bmi": 24,
+    "sex": 0.6,
+    "hairStyle": "krotkie_klasyczne",
+    "hairColor": "#5A3F2A",
+    "wear": 0.3,
+    "upperBaseType": "koszulka_ratownicza",
+    "upperBaseColor": "#FF3A2A",
+    "outerType": "kurtka_ratownicza",
+    "outerColor": "#FF3A2A",
+    "lowerType": "spodnie_mundurowe",
+    "lowerColor": "#FF3A2A",
+    "feetType": "buty_mundurowe",
+    "feetColor": "#111111",
+    "carryType": "torba_medyczna",
+    "carryColor": "#141414"
+   }
+  },
+  {
+   "id": "strazak_sluzbowy",
+   "name": "Strażak w ubiorze służbowym",
+   "short": "Strażak służb.",
+   "years": [
+    1975,
+    2000
+   ],
+   "map": {
+    "year": 1988,
+    "scale": 0.8
+   },
+   "description": "Ubiór służbowy PSP (dawne „koszarowe”): piaskowy, czarny polar.",
+   "features": [
+    "piasek `#A8956A`, polar `#111111`",
+    "napis PAŃSTWOWA STRAŻ POŻARNA na plecach",
+    "zastępuje strazak_koszarowy z planu"
+   ],
+   "sources": [
+    {
+     "title": "Dz.U. 2021 poz. 1795 — ubiory PSP",
+     "url": "https://api.sejm.gov.pl/eli/acts/DU/2021/1795/text.pdf",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 38,
+    "bmi": 26,
+    "sex": 0.9,
+    "hairStyle": "buzz",
+    "hairColor": "#3B2A1E",
+    "upperBaseType": "koszula",
+    "upperBaseColor": "#A8956A",
+    "upperMidType": "polar",
+    "upperMidColor": "#111111",
+    "lowerType": "spodnie_mundurowe",
+    "lowerColor": "#A8956A",
+    "feetType": "buty_mundurowe",
+    "feetColor": "#111111",
+    "headType": "czapka_mundurowa",
+    "headColor": "#A8956A"
+   }
+  },
+  {
+   "id": "strazak_bojowy",
+   "name": "Strażak w ubraniu specjalnym",
+   "short": "Strażak",
+   "years": [
+    1980,
+    2000
+   ],
+   "map": {
+    "year": 1990,
+    "scale": 0.95
+   },
+   "description": "Ubranie specjalne PSP złoto-piaskowe, taśmy żółto-zielona fluo i srebrna, hełm czerwony, aparat oddechowy.",
+   "features": [
+    "tkanina `#B08E5A`, taśmy `#DFF020` i `#C8C8C8`",
+    "czarne kolana i dół nogawek",
+    "hełm `#AB2524`",
+    "wzór z 2005 r. dopuszczony do 31.12.2027"
+   ],
+   "sources": [
+    {
+     "title": "Dz.U. 2021 poz. 1795 — ubiory PSP",
+     "url": "https://api.sejm.gov.pl/eli/acts/DU/2021/1795/text.pdf",
+     "verified": true
+    },
+    {
+     "title": "EN ISO 20471 — odzież ostrzegawcza (3M UK, Marina Textil)",
+     "url": "https://www.3m.co.uk/3M/en_GB/scotchlite-uk/resources/standards/",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 34,
+    "bmi": 26,
+    "sex": 0.95,
+    "hairStyle": "buzz",
+    "hairColor": "#3B2A1E",
+    "wear": 0.4,
+    "upperBaseType": "tshirt",
+    "upperBaseColor": "#111111",
+    "outerType": "ubranie_specjalne",
+    "outerColor": "#B08E5A",
+    "lowerType": "spodnie_ubranie_specjalne",
+    "lowerColor": "#B08E5A",
+    "feetType": "buty_strazackie",
+    "feetColor": "#111111",
+    "headType": "helm_psp",
+    "headColor": "#AB2524",
+    "carryType": "aparat_oddechowy",
+    "carryColor": "#C8C8C8"
+   }
+  },
+  {
+   "id": "operator_ciezkiego_sprzetu",
+   "name": "Operator ciężkiego sprzętu",
+   "short": "Operator",
+   "years": [
+    1965,
+    1995
+   ],
+   "map": {
+    "year": 1980,
+    "scale": 0.85
+   },
+   "description": "Odzież ostrzegawcza EN ISO 20471 w żółtej fluo, kask, buty robocze.",
+   "features": [
+    "tło żółte fluo `#DFFC00` (Y ≥ 0,70)",
+    "klasa 2: 0,50 m² tła, 0,13 m² odblasku",
+    "taśma odblaskowa `#BFC3C7`"
+   ],
+   "sources": [
+    {
+     "title": "EN ISO 20471 — odzież ostrzegawcza (3M UK, Marina Textil)",
+     "url": "https://www.3m.co.uk/3M/en_GB/scotchlite-uk/resources/standards/",
+     "verified": true
+    },
+    {
+     "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S]",
+     "url": "reports/Generatory ludzi i pojazdów low poly.md",
+     "verified": false
+    }
+   ],
+   "overrides": {
+    "age": 45,
+    "bmi": 27.5,
+    "sex": 0.95,
+    "beard": "kilkudniowy",
+    "hairStyle": "buzz",
+    "hairColor": "#5A3F2A",
+    "vest": "odblask_zolta",
+    "wear": 0.4,
+    "upperBaseType": "tshirt",
+    "upperBaseColor": "#3A3B3D",
+    "outerType": "kurtka_robocza",
+    "outerColor": "#DFFC00",
+    "lowerType": "spodnie_robocze",
+    "lowerColor": "#3A3B3D",
+    "feetType": "buty_robocze",
+    "feetColor": "#6B4F3F",
+    "headType": "kask_budowlany",
+    "headColor": "#F4F4F0"
+   }
+  }
+ ],
+ "szkielet": {
+  "uklad": "glTF: Y w górę, przód +Z, lewa strona postaci = +X; metry",
+  "zrodlo": "Assets/Characters/pipeline/build.py (Blender z-up, przód −Y)",
+  "jointy": [
+   {
+    "name": "Root",
+    "parent": null,
+    "head": [
+     0.0,
+     0,
+     0.0
+    ],
+    "tail": [
+     0.0,
+     0.1,
+     0.0
+    ]
+   },
+   {
+    "name": "Hips",
+    "parent": "Root",
+    "head": [
+     0.0,
+     0.98,
+     0.0
+    ],
+    "tail": [
+     0.0,
+     1.08,
+     0.0
+    ]
+   },
+   {
+    "name": "Spine",
+    "parent": "Hips",
+    "head": [
+     0.0,
+     1.08,
+     0.0
+    ],
+    "tail": [
+     0.0,
+     1.22,
+     0.0
+    ]
+   },
+   {
+    "name": "Chest",
+    "parent": "Spine",
+    "head": [
+     0.0,
+     1.22,
+     0.0
+    ],
+    "tail": [
+     0.0,
+     1.35,
+     0.0
+    ]
+   },
+   {
+    "name": "UpperChest",
+    "parent": "Chest",
+    "head": [
+     0.0,
+     1.35,
+     0.0
+    ],
+    "tail": [
+     0.0,
+     1.46,
+     0.0
+    ]
+   },
+   {
+    "name": "Neck",
+    "parent": "UpperChest",
+    "head": [
+     0.0,
+     1.46,
+     0.0
+    ],
+    "tail": [
+     0.0,
+     1.56,
+     0.0
+    ]
+   },
+   {
+    "name": "Head",
+    "parent": "Neck",
+    "head": [
+     0.0,
+     1.56,
+     0.0
+    ],
+    "tail": [
+     0.0,
+     1.78,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftShoulder",
+    "parent": "UpperChest",
+    "head": [
+     0.03,
+     1.42,
+     0.0
+    ],
+    "tail": [
+     0.17,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftUpperArm",
+    "parent": "LeftShoulder",
+    "head": [
+     0.17,
+     1.43,
+     0.0
+    ],
+    "tail": [
+     0.45,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftLowerArm",
+    "parent": "LeftUpperArm",
+    "head": [
+     0.45,
+     1.43,
+     0.0
+    ],
+    "tail": [
+     0.71,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftHand",
+    "parent": "LeftLowerArm",
+    "head": [
+     0.71,
+     1.43,
+     0.0
+    ],
+    "tail": [
+     0.89,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftUpperLeg",
+    "parent": "Hips",
+    "head": [
+     0.09,
+     0.95,
+     0.0
+    ],
+    "tail": [
+     0.09,
+     0.52,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftLowerLeg",
+    "parent": "LeftUpperLeg",
+    "head": [
+     0.09,
+     0.52,
+     0.0
+    ],
+    "tail": [
+     0.09,
+     0.09,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftFoot",
+    "parent": "LeftLowerLeg",
+    "head": [
+     0.09,
+     0.09,
+     0.0
+    ],
+    "tail": [
+     0.09,
+     0.025,
+     0.13
+    ]
+   },
+   {
+    "name": "LeftToes",
+    "parent": "LeftFoot",
+    "head": [
+     0.09,
+     0.025,
+     0.13
+    ],
+    "tail": [
+     0.09,
+     0.025,
+     0.2
+    ]
+   },
+   {
+    "name": "LeftHandIK",
+    "parent": "Root",
+    "head": [
+     0.71,
+     1.43,
+     0.0
+    ],
+    "tail": [
+     0.89,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftFootIK",
+    "parent": "Root",
+    "head": [
+     0.09,
+     0.09,
+     0.0
+    ],
+    "tail": [
+     0.09,
+     0.025,
+     0.13
+    ]
+   },
+   {
+    "name": "LeftHandGrip",
+    "parent": "LeftHand",
+    "head": [
+     0.79,
+     1.41,
+     0.0
+    ],
+    "tail": [
+     0.84,
+     1.41,
+     0.0
+    ]
+   },
+   {
+    "name": "RightShoulder",
+    "parent": "UpperChest",
+    "head": [
+     -0.03,
+     1.42,
+     0.0
+    ],
+    "tail": [
+     -0.17,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "RightUpperArm",
+    "parent": "RightShoulder",
+    "head": [
+     -0.17,
+     1.43,
+     0.0
+    ],
+    "tail": [
+     -0.45,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "RightLowerArm",
+    "parent": "RightUpperArm",
+    "head": [
+     -0.45,
+     1.43,
+     0.0
+    ],
+    "tail": [
+     -0.71,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "RightHand",
+    "parent": "RightLowerArm",
+    "head": [
+     -0.71,
+     1.43,
+     0.0
+    ],
+    "tail": [
+     -0.89,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "RightUpperLeg",
+    "parent": "Hips",
+    "head": [
+     -0.09,
+     0.95,
+     0.0
+    ],
+    "tail": [
+     -0.09,
+     0.52,
+     0.0
+    ]
+   },
+   {
+    "name": "RightLowerLeg",
+    "parent": "RightUpperLeg",
+    "head": [
+     -0.09,
+     0.52,
+     0.0
+    ],
+    "tail": [
+     -0.09,
+     0.09,
+     0.0
+    ]
+   },
+   {
+    "name": "RightFoot",
+    "parent": "RightLowerLeg",
+    "head": [
+     -0.09,
+     0.09,
+     0.0
+    ],
+    "tail": [
+     -0.09,
+     0.025,
+     0.13
+    ]
+   },
+   {
+    "name": "RightToes",
+    "parent": "RightFoot",
+    "head": [
+     -0.09,
+     0.025,
+     0.13
+    ],
+    "tail": [
+     -0.09,
+     0.025,
+     0.2
+    ]
+   },
+   {
+    "name": "RightHandIK",
+    "parent": "Root",
+    "head": [
+     -0.71,
+     1.43,
+     0.0
+    ],
+    "tail": [
+     -0.89,
+     1.43,
+     0.0
+    ]
+   },
+   {
+    "name": "RightFootIK",
+    "parent": "Root",
+    "head": [
+     -0.09,
+     0.09,
+     0.0
+    ],
+    "tail": [
+     -0.09,
+     0.025,
+     0.13
+    ]
+   },
+   {
+    "name": "RightHandGrip",
+    "parent": "RightHand",
+    "head": [
+     -0.79,
+     1.41,
+     0.0
+    ],
+    "tail": [
+     -0.84,
+     1.41,
+     0.0
+    ]
+   },
+   {
+    "name": "LeftThumbProximal",
+    "parent": "LeftHand",
+    "head": [
+     0.728,
+     1.422,
+     0.02
+    ],
+    "tail": [
+     0.7633,
+     1.4161,
+     0.0455
+    ]
+   },
+   {
+    "name": "LeftThumbIntermediate",
+    "parent": "LeftThumbProximal",
+    "head": [
+     0.7633,
+     1.4161,
+     0.0455
+    ],
+    "tail": [
+     0.7888,
+     1.4129,
+     0.063
+    ]
+   },
+   {
+    "name": "LeftThumbDistal",
+    "parent": "LeftThumbIntermediate",
+    "head": [
+     0.7888,
+     1.4129,
+     0.063
+    ],
+    "tail": [
+     0.8111,
+     1.4103,
+     0.0761
+    ]
+   },
+   {
+    "name": "LeftIndexProximal",
+    "parent": "LeftHand",
+    "head": [
+     0.806,
+     1.428,
+     0.0312
+    ],
+    "tail": [
+     0.843,
+     1.428,
+     0.0334
+    ]
+   },
+   {
+    "name": "LeftIndexIntermediate",
+    "parent": "LeftIndexProximal",
+    "head": [
+     0.843,
+     1.428,
+     0.0334
+    ],
+    "tail": [
+     0.8649,
+     1.428,
+     0.0347
+    ]
+   },
+   {
+    "name": "LeftIndexDistal",
+    "parent": "LeftIndexIntermediate",
+    "head": [
+     0.8649,
+     1.428,
+     0.0347
+    ],
+    "tail": [
+     0.8829,
+     1.428,
+     0.0358
+    ]
+   },
+   {
+    "name": "LeftMiddleProximal",
+    "parent": "LeftHand",
+    "head": [
+     0.81,
+     1.429,
+     0.0096
+    ],
+    "tail": [
+     0.852,
+     1.429,
+     0.0096
+    ]
+   },
+   {
+    "name": "LeftMiddleIntermediate",
+    "parent": "LeftMiddleProximal",
+    "head": [
+     0.852,
+     1.429,
+     0.0096
+    ],
+    "tail": [
+     0.878,
+     1.429,
+     0.0096
+    ]
+   },
+   {
+    "name": "LeftMiddleDistal",
+    "parent": "LeftMiddleIntermediate",
+    "head": [
+     0.878,
+     1.429,
+     0.0096
+    ],
+    "tail": [
+     0.897,
+     1.429,
+     0.0096
+    ]
+   },
+   {
+    "name": "LeftRingProximal",
+    "parent": "LeftHand",
+    "head": [
+     0.806,
+     1.428,
+     -0.012
+    ],
+    "tail": [
+     0.845,
+     1.428,
+     -0.0137
+    ]
+   },
+   {
+    "name": "LeftRingIntermediate",
+    "parent": "LeftRingProximal",
+    "head": [
+     0.845,
+     1.428,
+     -0.0137
+    ],
+    "tail": [
+     0.87,
+     1.428,
+     -0.0146
+    ]
+   },
+   {
+    "name": "LeftRingDistal",
+    "parent": "LeftRingIntermediate",
+    "head": [
+     0.87,
+     1.428,
+     -0.0146
+    ],
+    "tail": [
+     0.8889,
+     1.428,
+     -0.0155
+    ]
+   },
+   {
+    "name": "LeftLittleProximal",
+    "parent": "LeftHand",
+    "head": [
+     0.798,
+     1.426,
+     -0.0312
+    ],
+    "tail": [
+     0.8289,
+     1.426,
+     -0.0342
+    ]
+   },
+   {
+    "name": "LeftLittleIntermediate",
+    "parent": "LeftLittleProximal",
+    "head": [
+     0.8289,
+     1.426,
+     -0.0342
+    ],
+    "tail": [
+     0.8478,
+     1.426,
+     -0.036
+    ]
+   },
+   {
+    "name": "LeftLittleDistal",
+    "parent": "LeftLittleIntermediate",
+    "head": [
+     0.8478,
+     1.426,
+     -0.036
+    ],
+    "tail": [
+     0.8648,
+     1.426,
+     -0.0376
+    ]
+   },
+   {
+    "name": "RightThumbProximal",
+    "parent": "RightHand",
+    "head": [
+     -0.728,
+     1.422,
+     0.02
+    ],
+    "tail": [
+     -0.7633,
+     1.4161,
+     0.0455
+    ]
+   },
+   {
+    "name": "RightThumbIntermediate",
+    "parent": "RightThumbProximal",
+    "head": [
+     -0.7633,
+     1.4161,
+     0.0455
+    ],
+    "tail": [
+     -0.7888,
+     1.4129,
+     0.063
+    ]
+   },
+   {
+    "name": "RightThumbDistal",
+    "parent": "RightThumbIntermediate",
+    "head": [
+     -0.7888,
+     1.4129,
+     0.063
+    ],
+    "tail": [
+     -0.8111,
+     1.4103,
+     0.0761
+    ]
+   },
+   {
+    "name": "RightIndexProximal",
+    "parent": "RightHand",
+    "head": [
+     -0.806,
+     1.428,
+     0.0312
+    ],
+    "tail": [
+     -0.843,
+     1.428,
+     0.0334
+    ]
+   },
+   {
+    "name": "RightIndexIntermediate",
+    "parent": "RightIndexProximal",
+    "head": [
+     -0.843,
+     1.428,
+     0.0334
+    ],
+    "tail": [
+     -0.8649,
+     1.428,
+     0.0347
+    ]
+   },
+   {
+    "name": "RightIndexDistal",
+    "parent": "RightIndexIntermediate",
+    "head": [
+     -0.8649,
+     1.428,
+     0.0347
+    ],
+    "tail": [
+     -0.8829,
+     1.428,
+     0.0358
+    ]
+   },
+   {
+    "name": "RightMiddleProximal",
+    "parent": "RightHand",
+    "head": [
+     -0.81,
+     1.429,
+     0.0096
+    ],
+    "tail": [
+     -0.852,
+     1.429,
+     0.0096
+    ]
+   },
+   {
+    "name": "RightMiddleIntermediate",
+    "parent": "RightMiddleProximal",
+    "head": [
+     -0.852,
+     1.429,
+     0.0096
+    ],
+    "tail": [
+     -0.878,
+     1.429,
+     0.0096
+    ]
+   },
+   {
+    "name": "RightMiddleDistal",
+    "parent": "RightMiddleIntermediate",
+    "head": [
+     -0.878,
+     1.429,
+     0.0096
+    ],
+    "tail": [
+     -0.897,
+     1.429,
+     0.0096
+    ]
+   },
+   {
+    "name": "RightRingProximal",
+    "parent": "RightHand",
+    "head": [
+     -0.806,
+     1.428,
+     -0.012
+    ],
+    "tail": [
+     -0.845,
+     1.428,
+     -0.0137
+    ]
+   },
+   {
+    "name": "RightRingIntermediate",
+    "parent": "RightRingProximal",
+    "head": [
+     -0.845,
+     1.428,
+     -0.0137
+    ],
+    "tail": [
+     -0.87,
+     1.428,
+     -0.0146
+    ]
+   },
+   {
+    "name": "RightRingDistal",
+    "parent": "RightRingIntermediate",
+    "head": [
+     -0.87,
+     1.428,
+     -0.0146
+    ],
+    "tail": [
+     -0.8889,
+     1.428,
+     -0.0155
+    ]
+   },
+   {
+    "name": "RightLittleProximal",
+    "parent": "RightHand",
+    "head": [
+     -0.798,
+     1.426,
+     -0.0312
+    ],
+    "tail": [
+     -0.8289,
+     1.426,
+     -0.0342
+    ]
+   },
+   {
+    "name": "RightLittleIntermediate",
+    "parent": "RightLittleProximal",
+    "head": [
+     -0.8289,
+     1.426,
+     -0.0342
+    ],
+    "tail": [
+     -0.8478,
+     1.426,
+     -0.036
+    ]
+   },
+   {
+    "name": "RightLittleDistal",
+    "parent": "RightLittleIntermediate",
+    "head": [
+     -0.8478,
+     1.426,
+     -0.036
+    ],
+    "tail": [
+     -0.8648,
+     1.426,
+     -0.0376
+    ]
+   }
+  ]
+ },
+ "proporcje": {
+  "unit": "cm",
+  "zrodlo": "Atlas miar człowieka CIOP-PIB 2023, populacja 20–70 lat",
+  "cechy": {
+   "w1_wzrost": {
+    "k": [
+     154.4,
+     165.1,
+     176.1
+    ],
+    "m": [
+     166.8,
+     178.3,
+     189.4
+    ]
+   },
+   "w3_wysokoscBarkowa": {
+    "k": [
+     126.6,
+     135.7,
+     146.6
+    ],
+    "m": [
+     136.5,
+     147.2,
+     157.4
+    ]
+   },
+   "w5_wysokoscLokciowa": {
+    "k": [
+     96.2,
+     103.8,
+     112.0
+    ],
+    "m": [
+     103.6,
+     112.1,
+     120.5
+    ]
+   },
+   "w7_wysokoscKrocza": {
+    "k": [
+     76.6,
+     84.7,
+     92.9
+    ],
+    "m": [
+     83.6,
+     92.0,
+     100.2
+    ]
+   },
+   "w9_wysokoscKolanowa": {
+    "k": [
+     38.8,
+     43.2,
+     48.0
+    ],
+    "m": [
+     41.9,
+     46.7,
+     52.0
+    ]
+   },
+   "s1_szerokoscBarkowa": {
+    "k": [
+     40.0,
+     44.6,
+     50.5
+    ],
+    "m": [
+     46.7,
+     52.4,
+     58.2
+    ]
+   },
+   "s4_szerokoscKlatki": {
+    "k": [
+     25.4,
+     30.2,
+     37.8
+    ],
+    "m": [
+     29.1,
+     33.8,
+     39.6
+    ]
+   },
+   "s6_szerokoscBiodrowa": {
+    "k": [
+     34.5,
+     39.2,
+     46.1
+    ],
+    "m": [
+     34.7,
+     38.3,
+     43.0
+    ]
+   },
+   "g2_glebokoscKlatki": {
+    "k": [
+     21.9,
+     27.2,
+     37.0
+    ],
+    "m": [
+     22.6,
+     26.9,
+     31.6
+    ]
+   },
+   "g4_glebokoscBrzuszna": {
+    "k": [
+     22.4,
+     28.4,
+     38.1
+    ],
+    "m": [
+     24.3,
+     30.8,
+     39.5
+    ]
+   },
+   "o7_obwodTalii": {
+    "k": [
+     64.3,
+     79.0,
+     108.0
+    ],
+    "m": [
+     75.4,
+     94.0,
+     116.5
+    ]
+   },
+   "o8_obwodBioder": {
+    "k": [
+     89.0,
+     101.0,
+     119.9
+    ],
+    "m": [
+     92.0,
+     101.5,
+     114.2
+    ]
+   },
+   "d3_dlugoscRamienia": {
+    "k": [
+     27.2,
+     31.6,
+     35.5
+    ],
+    "m": [
+     29.1,
+     34.3,
+     38.7
+    ]
+   },
+   "d4_dlugoscKonczynyGornej": {
+    "k": [
+     66.1,
+     72.2,
+     83.2
+    ],
+    "m": [
+     72.1,
+     79.0,
+     89.8
+    ]
+   },
+   "d5_dlugoscUda": {
+    "k": [
+     55.4,
+     60.4,
+     69.7
+    ],
+    "m": [
+     60.4,
+     66.9,
+     75.5
+    ]
+   },
+   "w11_wysokoscSiedzeniowa": {
+    "k": [
+     80.7,
+     87.2,
+     92.9
+    ],
+    "m": [
+     85.5,
+     91.7,
+     97.8
+    ]
+   },
+   "d6_dlugoscGlowy": {
+    "k": [
+     19.0,
+     21.1,
+     23.5
+    ],
+    "m": [
+     19.4,
+     21.7,
+     24.6
+    ]
+   },
+   "s18_szerokoscGlowy": {
+    "k": [
+     14.4,
+     15.8,
+     17.1
+    ],
+    "m": [
+     14.9,
+     16.3,
+     18.2
+    ]
+   },
+   "o1_obwodGlowy": {
+    "k": [
+     52.5,
+     55.0,
+     57.5
+    ],
+    "m": [
+     54.8,
+     57.2,
+     60.0
+    ]
+   },
+   "d24_dlugoscStopy": {
+    "k": [
+     21.7,
+     23.5,
+     25.4
+    ],
+    "m": [
+     23.8,
+     25.7,
+     27.5
+    ]
+   }
+  },
+  "ulamkiP50": {
+   "barki": {
+    "k": 0.27,
+    "m": 0.294
+   },
+   "biodra": {
+    "k": 0.237,
+    "m": 0.215
+   },
+   "krocze": {
+    "k": 0.513,
+    "m": 0.516
+   },
+   "wysokoscBarkowa": {
+    "k": 0.822,
+    "m": 0.826
+   },
+   "koncynaGorna": {
+    "k": 0.437,
+    "m": 0.443
+   }
+  },
+  "glowyWeWzroscie": {
+   "dorosly_k": 7.8,
+   "dorosly_m": 8.2,
+   "kanon_dorosly": 7.5,
+   "dziecko_6_8": 6,
+   "nastolatek_12_14": 7,
+   "niemowle": 4
+  }
+ },
+ "wzrost": {
+  "unit": "cm",
+  "zrodlo": "Wroński 2023 (średnia z dowodów; SD z CoV [S]); dzieci NCD-RisC 2019",
+  "rocznikiDorosli": [
+   {
+    "rocznik": 1996,
+    "m": {
+     "srednia": 179.6,
+     "sd": 6.9
+    },
+    "k": {
+     "srednia": 166.2,
+     "sd": 6.1
+    }
+   },
+   {
+    "rocznik": 1986,
+    "m": {
+     "srednia": 179.52,
+     "sd": 6.7
+    },
+    "k": {
+     "srednia": 166.35,
+     "sd": 5.8
+    }
+   },
+   {
+    "rocznik": 1976,
+    "m": {
+     "srednia": 178.59,
+     "sd": 6.4
+    },
+    "k": {
+     "srednia": 165.7,
+     "sd": 5.9
+    }
+   },
+   {
+    "rocznik": 1966,
+    "m": {
+     "srednia": 176.64,
+     "sd": 6.3
+    },
+    "k": {
+     "srednia": 163.93,
+     "sd": 5.4
+    }
+   },
+   {
+    "rocznik": 1956,
+    "m": {
+     "srednia": 174.75,
+     "sd": 6.1
+    },
+    "k": {
+     "srednia": 162.25,
+     "sd": 5.4
+    }
+   },
+   {
+    "rocznik": 1946,
+    "m": {
+     "srednia": 172.81,
+     "sd": 5.9
+    },
+    "k": {
+     "srednia": 161.65,
+     "sd": 5.3
+    }
+   }
+  ],
+  "dzieci": {
+   "wiek": [
+    5,
+    7,
+    9,
+    11,
+    13,
+    15,
+    17,
+    19
+   ],
+   "chlopcy": [
+    112.5,
+    125.6,
+    137.3,
+    148.6,
+    162.2,
+    173.9,
+    179.1,
+    180.7
+   ],
+   "dziewczeta": [
+    111.4,
+    124.2,
+    136.2,
+    149.1,
+    159.2,
+    163.6,
+    164.9,
+    165.8
+   ]
+  },
+  "losowanie": "N(μ_rocznik, σ_rocznik) obcięty do ±2,5σ",
+  "osiadanie70plus_cm": [
+   2,
+   5
+  ]
+ },
+ "bmi": {
+  "zrodlo": "Eurostat EHIS 2019, dane samodeklarowane",
+  "unit": "% populacji",
+  "archetypyTuszy": {
+   "szczuply": 20,
+   "normalny": 23,
+   "nadwaga": 27.5,
+   "otyly": 33
+  },
+  "udzialy": [
+   {
+    "wiek": "18-24",
+    "m": {
+     "ge25": 33.4,
+     "ge30": 4.8
+    },
+    "k": {
+     "ge25": 19.0,
+     "ge30": 6.8
+    }
+   },
+   {
+    "wiek": "25-34",
+    "m": {
+     "ge25": 58.9,
+     "ge30": 12.3
+    },
+    "k": {
+     "ge25": 28.1,
+     "ge30": 6.7
+    }
+   },
+   {
+    "wiek": "35-44",
+    "m": {
+     "ge25": 70.7,
+     "ge30": 19.4
+    },
+    "k": {
+     "ge25": 39.9,
+     "ge30": 12.6
+    }
+   },
+   {
+    "wiek": "45-54",
+    "m": {
+     "ge25": 76.7,
+     "ge30": 26.0
+    },
+    "k": {
+     "ge25": 54.3,
+     "ge30": 18.7
+    }
+   },
+   {
+    "wiek": "55-64",
+    "m": {
+     "ge25": 74.7,
+     "ge30": 27.4
+    },
+    "k": {
+     "ge25": 65.5,
+     "ge30": 26.7
+    }
+   },
+   {
+    "wiek": "65-74",
+    "m": {
+     "ge25": 75.1,
+     "ge30": 27.1
+    },
+    "k": {
+     "ge25": 72.6,
+     "ge30": 28.7
+    }
+   },
+   {
+    "wiek": "75+",
+    "m": {
+     "ge25": 66.4,
+     "ge30": 19.9
+    },
+    "k": {
+     "ge25": 64.9,
+     "ge30": 24.1
+    }
+   },
+   {
+    "wiek": "18+",
+    "m": {
+     "ge25": 66.9,
+     "ge30": 20.1
+    },
+    "k": {
+     "ge25": 50.2,
+     "ge30": 18.1
+    }
+   }
+  ],
+  "postawaPochylona": {
+   "<55": 0.0,
+   "55-64": 0.1,
+   "65-74": 0.25,
+   "75+": 0.4
+  },
+  "greyRatioWgWieku": {
+   "<30": 0.01,
+   "30-39": 0.05,
+   "40-49": 0.15,
+   "50-59": 0.35,
+   "60-69": 0.6,
+   "70+": 0.9
+  }
+ },
+ "palety": {
+  "monk": [
+   {
+    "mst": 1,
+    "hex": "#f6ede4",
+    "wagaPL": 0.08,
+    "verified": true
+   },
+   {
+    "mst": 2,
+    "hex": "#f3e7db",
+    "wagaPL": 0.25,
+    "verified": true
+   },
+   {
+    "mst": 3,
+    "hex": "#f7ead0",
+    "wagaPL": 0.3,
+    "verified": true
+   },
+   {
+    "mst": 4,
+    "hex": "#eadaba",
+    "wagaPL": 0.25,
+    "verified": true
+   },
+   {
+    "mst": 5,
+    "hex": "#d7bd96",
+    "wagaPL": 0.1,
+    "verified": true
+   },
+   {
+    "mst": 6,
+    "hex": "#a07e56",
+    "wagaPL": 0.02,
+    "verified": true
+   },
+   {
+    "mst": 7,
+    "hex": "#825c43",
+    "wagaPL": 0,
+    "verified": true
+   },
+   {
+    "mst": 8,
+    "hex": "#604134",
+    "wagaPL": 0,
+    "verified": true
+   },
+   {
+    "mst": 9,
+    "hex": "#3a312a",
+    "wagaPL": 0,
+    "verified": true
+   },
+   {
+    "mst": 10,
+    "hex": "#292420",
+    "wagaPL": 0,
+    "verified": true
+   }
+  ],
+  "wlosy": [
+   {
+    "klasa": "platyna",
+    "waga": 0.05,
+    "hex": "#E6D3AE",
+    "cien": "#C9B48A"
+   },
+   {
+    "klasa": "blond",
+    "waga": 0.12,
+    "hex": "#C9A46A",
+    "cien": "#A9844E"
+   },
+   {
+    "klasa": "ciemny_blond",
+    "waga": 0.3,
+    "hex": "#9C7A4E",
+    "cien": "#7D5F3A"
+   },
+   {
+    "klasa": "brąz_jasny",
+    "waga": 0.175,
+    "hex": "#7A5A3A",
+    "cien": "#5F452C"
+   },
+   {
+    "klasa": "brąz_sredni",
+    "waga": 0.175,
+    "hex": "#5A3F2A",
+    "cien": "#45301F"
+   },
+   {
+    "klasa": "ciemny_brąz",
+    "waga": 0.085,
+    "hex": "#3B2A1E",
+    "cien": "#2C1F16"
+   },
+   {
+    "klasa": "czarny",
+    "waga": 0.085,
+    "hex": "#1F1A17",
+    "cien": "#141110"
+   },
+   {
+    "klasa": "rudy",
+    "waga": 0.005,
+    "hex": "#A2522B",
+    "cien": "#7E3E20"
+   },
+   {
+    "klasa": "rudo_blond",
+    "waga": 0.005,
+    "hex": "#C98A55",
+    "cien": "#A66D3E"
+   }
+  ],
+  "siwe": [
+   {
+    "klasa": "sol_z_pieprzem",
+    "hex": "#8F8B85",
+    "cien": "#6E6A65"
+   },
+   {
+    "klasa": "siwy",
+    "hex": "#B8B5AF",
+    "cien": "#9A9791"
+   },
+   {
+    "klasa": "bialy",
+    "hex": "#E3E1DB",
+    "cien": "#C8C6C0"
+   }
+  ],
+  "farba": [
+   {
+    "klasa": "miedz_bordo",
+    "hex": "#8E2F2A",
+    "cien": "#6E2320"
+   },
+   {
+    "klasa": "popielaty_blond",
+    "hex": "#CFC6B0",
+    "cien": "#ADA48F"
+   }
+  ],
+  "odziez": {
+   "neutralne": {
+    "czarny": "#1C1C1E",
+    "antracyt": "#3A3B3D",
+    "grafit": "#4A4C50",
+    "szary": "#7D7F82",
+    "melanz": "#A3A5A8",
+    "zlamana_biel": "#ECEBE6",
+    "granat": "#1F2A44",
+    "bez": "#C8B39A",
+    "camel": "#B48A5A",
+    "ecru": "#E6DCCB",
+    "mocha": "#6B4F3F",
+    "khaki": "#8A8158",
+    "oliwka": "#5B5E3C"
+   },
+   "denim": {
+    "indygo": "#24324F",
+    "sredni": "#46658F",
+    "sprany": "#8FA9C5",
+    "czarny": "#2B2B2E"
+   },
+   "akcenty": {
+    "bordo": "#6E2233",
+    "butelkowa_zielen": "#2F5D50",
+    "musztarda": "#C9A227",
+    "ceglasty": "#A4553A",
+    "czerwony": "#B22234"
+   },
+   "dzieci": [
+    "#D7263D",
+    "#F4C430",
+    "#2E5EAA",
+    "#F49AC2",
+    "#3BAA5C",
+    "#8E5BB5"
+   ],
+   "seniorzy": {
+    "braz": "#5B4636",
+    "bez": "#BFA98A",
+    "wrzos": "#8E6C8A",
+    "bordo": "#6A2C36",
+    "butelkowa_zielen": "#36513F"
+   }
+  },
+  "weryfikacja": "Monk: [Ź]; włosy i odzież: [S] (projektowe)",
+  "grupyBarwProcent": {
+   "okrycie_zima": {
+    "czarny": 45,
+    "grafit": 14,
+    "granat": 12,
+    "bez_camel_braz": 10,
+    "khaki": 8,
+    "bialy": 1,
+    "niebieski": 3,
+    "akcent": 6,
+    "wzor": 1
+   },
+   "gora_lato": {
+    "czarny": 22,
+    "grafit": 12,
+    "granat": 8,
+    "bez_camel_braz": 12,
+    "khaki": 4,
+    "bialy": 25,
+    "niebieski": 7,
+    "akcent": 10,
+    "wzor": 15
+   }
+  },
+  "harmonia": {
+   "akcentMax": 1,
+   "akcentP": 0.8,
+   "totalBlack": 0.12,
+   "totalBlackMlodziez": 0.2,
+   "dresJednokolorowy": 0.35,
+   "dzieciNasycone": 4,
+   "dzieciCzern": 0.4,
+   "seniorzyBraz": 1.6,
+   "seniorzyCzern": 0.8
+  }
+ },
+ "stroje": {
+  "wieki": [
+   "13-18",
+   "19-29",
+   "30-44",
+   "45-64",
+   "65+"
+  ],
+  "zrodlo": "szacunki [S]; brak polskiego spisu strojów ulicznych",
+  "archetypy": [
+   {
+    "id": "casual_basic",
+    "grupa": "cywilny",
+    "procent": [
+     30,
+     40,
+     45,
+     40,
+     25
+    ],
+    "formalnosc": 1
+   },
+   {
+    "id": "athleisure",
+    "grupa": "cywilny",
+    "procent": [
+     30,
+     20,
+     14,
+     10,
+     7
+    ],
+    "formalnosc": 0
+   },
+   {
+    "id": "teen_streetwear",
+    "grupa": "cywilny",
+    "procent": [
+     34.5,
+     13,
+     2,
+     0,
+     0
+    ],
+    "formalnosc": 0
+   },
+   {
+    "id": "smart_casual",
+    "grupa": "cywilny",
+    "procent": [
+     1,
+     13,
+     18,
+     15,
+     5
+    ],
+    "formalnosc": 2
+   },
+   {
+    "id": "formal",
+    "grupa": "cywilny",
+    "procent": [
+     1,
+     2,
+     2,
+     3,
+     3
+    ],
+    "formalnosc": 3
+   },
+   {
+    "id": "outdoor_functional",
+    "grupa": "cywilny",
+    "procent": [
+     3,
+     5,
+     9,
+     13,
+     12
+    ],
+    "formalnosc": 1
+   },
+   {
+    "id": "senior_classic",
+    "grupa": "cywilny",
+    "procent": [
+     0,
+     0,
+     0,
+     10,
+     47
+    ],
+    "formalnosc": 2
+   },
+   {
+    "id": "child_casual",
+    "grupa": "cywilny",
+    "procent": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "formalnosc": 1,
+    "uwaga": "dzieci 3–12 l.: child_casual 85%, athleisure 10%, formal 5%"
+   },
+   {
+    "id": "work_construction",
+    "grupa": "pracowniczy",
+    "procent": [
+     0.1,
+     1.4,
+     2,
+     1.8,
+     0.2
+    ],
+    "formalnosc": 1
+   },
+   {
+    "id": "work_road",
+    "grupa": "pracowniczy",
+    "procent": [
+     0.1,
+     1.4,
+     2,
+     1.8,
+     0.2
+    ],
+    "formalnosc": 1
+   },
+   {
+    "id": "work_courier_parcel",
+    "grupa": "pracowniczy",
+    "procent": [
+     0.1,
+     1.4,
+     2,
+     1.8,
+     0.2
+    ],
+    "formalnosc": 1
+   },
+   {
+    "id": "work_food_delivery",
+    "grupa": "pracowniczy",
+    "procent": [
+     0.1,
+     1.4,
+     2,
+     1.8,
+     0.2
+    ],
+    "formalnosc": 1
+   },
+   {
+    "id": "work_municipal",
+    "grupa": "pracowniczy",
+    "procent": [
+     0.1,
+     1.4,
+     2,
+     1.8,
+     0.2
+    ],
+    "formalnosc": 1
+   },
+   {
+    "id": "parent_overlay",
+    "grupa": "modyfikator",
+    "procent": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "formalnosc": 1,
+    "uwaga": "dorosły z wózkiem lub dzieckiem za rękę"
+   }
+  ],
+  "mnozniki": {
+   "work_M": 1.7,
+   "work_K": 0.3,
+   "biuroweSzczyt_smart_casual": 2.5,
+   "osiedleWielkaPlyta_athleisure": 1.4,
+   "park_athleisure": 2,
+   "park_outdoor": 3,
+   "weekend_smart_casual": 0.4,
+   "niedzielaMaleMiasto45plus_formal": 3
+  }
+ },
+ "clo": {
+  "zrodlo": "ASHRAE 55 / Schiavon & Lee (pythermalcomfort clo_tout) [Ź]; dodatek outer [S]",
+  "szumSigma": 0.15,
+  "funkcja": [
+   {
+    "tMax": -5,
+    "clo": 1.0
+   },
+   {
+    "tMin": -5,
+    "tMax": 5,
+    "clo": "0.818 - 0.0364*t"
+   },
+   {
+    "tMin": 5,
+    "tMax": 26,
+    "clo": "10^(-0.1635 - 0.0066*t)"
+   },
+   {
+    "tMin": 26,
+    "clo": 0.46
+   }
+  ],
+  "dodatekOuter": [
+   {
+    "tMin": 20,
+    "clo": [
+     0,
+     0
+    ]
+   },
+   {
+    "tMin": 10,
+    "tMax": 15,
+    "clo": [
+     0.3,
+     0.5
+    ]
+   },
+   {
+    "tMin": 0,
+    "tMax": 5,
+    "clo": [
+     0.6,
+     0.9
+    ]
+   },
+   {
+    "tMax": 0,
+    "clo": [
+     1.0,
+     1.5
+    ]
+   }
+  ],
+  "czesci": {
+   "tshirt": 0.08,
+   "gruby_sweter": 0.36,
+   "dres": 0.74
+  },
+  "pasma": [
+   {
+    "tMin": 25,
+    "tMax": 99,
+    "warstwyTulowia": [
+     1,
+     1
+    ],
+    "outerProcent": 0,
+    "obuwie": {
+     "sneakersy": 55,
+     "sandaly": 40
+    },
+    "glowa": {
+     "czapka_daszek": 15,
+     "okulary_sloneczne": 40
+    }
+   },
+   {
+    "tMin": 18,
+    "tMax": 25,
+    "warstwyTulowia": [
+     1,
+     2
+    ],
+    "outerProcent": 15,
+    "obuwie": {
+     "sneakersy": 75,
+     "sandaly": 15
+    },
+    "glowa": {
+     "okulary_sloneczne": 25
+    }
+   },
+   {
+    "tMin": 12,
+    "tMax": 18,
+    "warstwyTulowia": [
+     2,
+     2
+    ],
+    "outerProcent": 60,
+    "obuwie": {
+     "sneakersy": 75,
+     "botki": 15
+    },
+    "glowa": {
+     "czapka": 5,
+     "szalik": 5
+    }
+   },
+   {
+    "tMin": 5,
+    "tMax": 12,
+    "warstwyTulowia": [
+     2,
+     3
+    ],
+    "outerProcent": 95,
+    "obuwie": {
+     "sneakersy": 60,
+     "botki": 30
+    },
+    "glowa": {
+     "czapka": 25,
+     "szalik": 25,
+     "rekawiczki": 10
+    }
+   },
+   {
+    "tMin": 0,
+    "tMax": 5,
+    "warstwyTulowia": [
+     3,
+     3
+    ],
+    "outerProcent": 100,
+    "outerRodzaj": {
+     "puchowka": 60,
+     "plaszcz": 20,
+     "parka": 20
+    },
+    "obuwie": {
+     "sneakersy": 40,
+     "buty_zimowe": 55
+    },
+    "glowa": {
+     "czapka": 55,
+     "szalik": 45,
+     "rekawiczki": 40
+    }
+   },
+   {
+    "tMin": -99,
+    "tMax": 0,
+    "warstwyTulowia": [
+     3,
+     4
+    ],
+    "outerProcent": 100,
+    "outerRodzaj": {
+     "puchowka_parka": 85
+    },
+    "obuwie": {
+     "buty_zimowe": 65
+    },
+    "glowa": {
+     "czapka": 75,
+     "szalik": 60,
+     "rekawiczki": 70
+    }
+   }
+  ],
+  "pogoda": {
+   "deszcz": {
+    "parasol": 0.35,
+    "kaptur": 0.25
+   },
+   "wiatrPowyzej8ms": {
+    "kapturX": 1.5,
+    "parasolX": 0.3
+   },
+   "kurtkaRozpieta": {
+    "powyzej10C": 0.4,
+    "od0do10C": 0.15
+   }
+  }
+ },
+ "wykluczenia": {
+  "zrodlo": "szacunki [S]",
+  "reguly": [
+   {
+    "id": "szorty_bez_ciepla",
+    "forbid": [
+     "lowerType=szorty"
+    ],
+    "with": [
+     "outerType=puchowka",
+     "outerType=parka",
+     "outerType=plaszcz"
+    ]
+   },
+   {
+    "id": "sandaly_ciepło",
+    "requires": "feetType=sandaly",
+    "tMin": 14
+   },
+   {
+    "id": "puchowka_zimno",
+    "requires": "outerType=puchowka",
+    "tMax": 12
+   },
+   {
+    "id": "krawat_formalnie",
+    "forbid": [
+     "neckFaceType=krawat"
+    ],
+    "with": [
+     "upperMidType=bluza_kaptur",
+     "upperBaseType=tshirt",
+     "lowerType=dres",
+     "lowerType=bojowki"
+    ]
+   },
+   {
+    "id": "kamizelka_odblaskowa",
+    "forbid": [
+     "vest=odblask_zolta",
+     "vest=odblask_pomaranczowa"
+    ],
+    "with": [
+     "lowerType=spodnica",
+     "feetType=sandaly"
+    ]
+   },
+   {
+    "id": "kask_tylko_work",
+    "requires": "headType=kask_budowlany",
+    "archetypy": [
+     "work_*",
+     "robotnik",
+     "operator_ciezkiego_sprzetu"
+    ]
+   },
+   {
+    "id": "formalnosc",
+    "opis": "części stroju różnią się o ≤ 1 stopień skali 0–3 (P = 0,9)",
+    "skala": [
+     "dres",
+     "casual",
+     "smart",
+     "formal"
+    ],
+    "p": 0.9
+   }
+  ],
+  "mnozniki": {
+   "nastolatki": {
+    "bluza_kaptur": 3,
+    "plecak": 3,
+    "sluchawki": 3
+   },
+   "seniorzy65plus": {
+    "plaszcz_welniany": 2.5,
+    "kaszkiet_M": 4,
+    "beret_K": 3,
+    "wozek_na_zakupy": 8,
+    "laska": 6
+   }
+  }
+ },
+ "mundury": {
+  "normy": {
+   "EN_ISO_20471": {
+    "zrodlo": "3M UK / Marina Textil",
+    "luminancja": {
+     "zolty_fluo": 0.7,
+     "pomaranczowo_czerwony": 0.4,
+     "czerwony": 0.25
+    },
+    "klasy": {
+     "3": {
+      "tlo_m2": 0.8,
+      "odblask_m2": 0.2
+     },
+     "2": {
+      "tlo_m2": 0.5,
+      "odblask_m2": 0.13
+     },
+     "1": {
+      "tlo_m2": 0.14,
+      "odblask_m2": 0.1
+     }
+    }
+   },
+   "kolory": {
+    "zolty_fluo": {
+     "hex": "#DFFC00",
+     "alt": "#CCE700 (Y=0,70)"
+    },
+    "pomaranczowo_czerwony": {
+     "hex": "#FF6115",
+     "uwaga": "poza gamutem sRGB, przycięte"
+    },
+    "czerwony_fluo": {
+     "hex": "#FF121D",
+     "verified": false
+    },
+    "tasma_odblaskowa": {
+     "hex": "#BFC3C7"
+    }
+   }
+  },
+  "okresyPrzejsciowe": {
+   "PRM": "2030-12-31",
+   "PSP_ubior": "2033-10",
+   "PSP_ubranie_specjalne_2005": "2027-12-31",
+   "Policja_sweter_spodnie_zimowe": "2032-12-31"
+  },
+  "typyPersonelu": [
+   {
+    "typ": "Strażak",
+    "archetypy": [
+     "strazak_sluzbowy",
+     "strazak_bojowy"
+    ],
+    "zrodlo": "Dz.U. 2021 poz. 1795",
+    "verified": true,
+    "kolory": {
+     "ubior_sluzbowy": "#A8956A",
+     "polar": "#111111",
+     "ubranie_specjalne": "#B08E5A",
+     "tasma_zoltozielona": "#DFF020",
+     "tasma_srebrna": "#C8C8C8",
+     "helm_PSP": "#AB2524",
+     "helm_OSP": "#F4F4F0"
+    }
+   },
+   {
+    "typ": "Ratownik medyczny",
+    "archetypy": [
+     "ratownik_medyczny"
+    ],
+    "zrodlo": "Dz.U. 2025 poz. 1768",
+    "verified": true,
+    "norma": "EN ISO 20471 klasa 2",
+    "kolory": {
+     "czerwien_fluo": [
+      "#FF3A2A",
+      "#FF4F2E"
+     ],
+     "wstawki": "#141414",
+     "odblask": "#C8CCD0",
+     "KAM_niebieska": "#1E50C8",
+     "LPR": "#C8102E"
+    }
+   },
+   {
+    "typ": "Operator ciężkiego sprzętu",
+    "archetypy": [
+     "operator_ciezkiego_sprzetu"
+    ],
+    "zrodlo": "EN ISO 20471",
+    "verified": true,
+    "norma": "EN ISO 20471 klasa 1–3",
+    "kolory": {
+     "zolty_fluo": "#E5FF00",
+     "zolty_fluo_gra": "#DFFC00",
+     "pomaranczowy": "#FF6A00"
+    }
+   },
+   {
+    "typ": "Policjant prewencji",
+    "archetypy": [
+     "policjant_prewencji"
+    ],
+    "zrodlo": "Dz.U. 2024 poz. 1953",
+    "verified": true,
+    "kolory": {
+     "granat": "#1F2340",
+     "srebro": "#C0C4C8"
+    },
+    "luka": "kolor kamizelki ostrzegawczej niepotwierdzony (verified=false)"
+   },
+   {
+    "typ": "Policjant ruchu drogowego",
+    "archetypy": [
+     "policjant_ruchu_drogowego"
+    ],
+    "zrodlo": "Kwartalnik Policyjny 2/2025",
+    "verified": true,
+    "kolory": {
+     "biel": "#F4F8F4",
+     "granat": "#1F2340"
+    }
+   }
+  ],
+  "hexyPrzyblizone": "przepisy nie podają RAL/Pantone; hexy z rysunków w Dz.U. [S]"
+ }
+}

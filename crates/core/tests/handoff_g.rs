@@ -141,7 +141,7 @@ fn determinism_and_validity() {
     let s = spec(json!({ "cursor": { "year": 1960, "scale": 0.5 }, "seed": 9, "variation": 0.5 }));
     let a = generate_from_spec(&s);
     let b = generate_from_spec(&s);
-    assert_eq!(to_glb(&[ExportNode { name: "a".into(), mesh: &a.mesh, offset: None, extras: None }]), to_glb(&[ExportNode { name: "a".into(), mesh: &b.mesh, offset: None, extras: None }]));
+    assert_eq!(to_glb(&[ExportNode { name: "a".into(), mesh: &a.mesh, offset: None, parent: None, rotation: None, extras: None }]), to_glb(&[ExportNode { name: "a".into(), mesh: &b.mesh, offset: None, parent: None, rotation: None, extras: None }]));
     for p in &a.mesh.parts {
         assert!(p.positions.iter().all(|x| x.is_finite()));
     }

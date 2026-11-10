@@ -8,11 +8,16 @@ pub struct ExportNode<'a> {
     pub name: String,
     pub mesh: &'a MeshData,
     pub offset: Option<V3>,
+    /// Indeks węzła-rodzica w tej samej tablicy (offset i obrót są wtedy lokalne); `None` = korzeń sceny.
+    pub parent: Option<usize>,
+    /// Obrót węzła jako kwaternion glTF `[x, y, z, w]`.
+    pub rotation: Option<[f64; 4]>,
     /// Metadane węzła (glTF `extras`), np. spec i metryka.
     pub extras: Option<Value>,
 }
 
 /// Binarny glTF 2.0: jeden węzeł na budynek, jeden prymityw na materiał.
+/// Węzły o tym samym `&MeshData` dzielą jeden mesh glTF; pusta siatka = węzeł bez meshu (kotwica).
 pub fn to_glb(nodes: &[ExportNode]) -> Vec<u8> {
     let mut bin: Vec<u8> = Vec::new();
     let (mut views, mut accessors, mut materials, mut meshes, mut gnodes) = (vec![], vec![], vec![], vec![], vec![]);
@@ -25,7 +30,16 @@ pub fn to_glb(nodes: &[ExportNode]) -> Vec<u8> {
         views.len() - 1
     };
     let f32b = |v: &[f32]| v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
-    for node in nodes {
+    let mut mesh_of: Vec<Option<usize>> = Vec::with_capacity(nodes.len());
+    for (ni, node) in nodes.iter().enumerate() {
+        if node.mesh.parts.is_empty() {
+            mesh_of.push(None);
+            continue;
+        }
+        if let Some(j) = nodes[..ni].iter().position(|o| std::ptr::eq(o.mesh, node.mesh)) {
+            mesh_of.push(mesh_of[j]);
+            continue;
+        }
         let mut prims = vec![];
         for part in &node.mesh.parts {
             let key = part.material.expect("materiał części");
@@ -71,12 +85,25 @@ pub fn to_glb(nodes: &[ExportNode]) -> Vec<u8> {
             prims.push(json!({ "attributes": { "POSITION": n - 4, "NORMAL": n - 3, "TEXCOORD_0": n - 2 }, "indices": n - 1, "material": materials.len() - 1, "mode": 4 }));
         }
         meshes.push(json!({ "name": node.name, "primitives": prims }));
-        let mut gn = json!({ "name": node.name, "mesh": meshes.len() - 1 });
+        mesh_of.push(Some(meshes.len() - 1));
+    }
+    for (node, mesh) in nodes.iter().zip(&mesh_of) {
+        let mut gn = json!({ "name": node.name });
+        if let Some(m) = mesh {
+            gn["mesh"] = json!(m);
+        }
         if let Some(o) = node.offset {
             gn["translation"] = json!(o);
         }
+        if let Some(r) = node.rotation {
+            gn["rotation"] = json!(r);
+        }
         if let Some(e) = &node.extras {
             gn["extras"] = e.clone();
+        }
+        let kids: Vec<usize> = (0..nodes.len()).filter(|&k| nodes[k].parent == Some(gnodes.len())).collect();
+        if !kids.is_empty() {
+            gn["children"] = json!(kids);
         }
         gnodes.push(gn);
     }
@@ -86,7 +113,7 @@ pub fn to_glb(nodes: &[ExportNode]) -> Vec<u8> {
     let doc = json!({
         "asset": { "version": "2.0", "generator": "Pierzeja – generator budynków (Rust)" },
         "scene": 0,
-        "scenes": [{ "nodes": (0..gnodes.len()).collect::<Vec<_>>() }],
+        "scenes": [{ "nodes": (0..gnodes.len()).filter(|&i| nodes[i].parent.is_none()).collect::<Vec<_>>() }],
         "nodes": gnodes,
         "meshes": meshes,
         "materials": materials,

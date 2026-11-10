@@ -1,0 +1,1 @@
+{ "archetype": "sedan_liftback", "seed": 5, "overrides": { "service": "policja", "wheelbase": 2.8, "seats": 2 } }

@@ -5,6 +5,8 @@
 //! Ctrl+K — szukaj poleceń.
 
 mod editors;
+mod gizmos;
+mod human;
 mod screens;
 mod theme;
 mod ui;
@@ -50,17 +52,33 @@ fn main() {
 const SKY: Color = Color::srgb(0.80, 0.85, 0.88);
 const NIGHT_SKY: Color = Color::srgb(0.04, 0.06, 0.11);
 
-/// `PIERZEJA_MODE=start|mcp|budynek|wielokat|ulica|osiedle|skrzyzowanie|rondo` — ekran startowy (zrzuty, testy).
+/// `PIERZEJA_MODE=start|mcp|budynek|wielokat|pojazd|czlowiek|ulica|osiedle|skrzyzowanie|rondo` — ekran startowy (zrzuty, testy);
+/// opcjonalnie `PIERZEJA_ARCHETYPE=id` (budynek/pojazd/człowiek), `PIERZEJA_POSE=stand|walk|sit|drive|rest`, `PIERZEJA_GIZMO=0`.
 fn initial_state() -> (Docs, View) {
     let mut view = View::default();
     let mut doc = Doc::building("familok");
     let m = std::env::var("PIERZEJA_MODE").unwrap_or_default();
+    let arch = |default: &str| std::env::var("PIERZEJA_ARCHETYPE").unwrap_or_else(|_| default.into());
+    view.gizmos = std::env::var("PIERZEJA_GIZMO").as_deref() != Ok("0");
     match m.as_str() {
-        "start" | "" => view.screen = Screen::Start,
+        "" | "loading" => view.screen = Screen::Loading,
+        "start" => view.screen = Screen::Start,
         "mcp" => view.screen = Screen::Mcp,
         "wielokat" => {
             doc.use_poly = true;
             view.item = Some(Item::Dzialka);
+        }
+        "budynek" => doc = Doc::building(&arch("familok")),
+        "pojazd" => {
+            doc = Doc::vehicle(&arch(&tabor_core::data().default_archetype));
+            view.ribbon = RibbonTab::Pojazd;
+            view.item = Some(Item::Veh("bryla"));
+        }
+        "czlowiek" => {
+            doc = Doc::human(&arch(&tlum_core::data().default_archetype));
+            doc.pose = std::env::var("PIERZEJA_POSE").unwrap_or_else(|_| "stand".into());
+            view.ribbon = RibbonTab::Czlowiek;
+            view.item = Some(Item::Hum("cialo"));
         }
         "ulica" | "osiedle" | "skrzyzowanie" | "rondo" => {
             doc = Doc::street(match m.as_str() {
@@ -116,9 +134,50 @@ pub enum Mode {
     Estate,
     Crossroads,
     Roundabout,
+    /// Pojazd z Tabora.
+    Vehicle,
+    /// Człowiek z Tłumu.
+    Human,
+}
+
+/// Tryb edytora (ProceduraSuite): zestaw dokumentów jednego generatora.
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum Fam {
+    Budynki,
+    Pojazdy,
+    Ludzie,
+}
+
+impl Fam {
+    pub fn label(self) -> &'static str {
+        match self {
+            Fam::Budynki => "Budynki",
+            Fam::Pojazdy => "Pojazdy",
+            Fam::Ludzie => "Ludzie",
+        }
+    }
+    /// Kolor trybu (z makiety): budynki ceglasty, pojazdy żółty, ludzie turkus.
+    pub fn color(self) -> egui::Color32 {
+        match self {
+            Fam::Budynki => egui::Color32::from_rgb(0xE8, 0x73, 0x5A),
+            Fam::Pojazdy => egui::Color32::from_rgb(0xE9, 0xB4, 0x4C),
+            Fam::Ludzie => egui::Color32::from_rgb(0x4F, 0xB6, 0xC8),
+        }
+    }
 }
 
 impl Mode {
+    pub fn fam(self) -> Fam {
+        match self {
+            Mode::Vehicle => Fam::Pojazdy,
+            Mode::Human => Fam::Ludzie,
+            _ => Fam::Budynki,
+        }
+    }
+    /// Pierzeja i sceny (nie pojedynczy budynek ani pojazd).
+    pub fn is_street(self) -> bool {
+        !matches!(self, Mode::Building | Mode::Vehicle | Mode::Human)
+    }
     pub fn scene(self) -> Option<SceneKind> {
         match self {
             Mode::Estate => Some(SceneKind::Estate),
@@ -134,6 +193,8 @@ impl Mode {
             Mode::Estate => "Osiedle",
             Mode::Crossroads => "Skrzyżowanie",
             Mode::Roundabout => "Rondo",
+            Mode::Vehicle => "Pojazd",
+            Mode::Human => "Człowiek",
         }
     }
 }
@@ -211,6 +272,9 @@ pub struct Doc {
     pub rows: u32,
     pub arm: f64,
     pub scene_seed: u32,
+    // człowiek (Tłum): poza (`stand|walk|sit|drive|rest`) i faza kroku 0–1
+    pub pose: String,
+    pub phase: f64,
 }
 
 impl Doc {
@@ -237,6 +301,8 @@ impl Doc {
             rows: 3,
             arm: 90.0,
             scene_seed: 11,
+            pose: "stand".into(),
+            phase: 0.0,
         }
     }
     pub fn street(mode: Mode) -> Doc {
@@ -249,23 +315,23 @@ impl Doc {
         d
     }
     pub fn spec(&self) -> BuildingSpec {
-        let mut s = BuildingSpec { seed: Some(self.seed as f64), ..Default::default() };
+        let mut s = BuildingSpec { mix: pc::MixSpec { seed: Some(self.seed as f64), ..Default::default() }, ..Default::default() };
         match &self.source {
-            Source::Archetype(a) => s.archetype = Some(a.clone()),
-            Source::Cursor(year, scale) => s.cursor = Some(pc::MapPoint { year: *year, scale: *scale }),
-            Source::Weights(w) => s.weights = Some(w.iter().cloned().collect()),
+            Source::Archetype(a) => s.mix.archetype = Some(a.clone()),
+            Source::Cursor(year, scale) => s.mix.cursor = Some(pc::MapPoint { year: *year, scale: *scale }),
+            Source::Weights(w) => s.mix.weights = Some(w.iter().cloned().collect()),
         }
         if self.variation > 0.0 {
-            s.variation = Some(self.variation);
+            s.mix.variation = Some(self.variation);
         }
         if !self.overrides.is_empty() {
-            s.overrides = Some(self.overrides.clone());
+            s.mix.overrides = Some(self.overrides.clone());
         }
         if self.sharpness != 3.0 {
-            s.sharpness = Some(self.sharpness);
+            s.mix.sharpness = Some(self.sharpness);
         }
         if self.neighbors != 3.0 {
-            s.neighbors = Some(self.neighbors);
+            s.mix.neighbors = Some(self.neighbors);
         }
         if !self.regulations {
             s.regulations = Some(false);
@@ -284,6 +350,15 @@ impl Doc {
             mixing: Some(self.mixing),
             ..Default::default()
         }
+    }
+    /// Pojazd Tabora: te same pola mieszania co budynek (`source`, `overrides`, `seed`, `variation`).
+    pub fn vehicle(archetype: &str) -> Doc {
+        let mut d = Doc::building(archetype);
+        d.mode = Mode::Vehicle;
+        d
+    }
+    pub fn vehicle_spec(&self) -> tabor_core::TaborSpec {
+        tabor_core::TaborSpec { mix: self.spec().mix, version: None }
     }
     pub fn scene_spec(&self, kind: SceneKind) -> SceneSpec {
         SceneSpec { kind, seed: Some(self.scene_seed as f64), spacing: Some(self.spacing), rows: Some(self.rows), profile: Some(self.profile.clone()), arm: Some(self.arm), variation: None }
@@ -367,6 +442,8 @@ impl Docs {
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Screen {
+    /// Animacja pierwszego ładowania (potem `Start`).
+    Loading,
     Start,
     Editor,
     Mcp,
@@ -375,6 +452,8 @@ pub enum Screen {
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum RibbonTab {
     Plik,
+    Pojazd,
+    Czlowiek,
     Budynek,
     Ulica,
     Render,
@@ -402,6 +481,10 @@ pub enum Item {
     Gzyms,
     Parcel,
     Scena,
+    /// Wektor Tabora: `typ` albo id grupy (`bryla`, `sylwetka`, …).
+    Veh(&'static str),
+    /// Wektor Tłumu: `typ` albo id grupy (`cialo`, `glowa`, …).
+    Hum(&'static str),
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -424,6 +507,7 @@ pub enum Preset {
     Front,
     Iso,
     Top,
+    Side,
 }
 
 #[derive(Resource)]
@@ -450,6 +534,11 @@ pub struct View {
     pub screenshot: bool,
     pub msg: String,
     pub maximized: bool,
+    /// Gizmo edycji w widoku 3D (klawisz G): wszystkie naraz oraz kategorie.
+    pub gizmos: bool,
+    pub gz_dims: bool,
+    pub gz_anchors: bool,
+    pub gz_skeleton: bool,
 }
 
 impl Default for View {
@@ -476,6 +565,10 @@ impl Default for View {
             screenshot: false,
             msg: String::new(),
             maximized: false,
+            gizmos: true,
+            gz_dims: true,
+            gz_anchors: true,
+            gz_skeleton: true,
         }
     }
 }
@@ -512,6 +605,8 @@ pub struct Derived {
     pub parcels: Vec<Parcel>,
     pub info: String,
     pub tris: usize,
+    /// Dane modelu pojazdu/człowieka dla gizmo edycji.
+    pub gz: gizmos::Snap,
 }
 
 fn rgb(hex: &str) -> [u8; 3] {
@@ -663,14 +758,41 @@ fn regenerate(
     for e in &old {
         commands.entity(e).despawn();
     }
-    let (b, c, m) = (&mut commands, &mut *meshes, &mut *materials);
+    let (b, c, m_) = (&mut commands, &mut *meshes, &mut *materials);
+    let m = &mut *m_;
     der.parcels.clear();
     der.stats = None;
+    der.gz = gizmos::Snap::None;
     let bounds = if let Some(kind) = doc.mode.scene() {
         let sc = generate_scene(&doc.scene_spec(kind));
         der.tris = sc.items.iter().map(|it| spawn_mesh(b, c, m, &it.mesh, Vec3::ZERO, night)).sum();
         der.info = sc.describe();
         sc.bounds
+    } else if doc.mode == Mode::Vehicle {
+        let m = tabor_core::generate(&doc.vehicle_spec());
+        let mut tris = spawn_mesh(b, c, m_, &m.body, Vec3::ZERO, night);
+        for (_, h) in &m.wheels {
+            tris += spawn_mesh(b, c, m_, &m.wheel, Vec3::new(h[0] as f32, h[1] as f32, h[2] as f32), night);
+        }
+        der.tris = tris;
+        der.resolved = m.params.clone();
+        der.weights = tabor_core::resolve(&doc.vehicle_spec()).weights["bryla"].iter().map(|(k, v)| (k.clone(), *v)).collect();
+        der.gz = gizmos::Snap::vehicle(&m);
+        let st = &m.stats;
+        der.info = format!(
+            "Pojazd\n• Nadwozie — {}\n• Wymiary — {:.2} × {:.2} × {:.2} m\n• Rozstaw osi — {:.2} m\n• Miejsca — {}",
+            st.body_type, st.length, st.width, st.height, st.wheelbase, st.seats
+        );
+        m.bounds()
+    } else if doc.mode == Mode::Human {
+        let spec = doc.human_spec();
+        let m = tlum_core::generate(&spec);
+        der.tris = spawn_mesh(b, c, m_, &m.body, Vec3::ZERO, night);
+        der.resolved = m.params.clone();
+        der.weights = tlum_core::resolve(&spec).weights["cialo"].iter().map(|(k, v)| (k.clone(), *v)).collect();
+        der.info = human::info(&m);
+        der.gz = gizmos::Snap::human(&m);
+        m.bounds()
     } else if doc.mode == Mode::Street {
         let street = pc::generate_street(&doc.street_spec());
         let mut tris = 0;
@@ -690,9 +812,9 @@ fn regenerate(
                 color: rgb(&p.wall_color),
                 tris: t,
                 center: Vec3::new(bl.offset[0] as f32, 0.0, (bl.offset[2] + bl.model.mesh.bounds.max[2]) as f32),
-                weights: bl.spec.weights.as_ref().map(|w| w.iter().map(|(k, v)| (k.clone(), *v)).collect()).unwrap_or_default(),
-                seed: bl.spec.seed.unwrap_or(1.0) as u32,
-                variation: bl.spec.variation.unwrap_or(0.0),
+                weights: bl.spec.mix.weights.as_ref().map(|w| w.iter().map(|(k, v)| (k.clone(), *v)).collect()).unwrap_or_default(),
+                seed: bl.spec.mix.seed.unwrap_or(1.0) as u32,
+                variation: bl.spec.mix.variation.unwrap_or(0.0),
             });
         }
         tris += spawn_mesh(b, c, m, &street.context, Vec3::ZERO, night);
@@ -770,15 +892,17 @@ fn orbit(
                 orbit.dist = ((max.x - min.x - 40.0) / (0.75 * aspect)).max(size.y * 2.2) * 1.75;
                 orbit.target = Vec3::new((min.x + max.x) / 2.0, orbit.dist * 0.75 * 0.2, 0.0);
             }
-            Mode::Building => {
+            Mode::Building | Mode::Vehicle | Mode::Human => {
                 (orbit.yaw, orbit.pitch) = (34f32.to_radians(), 17f32.to_radians());
-                orbit.dist *= 0.92;
+                // człowiek: wysoka, wąska bryła — dalej i wyżej, żeby zmieściły się wymiary i znaczniki
+                orbit.dist *= if mode == Mode::Human { 1.2 } else { 0.92 };
             }
         }
     }
     match view.preset.take() {
         Some(Preset::Front) => (orbit.yaw, orbit.pitch) = (0.0, 4f32.to_radians()),
         Some(Preset::Iso) => (orbit.yaw, orbit.pitch) = (45f32.to_radians(), 30f32.to_radians()),
+        Some(Preset::Side) => (orbit.yaw, orbit.pitch) = (90f32.to_radians(), 4f32.to_radians()),
         Some(Preset::Top) => (orbit.yaw, orbit.pitch) = (0.0, 85f32.to_radians()),
         None => {}
     }
@@ -829,22 +953,26 @@ pub fn export_glb(doc: &Doc) -> Result<PathBuf, String> {
             .items
             .iter()
             .enumerate()
-            .map(|(i, it)| pc::ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
+            .map(|(i, it)| pc::ExportNode { name: format!("{:02}-{}", i + 1, it.name), mesh: &it.mesh, offset: None, parent: None, rotation: None, extras: it.spec.as_ref().map(|s| json!({ "spec": s, "stats": it.stats })) })
             .collect();
         pc::to_glb(&nodes)
+    } else if doc.mode == Mode::Vehicle {
+        tabor_core::to_glb(&tabor_core::generate(&doc.vehicle_spec()))
+    } else if doc.mode == Mode::Human {
+        tlum_core::to_glb(&tlum_core::generate(&doc.human_spec()))
     } else if doc.mode == Mode::Street {
         let street = pc::generate_street(&doc.street_spec());
         let mut nodes: Vec<pc::ExportNode> = street
             .buildings
             .iter()
-            .map(|b| pc::ExportNode { name: format!("{:02}-{}", b.index + 1, b.archetype), mesh: &b.model.mesh, offset: Some(b.offset), extras: Some(json!({ "spec": b.spec })) })
+            .map(|b| pc::ExportNode { name: format!("{:02}-{}", b.index + 1, b.archetype), mesh: &b.model.mesh, offset: Some(b.offset), parent: None, rotation: None, extras: Some(json!({ "spec": b.spec })) })
             .collect();
-        nodes.push(pc::ExportNode { name: "ulica".into(), mesh: &street.context, offset: None, extras: None });
+        nodes.push(pc::ExportNode { name: "ulica".into(), mesh: &street.context, offset: None, parent: None, rotation: None, extras: None });
         pc::to_glb(&nodes)
     } else {
         let spec = doc.spec();
         let m = pc::generate_from_spec(&spec);
-        pc::to_glb(&[pc::ExportNode { name: doc.name.clone(), mesh: &m.mesh, offset: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }])
+        pc::to_glb(&[pc::ExportNode { name: doc.name.clone(), mesh: &m.mesh, offset: None, parent: None, rotation: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }])
     };
     let path = unique(&dir, &doc.name, "glb");
     std::fs::write(&path, glb).map_err(|e| e.to_string())?;

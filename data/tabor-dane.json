@@ -1,0 +1,1520 @@
+{
+  "format": "tabor-dane/1",
+  "defaultArchetype": "hatchback",
+  "opis": "Dane referencyjne generatora Tabor: definicje parametrów, archetypy (nadpisania; pełne wektory liczy Dataset::load), epoki designu. Liczby z raportu Generatory ludzi i pojazdów low poly; źródła z verified=true to wartości [Ź], verified=false to szacunki [S].",
+  "mapYears": [
+    1995,
+    2026
+  ],
+  "eras": [
+    {
+      "from": 1995,
+      "to": 2000,
+      "label": "Przed 2000"
+    },
+    {
+      "from": 2000,
+      "to": 2010,
+      "label": "Lata 2000–2010"
+    },
+    {
+      "from": 2010,
+      "to": 2018,
+      "label": "Lata 2010–2018"
+    },
+    {
+      "from": 2018,
+      "to": 2026,
+      "label": "Po 2018"
+    }
+  ],
+  "groups": [
+    {
+      "id": "bryla",
+      "label": "Bryła",
+      "description": "Typ nadwozia, wymiary całkowite, rozstaw osi i zwisy."
+    },
+    {
+      "id": "sylwetka",
+      "label": "Sylwetka",
+      "description": "Linia okien, maska, nachylenie szyb, obłość, lampy i grill."
+    },
+    {
+      "id": "podwozie",
+      "label": "Podwozie",
+      "description": "Koła i opony, prześwit, liczba osi, napęd."
+    },
+    {
+      "id": "zabudowa",
+      "label": "Zabudowa",
+      "description": "Kabina i moduł zabudowy na ramie (skrytki, dach, żuraw, wyciągarka)."
+    },
+    {
+      "id": "sluzba",
+      "label": "Służba",
+      "description": "Wariant służby (oklejenie, belki), liczba Miejsc."
+    },
+    {
+      "id": "material",
+      "label": "Materiał",
+      "description": "Kolory lakieru i plastików, dach dwukolorowy, zużycie."
+    }
+  ],
+  "params": [
+    {
+      "key": "bodyType",
+      "group": "bryla",
+      "kind": "enum",
+      "label": "Typ nadwozia",
+      "options": [
+        {
+          "value": "hatchback",
+          "label": "Hatchback"
+        },
+        {
+          "value": "liftback",
+          "label": "Liftback / sedan"
+        },
+        {
+          "value": "sedan",
+          "label": "Sedan"
+        },
+        {
+          "value": "kombi",
+          "label": "Kombi"
+        },
+        {
+          "value": "suv",
+          "label": "SUV"
+        },
+        {
+          "value": "van",
+          "label": "Van / furgon"
+        },
+        {
+          "value": "podwozie",
+          "label": "Podwozie z kabiną"
+        }
+      ],
+      "default": "hatchback",
+      "jitter": 0,
+      "hint": "Osobowe i van loftuje się ze stacji, podwozie składa się z kabiny i zabudowy na ramie."
+    },
+    {
+      "key": "length",
+      "group": "bryla",
+      "kind": "number",
+      "label": "Długość całkowita",
+      "min": 3.3,
+      "max": 12.0,
+      "step": 0.01,
+      "default": 4.2,
+      "jitter": 0.03,
+      "unit": "m",
+      "hint": "Limit UE 12,00 m dla pojazdu silnikowego (96/53/WE)."
+    },
+    {
+      "key": "width",
+      "group": "bryla",
+      "kind": "number",
+      "label": "Szerokość",
+      "min": 1.5,
+      "max": 2.6,
+      "step": 0.01,
+      "default": 1.78,
+      "jitter": 0.02,
+      "unit": "m",
+      "hint": "Bez lusterek; limit UE 2,55 m (2,60 m nadwozia kondycjonowane)."
+    },
+    {
+      "key": "height",
+      "group": "bryla",
+      "kind": "number",
+      "label": "Wysokość całkowita",
+      "min": 1.35,
+      "max": 4.0,
+      "step": 0.01,
+      "default": 1.48,
+      "jitter": 0.03,
+      "unit": "m",
+      "hint": "Z zabudową; limit UE 4,00 m."
+    },
+    {
+      "key": "wheelbase",
+      "group": "bryla",
+      "kind": "number",
+      "label": "Rozstaw osi",
+      "min": 2.2,
+      "max": 7.0,
+      "step": 0.01,
+      "default": 2.58,
+      "jitter": 0.02,
+      "unit": "m",
+      "hint": "Oś przednia → pierwsza oś tylna; przy ≥ 3 osiach zespół tylny dolicza `axleGap`."
+    },
+    {
+      "key": "frontOverhang",
+      "group": "bryla",
+      "kind": "number",
+      "label": "Zwis przedni",
+      "min": 0.1,
+      "max": 0.3,
+      "step": 0.005,
+      "default": 0.2,
+      "jitter": 0.02,
+      "hint": "Ułamek długości całkowitej (osobowe 0,18–0,21)."
+    },
+    {
+      "key": "rearOverhang",
+      "group": "bryla",
+      "kind": "number",
+      "label": "Zwis tylny",
+      "min": 0.12,
+      "max": 0.32,
+      "step": 0.005,
+      "default": 0.2,
+      "jitter": 0.02,
+      "hint": "Ułamek długości, liczony od ostatniej osi; length ≈ L·(front+rear) + wheelbase (+ axleGap)."
+    },
+    {
+      "key": "beltline",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Linia okien",
+      "min": 0.5,
+      "max": 0.75,
+      "step": 0.005,
+      "default": 0.65,
+      "jitter": 0.03,
+      "hint": "Wysokość dolnej krawędzi szyb bocznych / wysokość całkowita."
+    },
+    {
+      "key": "hoodHeight",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Wysokość maski",
+      "min": 0.45,
+      "max": 0.95,
+      "step": 0.005,
+      "default": 0.63,
+      "jitter": 0.03,
+      "hint": "Krawędź maski / wysokość nadwozia (u podwozia: wysokość kabiny); ~0,9 = kabina nad silnikiem."
+    },
+    {
+      "key": "windshieldAngle",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Nachylenie szyby przedniej",
+      "min": 20,
+      "max": 85,
+      "step": 1,
+      "default": 28,
+      "jitter": 0.03,
+      "unit": "°",
+      "hint": "Od poziomu; 85° ≈ pionowa szyba kabiny cab-over."
+    },
+    {
+      "key": "rearGlassAngle",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Nachylenie tylnej szyby / klapy",
+      "min": 20,
+      "max": 90,
+      "step": 1,
+      "default": 55,
+      "jitter": 0.03,
+      "unit": "°",
+      "hint": "Od poziomu; 90° = pionowy tył (van, kabina)."
+    },
+    {
+      "key": "roundness",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Obłość",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.6,
+      "jitter": 0.05,
+      "hint": "0 = pudełko, 1 = mocno zaokrąglone krawędzie i słupki."
+    },
+    {
+      "key": "tumblehome",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Zwężenie dachu",
+      "min": 0,
+      "max": 0.2,
+      "step": 0.005,
+      "default": 0.09,
+      "jitter": 0.03,
+      "hint": "Zmniejszenie półszerokości dachu względem nadwozia (ułamek)."
+    },
+    {
+      "key": "chamfer",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Fazka",
+      "min": 0,
+      "max": 0.15,
+      "step": 0.005,
+      "default": 0.05,
+      "jitter": 0.03,
+      "unit": "m",
+      "hint": "Szerokość fazki 45° na krawędziach dach–bok i maska–czoło."
+    },
+    {
+      "key": "lampStyle",
+      "group": "sylwetka",
+      "kind": "enum",
+      "label": "Styl lamp",
+      "options": [
+        {
+          "value": "oval",
+          "label": "Owalne / łezki"
+        },
+        {
+          "value": "trapezoid",
+          "label": "Trapezowe"
+        },
+        {
+          "value": "strip",
+          "label": "Pasek LED"
+        }
+      ],
+      "default": "oval",
+      "jitter": 0,
+      "hint": "Kształty z prymitywów: elipsa, trapez, pasek (epoki 2000–10 / 2010–18 / 2018+)."
+    },
+    {
+      "key": "grill",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Wielkość grilla",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.3,
+      "jitter": 0.05,
+      "hint": "0 = zamknięty panel (EV), 1 = ogromny."
+    },
+    {
+      "key": "rearLightBar",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Listwa świetlna z tyłu",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0,
+      "jitter": 0,
+      "hint": "Prawdopodobieństwo (0 w latach 2000, ~0,35 po 2018)."
+    },
+    {
+      "key": "wheelDiameter",
+      "group": "podwozie",
+      "kind": "number",
+      "label": "Średnica koła",
+      "min": 0.45,
+      "max": 1.15,
+      "step": 0.005,
+      "default": 0.63,
+      "jitter": 0.02,
+      "unit": "m",
+      "hint": "Zewnętrzna, z oponą."
+    },
+    {
+      "key": "tyreWidth",
+      "group": "podwozie",
+      "kind": "number",
+      "label": "Szerokość opony",
+      "min": 0.14,
+      "max": 0.45,
+      "step": 0.005,
+      "default": 0.205,
+      "jitter": 0.02,
+      "unit": "m"
+    },
+    {
+      "key": "rimRatio",
+      "group": "podwozie",
+      "kind": "number",
+      "label": "Udział felgi",
+      "min": 0.45,
+      "max": 0.75,
+      "step": 0.005,
+      "default": 0.64,
+      "jitter": 0.02,
+      "hint": "Średnica felgi / średnica koła."
+    },
+    {
+      "key": "clearance",
+      "group": "podwozie",
+      "kind": "number",
+      "label": "Prześwit",
+      "min": 0.1,
+      "max": 0.45,
+      "step": 0.005,
+      "default": 0.14,
+      "jitter": 0.03,
+      "unit": "m",
+      "hint": "Wozy PSP kat. 2: ≥ 0,30 m."
+    },
+    {
+      "key": "trackRatio",
+      "group": "podwozie",
+      "kind": "number",
+      "label": "Rozstaw kół / szerokość",
+      "min": 0.75,
+      "max": 0.9,
+      "step": 0.005,
+      "default": 0.86,
+      "jitter": 0.01,
+      "hint": "Osobowe 0,85–0,88."
+    },
+    {
+      "key": "wheelArchGap",
+      "group": "podwozie",
+      "kind": "number",
+      "label": "Luz nadkola",
+      "min": 0.02,
+      "max": 0.1,
+      "step": 0.005,
+      "default": 0.04,
+      "jitter": 0.01,
+      "unit": "m",
+      "hint": "Promień wycięcia = promień koła + luz (3–8 cm)."
+    },
+    {
+      "key": "axles",
+      "group": "podwozie",
+      "kind": "int",
+      "label": "Liczba osi",
+      "min": 2,
+      "max": 4,
+      "step": 1,
+      "default": 2,
+      "jitter": 0.0
+    },
+    {
+      "key": "axleGap",
+      "group": "podwozie",
+      "kind": "number",
+      "label": "Rozstaw osi tylnych",
+      "min": 1.2,
+      "max": 1.6,
+      "step": 0.01,
+      "default": 1.4,
+      "jitter": 0,
+      "unit": "m",
+      "hint": "Używany tylko przy ≥ 3 osiach."
+    },
+    {
+      "key": "drive",
+      "group": "podwozie",
+      "kind": "enum",
+      "label": "Napęd",
+      "options": [
+        {
+          "value": "4x2",
+          "label": "4x2"
+        },
+        {
+          "value": "4x4",
+          "label": "4x4"
+        },
+        {
+          "value": "6x2",
+          "label": "6x2"
+        },
+        {
+          "value": "6x4",
+          "label": "6x4"
+        },
+        {
+          "value": "6x6",
+          "label": "6x6"
+        },
+        {
+          "value": "8x4",
+          "label": "8x4"
+        }
+      ],
+      "default": "4x2",
+      "jitter": 0
+    },
+    {
+      "key": "powertrain",
+      "group": "podwozie",
+      "kind": "enum",
+      "label": "Układ napędowy",
+      "options": [
+        {
+          "value": "ice",
+          "label": "Spalinowy"
+        },
+        {
+          "value": "hybrid",
+          "label": "Hybryda"
+        },
+        {
+          "value": "ev",
+          "label": "Elektryczny"
+        }
+      ],
+      "default": "ice",
+      "jitter": 0,
+      "hint": "EV: zamknięty grill, bez rury wydechowej."
+    },
+    {
+      "key": "rearTyres",
+      "group": "podwozie",
+      "kind": "enum",
+      "label": "Opony tylne",
+      "options": [
+        {
+          "value": "single",
+          "label": "Pojedyncze"
+        },
+        {
+          "value": "dual",
+          "label": "Bliźniacze"
+        }
+      ],
+      "default": "single",
+      "jitter": 0
+    },
+    {
+      "key": "steelWheels",
+      "group": "podwozie",
+      "kind": "number",
+      "label": "Felgi stalowe z kołpakami",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.2,
+      "jitter": 0,
+      "hint": "Prawdopodobieństwo (0,5 w 2000–10, ~0 po 2018)."
+    },
+    {
+      "key": "module",
+      "group": "zabudowa",
+      "kind": "enum",
+      "label": "Moduł zabudowy",
+      "options": [
+        {
+          "value": "none",
+          "label": "Brak"
+        },
+        {
+          "value": "furgon",
+          "label": "Furgon"
+        },
+        {
+          "value": "skrzynia",
+          "label": "Skrzynia"
+        },
+        {
+          "value": "doka",
+          "label": "Doka"
+        },
+        {
+          "value": "wywrotka",
+          "label": "Wywrotka"
+        },
+        {
+          "value": "chlodnia",
+          "label": "Chłodnia"
+        },
+        {
+          "value": "minibus",
+          "label": "Minibus"
+        },
+        {
+          "value": "pozarniczy",
+          "label": "Pożarniczy (skrytki, pompa)"
+        },
+        {
+          "value": "techniczny",
+          "label": "Ratownictwo techniczne (żuraw)"
+        },
+        {
+          "value": "laweta",
+          "label": "Laweta"
+        }
+      ],
+      "default": "none",
+      "jitter": 0
+    },
+    {
+      "key": "moduleLength",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Długość zabudowy",
+      "min": 0,
+      "max": 9.5,
+      "step": 0.05,
+      "default": 0,
+      "jitter": 0.03,
+      "unit": "m"
+    },
+    {
+      "key": "cabType",
+      "group": "zabudowa",
+      "kind": "enum",
+      "label": "Typ kabiny",
+      "options": [
+        {
+          "value": "integral",
+          "label": "Jednobryłowa (osobowe, van)"
+        },
+        {
+          "value": "day",
+          "label": "Dzienna 1+2"
+        },
+        {
+          "value": "crew",
+          "label": "Brygadowa 1+1+4"
+        },
+        {
+          "value": "sleeper",
+          "label": "Sypialna"
+        }
+      ],
+      "default": "integral",
+      "jitter": 0
+    },
+    {
+      "key": "cabLength",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Długość kabiny",
+      "min": 0,
+      "max": 3.6,
+      "step": 0.005,
+      "default": 0,
+      "jitter": 0.02,
+      "unit": "m",
+      "hint": "Scania: dzienna 1,83, CP28 3,265, CP31 3,545."
+    },
+    {
+      "key": "cabHeight",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Wysokość kabiny",
+      "min": 1.3,
+      "max": 3.8,
+      "step": 0.01,
+      "default": 1.48,
+      "jitter": 0.02,
+      "unit": "m",
+      "hint": "Dach kabiny nad gruntem; dla bodyType ≠ podwozie równa wysokości."
+    },
+    {
+      "key": "compartments",
+      "group": "zabudowa",
+      "kind": "int",
+      "label": "Skrytki na stronę",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "default": 0,
+      "jitter": 0,
+      "hint": "Kolumny z żaluzjami: 2–3 w wozach PSP, do 4 w długich 6x6."
+    },
+    {
+      "key": "passThrough",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Przedział przelotowy",
+      "min": 0,
+      "max": 0.95,
+      "step": 0.01,
+      "default": 0,
+      "jitter": 0,
+      "unit": "m",
+      "hint": "Za kabiną, 0,4–0,95 m w przetargach PSP."
+    },
+    {
+      "key": "roofRack",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Wyposażenie dachu",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0,
+      "jitter": 0,
+      "hint": "0 = gładki dach, 1 = skrzynia, drabiny, działko, maszt."
+    },
+    {
+      "key": "crane",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Żuraw",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0,
+      "jitter": 0,
+      "hint": "0 = brak, 1 = żuraw HDS za kabiną."
+    },
+    {
+      "key": "winch",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Wyciągarka",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0,
+      "jitter": 0,
+      "hint": "0 = brak, 1 = wyciągarka w zderzaku."
+    },
+    {
+      "key": "service",
+      "group": "sluzba",
+      "kind": "enum",
+      "label": "Służba",
+      "options": [
+        {
+          "value": "cywilny",
+          "label": "Cywilny"
+        },
+        {
+          "value": "policja",
+          "label": "Policja"
+        },
+        {
+          "value": "medycy",
+          "label": "Medycy"
+        },
+        {
+          "value": "straz",
+          "label": "Straż"
+        },
+        {
+          "value": "techniczne",
+          "label": "Techniczne"
+        }
+      ],
+      "default": "cywilny",
+      "jitter": 0,
+      "hint": "Zmienia oklejenie, belki i wyposażenie, nie bryłę (WT § 37)."
+    },
+    {
+      "key": "seats",
+      "group": "sluzba",
+      "kind": "int",
+      "label": "Miejsca",
+      "min": 1,
+      "max": 9,
+      "step": 1,
+      "default": 5,
+      "jitter": 0,
+      "hint": "Liczba Miejsc (załoga + pasażerowie) w pojeździe."
+    },
+    {
+      "key": "lightbarLamps",
+      "group": "sluzba",
+      "kind": "int",
+      "label": "Niebieskie lampy",
+      "min": 0,
+      "max": 30,
+      "step": 1,
+      "default": 0,
+      "jitter": 0,
+      "hint": "WT § 26: od 1 do 30 lamp błyskowych; 0 = pojazd cywilny."
+    },
+    {
+      "key": "livery",
+      "group": "sluzba",
+      "kind": "enum",
+      "label": "Wzór oklejenia",
+      "options": [
+        {
+          "value": "stripe",
+          "label": "Pasy ciągłe"
+        },
+        {
+          "value": "checker",
+          "label": "Szachownica"
+        },
+        {
+          "value": "chevron",
+          "label": "Jodełka z tyłu"
+        },
+        {
+          "value": "battenburg",
+          "label": "Battenburg (zagraniczny)"
+        }
+      ],
+      "default": "stripe",
+      "jitter": 0,
+      "hint": "Domyślnie pasy ciągłe; Battenburg nie występuje w polskich przepisach."
+    },
+    {
+      "key": "paintColor",
+      "group": "material",
+      "kind": "color",
+      "label": "Lakier",
+      "default": "#8d9091",
+      "jitter": 0.2
+    },
+    {
+      "key": "roofColor",
+      "group": "material",
+      "kind": "color",
+      "label": "Dach",
+      "default": "#8d9091",
+      "jitter": 0.2
+    },
+    {
+      "key": "plasticColor",
+      "group": "material",
+      "kind": "color",
+      "label": "Plastiki",
+      "default": "#222426",
+      "jitter": 0
+    },
+    {
+      "key": "glassColor",
+      "group": "material",
+      "kind": "color",
+      "label": "Szyby",
+      "default": "#2a3540",
+      "jitter": 0
+    },
+    {
+      "key": "chassisColor",
+      "group": "material",
+      "kind": "color",
+      "label": "Podwozie",
+      "default": "#222426",
+      "jitter": 0
+    },
+    {
+      "key": "bumperColor",
+      "group": "material",
+      "kind": "color",
+      "label": "Zderzaki",
+      "default": "#8d9091",
+      "jitter": 0.1,
+      "hint": "Wozy PSP: białe zderzaki i błotniki (WT § 27)."
+    },
+    {
+      "key": "liveryColor",
+      "group": "material",
+      "kind": "color",
+      "label": "Kolor oklejenia",
+      "default": "#154889",
+      "jitter": 0
+    },
+    {
+      "key": "twoToneRoof",
+      "group": "material",
+      "kind": "number",
+      "label": "Dach dwukolorowy",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0,
+      "jitter": 0,
+      "hint": "Prawdopodobieństwo (SUV-y: 0 → 0,3 po 2018)."
+    },
+    {
+      "key": "claddingBlack",
+      "group": "material",
+      "kind": "number",
+      "label": "Czarne nadkola i progi",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.3,
+      "jitter": 0,
+      "hint": "Prawdopodobieństwo (SUV: 0,3 → 1,0)."
+    },
+    {
+      "key": "weathering",
+      "group": "material",
+      "kind": "number",
+      "label": "Zużycie",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.25,
+      "jitter": 0.15,
+      "hint": "Średni wiek parku 15 lat → domyślnie widoczne zużycie."
+    }
+  ],
+  "defaults": {
+    "bodyType": "hatchback",
+    "length": 4.2,
+    "width": 1.78,
+    "height": 1.48,
+    "wheelbase": 2.58,
+    "frontOverhang": 0.2,
+    "rearOverhang": 0.2,
+    "beltline": 0.65,
+    "hoodHeight": 0.63,
+    "windshieldAngle": 28,
+    "rearGlassAngle": 55,
+    "roundness": 0.6,
+    "tumblehome": 0.09,
+    "chamfer": 0.05,
+    "lampStyle": "oval",
+    "grill": 0.3,
+    "rearLightBar": 0,
+    "wheelDiameter": 0.63,
+    "tyreWidth": 0.205,
+    "rimRatio": 0.64,
+    "clearance": 0.14,
+    "trackRatio": 0.86,
+    "wheelArchGap": 0.04,
+    "axles": 2,
+    "axleGap": 1.4,
+    "drive": "4x2",
+    "powertrain": "ice",
+    "rearTyres": "single",
+    "steelWheels": 0.2,
+    "module": "none",
+    "moduleLength": 0,
+    "cabType": "integral",
+    "cabLength": 0,
+    "cabHeight": 1.48,
+    "compartments": 0,
+    "passThrough": 0,
+    "roofRack": 0,
+    "crane": 0,
+    "winch": 0,
+    "service": "cywilny",
+    "seats": 5,
+    "lightbarLamps": 0,
+    "livery": "stripe",
+    "paintColor": "#8d9091",
+    "roofColor": "#8d9091",
+    "plasticColor": "#222426",
+    "glassColor": "#2a3540",
+    "chassisColor": "#222426",
+    "bumperColor": "#8d9091",
+    "liveryColor": "#154889",
+    "twoToneRoof": 0,
+    "claddingBlack": 0.3,
+    "weathering": 0.25
+  },
+  "archetypes": [
+    {
+      "id": "hatchback",
+      "name": "Hatchback klasy C",
+      "short": "Hatchback",
+      "years": [
+        2000,
+        2026
+      ],
+      "map": {
+        "year": 2009,
+        "scale": 0.1
+      },
+      "description": "Najczęstsza osobówka na polskiej ulicy: kompakt z importu 2004–2013, owalne reflektory, mały grill, szara lub srebrna karoseria.",
+      "features": [
+        "rozstaw/długość ≈ 0,61, zwis przedni ≈ 0,20",
+        "koło/wysokość ≈ 0,43",
+        "owalne reflektory i mały grill (epoka 2000–2010)",
+        "stalowe felgi z kołpakami częste"
+      ],
+      "sources": [
+        {
+          "title": "autotijd — Volkswagen Golf 8 (4284×1789×1483 mm)",
+          "url": "https://autotijd.be/en/dimensions/volkswagen/golf",
+          "verified": true
+        },
+        {
+          "title": "Raport PZPM 2025/2026 — struktura parku i rynek nowych aut",
+          "url": "https://www.pzpm.org.pl/en/content/download/19611/243421/file/Raport_PZPM_2025-26_caly_lekki.pdf",
+          "verified": true
+        },
+        {
+          "title": "SpecialChem / Axalta 2025 — popularność kolorów aut w Europie",
+          "url": "https://www.specialchem.com/coatings/news/axalta-unveils-2025-global-automotive-color-popularity-report",
+          "verified": true
+        },
+        {
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "length": 4.28,
+        "wheelbase": 2.62,
+        "rearOverhang": 0.188,
+        "width": 1.79,
+        "roundness": 0.65,
+        "tumblehome": 0.1,
+        "chamfer": 0.04,
+        "grill": 0.45,
+        "steelWheels": 0.5,
+        "weathering": 0.35,
+        "claddingBlack": 0.1
+      }
+    },
+    {
+      "id": "sedan_liftback",
+      "name": "Sedan / liftback klasy C–D",
+      "short": "Sedan",
+      "years": [
+        2000,
+        2026
+      ],
+      "map": {
+        "year": 2016,
+        "scale": 0.22
+      },
+      "description": "Liftback lub sedan: długi zwis tylny, niski dach, trapezowe reflektory z paskiem DRL (epoka 2010–2018), często hybryda.",
+      "features": [
+        "rozstaw/długość 0,57–0,59, zwis tylny 0,21–0,23",
+        "H/L ≈ 0,31",
+        "trapezowy grill, reflektory z DRL",
+        "linia okien wyższa niż w latach 2000"
+      ],
+      "sources": [
+        {
+          "title": "autotijd — Škoda Octavia Combi IV (4689×1829×1468 mm, rozstaw 2686 mm)",
+          "url": "https://autotijd.be/en/dimensions/skoda/octavia-combi-2020-2024",
+          "verified": true
+        },
+        {
+          "title": "Daytime running lamp — obowiązek DRL od 7.02.2011",
+          "url": "https://en.wikipedia.org/wiki/Daytime_running_lamp",
+          "verified": true
+        },
+        {
+          "title": "Raport PZPM 2025/2026 — struktura parku i rynek nowych aut",
+          "url": "https://www.pzpm.org.pl/en/content/download/19611/243421/file/Raport_PZPM_2025-26_caly_lekki.pdf",
+          "verified": true
+        },
+        {
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "bodyType": "liftback",
+        "length": 4.6,
+        "frontOverhang": 0.195,
+        "wheelbase": 2.7,
+        "rearOverhang": 0.218,
+        "width": 1.82,
+        "height": 1.45,
+        "beltline": 0.66,
+        "hoodHeight": 0.64,
+        "windshieldAngle": 29,
+        "rearGlassAngle": 22,
+        "lampStyle": "trapezoid",
+        "grill": 0.65,
+        "rearLightBar": 0.05,
+        "wheelDiameter": 0.65,
+        "tyreWidth": 0.215,
+        "rimRatio": 0.66,
+        "powertrain": "hybrid",
+        "cabHeight": 1.45,
+        "paintColor": "#17191b",
+        "roofColor": "#17191b",
+        "bumperColor": "#17191b",
+        "claddingBlack": 0.1,
+        "weathering": 0.2
+      }
+    },
+    {
+      "id": "kombi",
+      "name": "Kombi klasy C–D",
+      "short": "Kombi",
+      "years": [
+        2000,
+        2026
+      ],
+      "map": {
+        "year": 2013,
+        "scale": 0.3
+      },
+      "description": "Kombi z długim dachem i pionowym tyłem: podstawa taksówek, flot i rodzin; Octavia Combi jako wzorzec proporcji.",
+      "features": [
+        "rozstaw/długość ≈ 0,58, zwis tylny ≈ 0,23",
+        "dach ciągnie się do pionowego tyłu",
+        "szersze słupki C niż w liftbacku"
+      ],
+      "sources": [
+        {
+          "title": "autotijd — Škoda Octavia Combi IV (4689×1829×1468 mm, rozstaw 2686 mm)",
+          "url": "https://autotijd.be/en/dimensions/skoda/octavia-combi-2020-2024",
+          "verified": true
+        },
+        {
+          "title": "Raport PZPM 2025/2026 — struktura parku i rynek nowych aut",
+          "url": "https://www.pzpm.org.pl/en/content/download/19611/243421/file/Raport_PZPM_2025-26_caly_lekki.pdf",
+          "verified": true
+        },
+        {
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "bodyType": "kombi",
+        "length": 4.65,
+        "frontOverhang": 0.195,
+        "wheelbase": 2.69,
+        "rearOverhang": 0.227,
+        "width": 1.83,
+        "hoodHeight": 0.64,
+        "rearGlassAngle": 62,
+        "roundness": 0.5,
+        "tumblehome": 0.08,
+        "lampStyle": "trapezoid",
+        "grill": 0.6,
+        "rearLightBar": 0.05,
+        "wheelDiameter": 0.65,
+        "tyreWidth": 0.215,
+        "rimRatio": 0.66,
+        "paintColor": "#bfc3c7",
+        "roofColor": "#bfc3c7",
+        "bumperColor": "#bfc3c7",
+        "claddingBlack": 0.1
+      }
+    },
+    {
+      "id": "suv",
+      "name": "SUV / crossover klasy C",
+      "short": "SUV",
+      "years": [
+        2008,
+        2026
+      ],
+      "map": {
+        "year": 2022,
+        "scale": 0.42
+      },
+      "description": "SUV to 57–60% rejestracji nowych aut: wysoka linia okien, wąskie paski LED, ogromny grill, czarne nadkola i czasem czarny dach.",
+      "features": [
+        "H/L ≈ 0,37, prześwit 0,17–0,19 m",
+        "czarne nadkola i progi",
+        "pływający dach, dwukolorowy z P = 0,3",
+        "wąskie reflektory, listwa świetlna z tyłu"
+      ],
+      "sources": [
+        {
+          "title": "autotijd — Hyundai Tucson IV (4510×1865×1650 mm)",
+          "url": "https://autotijd.be/en/dimensions/hyundai/tucson",
+          "verified": true
+        },
+        {
+          "title": "Auto Świat — udział SUV-ów w rejestracjach (57% w 2024)",
+          "url": "https://www.auto-swiat.pl/wiadomosci/aktualnosci/ten-typ-samochodu-polacy-pokochali-bez-reszty-niezwykla-sytuacja-w-top-10/qsgd21w",
+          "verified": true
+        },
+        {
+          "title": "Daytime running lamp — obowiązek DRL od 7.02.2011",
+          "url": "https://en.wikipedia.org/wiki/Daytime_running_lamp",
+          "verified": true
+        },
+        {
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "bodyType": "suv",
+        "length": 4.5,
+        "frontOverhang": 0.21,
+        "wheelbase": 2.7,
+        "rearOverhang": 0.19,
+        "width": 1.86,
+        "height": 1.65,
+        "beltline": 0.68,
+        "hoodHeight": 0.66,
+        "windshieldAngle": 32,
+        "rearGlassAngle": 65,
+        "roundness": 0.45,
+        "tumblehome": 0.06,
+        "lampStyle": "strip",
+        "grill": 0.75,
+        "rearLightBar": 0.35,
+        "wheelDiameter": 0.72,
+        "tyreWidth": 0.235,
+        "rimRatio": 0.635,
+        "clearance": 0.18,
+        "steelWheels": 0.03,
+        "powertrain": "hybrid",
+        "cabHeight": 1.65,
+        "paintColor": "#f1f2f0",
+        "roofColor": "#17191b",
+        "bumperColor": "#f1f2f0",
+        "twoToneRoof": 0.3,
+        "claddingBlack": 1.0,
+        "weathering": 0.1
+      }
+    },
+    {
+      "id": "van",
+      "name": "Van klasy Sprintera (L2H2)",
+      "short": "Van",
+      "years": [
+        2006,
+        2026
+      ],
+      "map": {
+        "year": 2019,
+        "scale": 0.58
+      },
+      "description": "Duży dostawczak z napędem na tył, wzorzec: Sprinter L2H2 (5,93 m, 2,62 m). Ta sama bryła i podwozie dla karetki, furgonu policji i serwisu.",
+      "features": [
+        "długość 5,93 m, wysokość 2,62 m (H2)",
+        "rozstaw osi 3,67 m (mieści się w ZRM P 3,7 m)",
+        "kabina jednobryłowa, pionowy tył",
+        "biały lakier, > 60% dostawczych"
+      ],
+      "sources": [
+        {
+          "title": "Vanreviewer — wymiary Sprintera L1–L4, H1–H3",
+          "url": "https://vanreviewer.co.uk/mercedes-benz/sprinter/dimensions/2827/",
+          "verified": true
+        },
+        {
+          "title": "Superauto — rejestracje dostawczych 2025 (Master, Ducato)",
+          "url": "https://www.superauto.pl/artykuly/historyczny-rekord-rejestracji-i-nowa-hierarchia-modeli-samochodow-dostawczych-toyota-krolem-2025-roku-analiza-rynku",
+          "verified": true
+        },
+        {
+          "title": "NFZ — typy ambulansów wg PN-EN 1789 (ZRM-P = typ B)",
+          "url": "https://www.nfz.gov.pl/aktualnosci/aktualnosci-centrali/komunikat,3628.html",
+          "verified": true
+        },
+        {
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "bodyType": "van",
+        "length": 5.93,
+        "frontOverhang": 0.165,
+        "wheelbase": 3.665,
+        "rearOverhang": 0.217,
+        "width": 2.02,
+        "height": 2.62,
+        "beltline": 0.54,
+        "hoodHeight": 0.48,
+        "windshieldAngle": 52,
+        "rearGlassAngle": 90,
+        "roundness": 0.3,
+        "tumblehome": 0.03,
+        "chamfer": 0.04,
+        "lampStyle": "trapezoid",
+        "grill": 0.85,
+        "wheelDiameter": 0.74,
+        "tyreWidth": 0.225,
+        "rimRatio": 0.55,
+        "clearance": 0.18,
+        "trackRatio": 0.85,
+        "wheelArchGap": 0.05,
+        "module": "furgon",
+        "moduleLength": 3.3,
+        "cabHeight": 2.62,
+        "seats": 3,
+        "paintColor": "#f1f2f0",
+        "roofColor": "#f1f2f0",
+        "bumperColor": "#2b2d2f",
+        "weathering": 0.3
+      }
+    },
+    {
+      "id": "podwozie_lekkie",
+      "name": "Podwozie lekkie (≤ 7,5 t)",
+      "short": "Lekkie",
+      "years": [
+        2000,
+        2026
+      ],
+      "map": {
+        "year": 2021,
+        "scale": 0.72
+      },
+      "description": "Klasa L (EN 1846): 3,5–7,5 t, kabina dzienna cab-over, skrzynia lub zabudowa; baza lekkich wozów (np. pomoc drogowa) i dostawczych ciężarówek.",
+      "features": [
+        "klasa L: ≤ 7,5 t, wysokość ≤ 2,6 m",
+        "kabina cab-over 1+2, szyba prawie pionowa",
+        "4x4, bliźniacze opony z tyłu",
+        "rozstaw osi 4,2 m"
+      ],
+      "sources": [
+        {
+          "title": "BiTP 2013, CNBOP — klasy masy EN 1846 (L ≤ 7,5 t, M ≤ 16 t, S > 16 t)",
+          "url": "https://sft.cnbop.pl/en/bi-tp-vol-32-issue-4-2013-firefighting-vehicles-classification-labelling-and-division",
+          "verified": true
+        },
+        {
+          "title": "ZOSP RP 2024 — OPZ lekki samochód (≤ 2600 mm, 3,5–7,5 t)",
+          "url": "https://www.zosprp.poznan.pl/wp-content/uploads/2024/08/Zalacznik-nr-1B-do-SWZ-OPZ-lekki-samochod.pdf",
+          "verified": true
+        },
+        {
+          "title": "Dyrektywa 96/53/WE, zał. I — limity długości, szerokości, wysokości",
+          "url": "https://www.legislation.gov.uk/eudr/1996/53/annex/I",
+          "verified": true
+        },
+        {
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "bodyType": "podwozie",
+        "length": 7.0,
+        "frontOverhang": 0.14,
+        "wheelbase": 4.2,
+        "rearOverhang": 0.26,
+        "width": 2.25,
+        "height": 2.6,
+        "beltline": 0.6,
+        "hoodHeight": 0.9,
+        "windshieldAngle": 75,
+        "rearGlassAngle": 90,
+        "roundness": 0.15,
+        "tumblehome": 0.05,
+        "chamfer": 0.03,
+        "lampStyle": "trapezoid",
+        "grill": 0.55,
+        "wheelDiameter": 0.8,
+        "tyreWidth": 0.235,
+        "rimRatio": 0.556,
+        "clearance": 0.25,
+        "trackRatio": 0.8,
+        "wheelArchGap": 0.07,
+        "steelWheels": 1,
+        "drive": "4x4",
+        "rearTyres": "dual",
+        "module": "skrzynia",
+        "moduleLength": 5.0,
+        "cabType": "day",
+        "cabLength": 1.83,
+        "cabHeight": 2.55,
+        "seats": 3,
+        "service": "techniczne",
+        "paintColor": "#f1f2f0",
+        "roofColor": "#f1f2f0",
+        "bumperColor": "#f1f2f0",
+        "chassisColor": "#0a0a0d",
+        "liveryColor": "#e15501",
+        "weathering": 0.35
+      }
+    },
+    {
+      "id": "podwozie_srednie",
+      "name": "Podwozie średnie (≤ 16 t)",
+      "short": "Średnie",
+      "years": [
+        2000,
+        2026
+      ],
+      "map": {
+        "year": 2020,
+        "scale": 0.84
+      },
+      "description": "Klasa M: wóz GBA 3/30 w polskim standardzie — kabina brygadowa 1+1+4, 4x4, trzy skrytki na stronę, pompa z tyłu, czerwień sygnałowa i białe zderzaki.",
+      "features": [
+        "klasa M: ≤ 16 t, ≤ 3,2–3,4 m wysokości, ≤ 8,0–8,4 m długości",
+        "prześwit ≥ 0,30 m",
+        "kabina CP28 3,265 m, 1+1+4",
+        "3+3 skrytki, przedział przelotowy ≥ 0,4 m"
+      ],
+      "sources": [
+        {
+          "title": "BiTP 2013, CNBOP — klasy masy EN 1846 (L ≤ 7,5 t, M ≤ 16 t, S > 16 t)",
+          "url": "https://sft.cnbop.pl/en/bi-tp-vol-32-issue-4-2013-firefighting-vehicles-classification-labelling-and-division",
+          "verified": true
+        },
+        {
+          "title": "KW PSP Lublin 2023 — OPZ średni samochód (≤ 3200 mm, ≤ 8000 mm, prześwit ≥ 300 mm)",
+          "url": "https://platformazakupowa.pl/file/get_new/eb6579a829a70207a6ac1021efdd49fb.pdf",
+          "verified": true
+        },
+        {
+          "title": "OSP 2024 — OPZ średni samochód (≤ 3400 mm, ≤ 8400 mm)",
+          "url": "https://platformazakupowa.pl/file/get_new/0f3aac7159dc9a8cc39946d71feeb4e9.pdf",
+          "verified": true
+        },
+        {
+          "title": "Scania — pojazdy ratownicze 09-25 (długości kabin)",
+          "url": "https://www.scania.com/content/dam/www/market/pl/ulotki/pdfy/pojazdy-ratownicze-scania-09-25.pdf",
+          "verified": true
+        },
+        {
+          "title": "Przetarg — śmieciarka 6x2: rozstaw osi 3750–3900 mm, zwis tylny do 2100 mm",
+          "url": "https://www.platformazakupowa.pl/file/get_new/ae5e29ceaae83b6de374582d8517d393.pdf",
+          "verified": true
+        },
+        {
+          "title": "Dz.U. 2024 poz. 502 — warunki techniczne pojazdów (§ 26–27)",
+          "url": "https://eli.gov.pl/eli/DU/2024/502/ogl/pol/pdf",
+          "verified": true
+        },
+        {
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "bodyType": "podwozie",
+        "length": 8.2,
+        "frontOverhang": 0.14,
+        "wheelbase": 4.7,
+        "rearOverhang": 0.287,
+        "width": 2.5,
+        "height": 3.3,
+        "beltline": 0.58,
+        "hoodHeight": 0.92,
+        "windshieldAngle": 78,
+        "rearGlassAngle": 90,
+        "roundness": 0.1,
+        "tumblehome": 0.05,
+        "chamfer": 0.03,
+        "lampStyle": "trapezoid",
+        "grill": 0.6,
+        "wheelDiameter": 1.0,
+        "tyreWidth": 0.315,
+        "rimRatio": 0.57,
+        "clearance": 0.32,
+        "trackRatio": 0.8,
+        "wheelArchGap": 0.07,
+        "steelWheels": 1,
+        "drive": "4x4",
+        "module": "pozarniczy",
+        "moduleLength": 4.8,
+        "cabType": "crew",
+        "cabLength": 3.265,
+        "cabHeight": 3.0,
+        "compartments": 3,
+        "passThrough": 0.6,
+        "roofRack": 1,
+        "winch": 1,
+        "seats": 6,
+        "service": "straz",
+        "lightbarLamps": 8,
+        "paintColor": "#ab2524",
+        "roofColor": "#ab2524",
+        "bumperColor": "#f7f9ef",
+        "chassisColor": "#0a0a0d",
+        "liveryColor": "#c1121c",
+        "weathering": 0.3
+      }
+    },
+    {
+      "id": "podwozie_ciezkie",
+      "name": "Podwozie ciężkie (> 16 t)",
+      "short": "Ciężkie",
+      "years": [
+        2000,
+        2026
+      ],
+      "map": {
+        "year": 2023,
+        "scale": 0.96
+      },
+      "description": "Klasa S: ciężki wóz GCBA na 3 osiach (6x6), dwumodułowa zabudowa 2+2+1, do 9,5–10 m długości; baza dla wozu ratownictwa technicznego z żurawiem.",
+      "features": [
+        "klasa S: > 16 t, wysokość ≤ 3,35 m, szerokość 2,55 m",
+        "6x6, pojedyncze koła, prześwit ≥ 0,30 m",
+        "kabina CP28, zabudowa dwumodułowa",
+        "rozstaw osi 5,0 m + zespół tylny 1,4 m"
+      ],
+      "sources": [
+        {
+          "title": "BiTP 2013, CNBOP — klasy masy EN 1846 (L ≤ 7,5 t, M ≤ 16 t, S > 16 t)",
+          "url": "https://sft.cnbop.pl/en/bi-tp-vol-32-issue-4-2013-firefighting-vehicles-classification-labelling-and-division",
+          "verified": true
+        },
+        {
+          "title": "Lublin 2025 — OPZ ciężki samochód (≤ 22 t, ≤ 3350 mm, ≤ 9500 mm)",
+          "url": "https://platformazakupowa.pl/file/get_new/199d962300f7d6e795845ffb676e8ec6.doc",
+          "verified": true
+        },
+        {
+          "title": "Dyrektywa 96/53/WE, zał. I — limity długości, szerokości, wysokości",
+          "url": "https://www.legislation.gov.uk/eudr/1996/53/annex/I",
+          "verified": true
+        },
+        {
+          "title": "Scania — pojazdy ratownicze 09-25 (długości kabin)",
+          "url": "https://www.scania.com/content/dam/www/market/pl/ulotki/pdfy/pojazdy-ratownicze-scania-09-25.pdf",
+          "verified": true
+        },
+        {
+          "title": "TruckScout24 — Volvo FH 4x2: rozstaw osi 3800 mm, opony 385/65 R22.5",
+          "url": "https://www.truckscout24.com/tsp/ts-227-84-660",
+          "verified": true
+        },
+        {
+          "title": "Magirus M32L-AS — rozstaw osi 4815 mm, 16 t",
+          "url": "https://www.magirusgroup.com/de/en/serving-heroes/deliveries/detail/delivery/m32l-as-for-sdis-43-haute-loire-12-2024/",
+          "verified": true
+        },
+        {
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "bodyType": "podwozie",
+        "length": 10.0,
+        "frontOverhang": 0.13,
+        "wheelbase": 5.0,
+        "rearOverhang": 0.23,
+        "width": 2.55,
+        "height": 3.35,
+        "beltline": 0.58,
+        "hoodHeight": 0.92,
+        "windshieldAngle": 80,
+        "rearGlassAngle": 90,
+        "roundness": 0.1,
+        "tumblehome": 0.05,
+        "chamfer": 0.03,
+        "lampStyle": "trapezoid",
+        "grill": 0.6,
+        "wheelDiameter": 1.07,
+        "tyreWidth": 0.385,
+        "rimRatio": 0.535,
+        "clearance": 0.32,
+        "trackRatio": 0.8,
+        "wheelArchGap": 0.08,
+        "steelWheels": 1,
+        "axles": 3,
+        "drive": "6x6",
+        "module": "pozarniczy",
+        "moduleLength": 6.6,
+        "cabType": "crew",
+        "cabLength": 3.265,
+        "cabHeight": 3.1,
+        "compartments": 2,
+        "passThrough": 0.6,
+        "roofRack": 1,
+        "winch": 1,
+        "seats": 6,
+        "service": "straz",
+        "lightbarLamps": 10,
+        "paintColor": "#ab2524",
+        "roofColor": "#ab2524",
+        "bumperColor": "#f7f9ef",
+        "chassisColor": "#0a0a0d",
+        "liveryColor": "#c1121c",
+        "weathering": 0.3
+      }
+    }
+  ]
+}

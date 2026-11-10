@@ -4764,7 +4764,10 @@ dependencies = [
  "egui-phosphor",
  "image",
  "pierzeja-core",
+ "procedura-kit",
  "serde_json",
+ "tabor-core",
+ "tlum-core",
  "winit",
 ]
 
@@ -4773,6 +4776,7 @@ name = "pierzeja-core"
 version = "0.1.0"
 dependencies = [
  "indexmap",
+ "procedura-kit",
  "serde",
  "serde_json",
 ]
@@ -4785,6 +4789,7 @@ dependencies = [
  "pierzeja-core",
  "serde",
  "serde_json",
+ "tabor-core",
 ]
 
 [[package]]
@@ -4796,6 +4801,7 @@ dependencies = [
  "pierzeja-render",
  "serde",
  "serde_json",
+ "tabor-core",
 ]
 
 [[package]]
@@ -4806,6 +4812,8 @@ dependencies = [
  "png",
  "serde",
  "serde_json",
+ "tabor-core",
+ "tlum-core",
 ]
 
 [[package]]
@@ -4941,6 +4949,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "procedura-kit"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -5568,6 +5585,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tabor-core"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "procedura-kit",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "taffy"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5689,6 +5716,16 @@ name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
+
+[[package]]
+name = "tlum-core"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "procedura-kit",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "tokio"

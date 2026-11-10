@@ -1,0 +1,11 @@
+[package]
+name = "tlum-core"
+version.workspace = true
+edition.workspace = true
+description = "Tłum: proceduralny generator ludzi (ProceduraSuite) — dane i rdzeń bez zależności od silnika."
+
+[dependencies]
+procedura-kit.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+indexmap.workspace = true

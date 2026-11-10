@@ -1,0 +1,10 @@
+[package]
+name = "procedura-kit"
+version.workspace = true
+edition.workspace = true
+description = "ProceduraSuite: wspólny kit generatorów (losowość, kolory, siatki, eksport GLB/OBJ)."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true

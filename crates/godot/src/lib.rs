@@ -3,6 +3,7 @@
 //! - `Pierzeja` — statyczne API (dane, mieszanie, budowa `ArrayMesh`, eksport GLB)
 //!   dla GDScript i zakładki edytora (`addons/pierzeja`).
 //! - `PierzejaBuilding` — węzeł `@tool`: zmiana `spec` w inspektorze przebudowuje budynek.
+//! - `Tabor` / `TaborVehicle` — to samo dla pojazdów (Tabor): API statyczne i węzeł `@tool`.
 
 use godot::classes::base_material_3d::{CullMode, Feature, Transparency};
 use godot::classes::mesh::{ArrayType, PrimitiveType};
@@ -12,6 +13,7 @@ use godot::prelude::*;
 use pierzeja_core::scene::{generate_scene, SceneSpec};
 use pierzeja_core::{self as pc, BuildingSpec, MatKey, MeshData};
 use serde_json::{json, Value};
+use tabor_core::{self as tc, TaborSpec};
 
 struct PierzejaExtension;
 
@@ -152,7 +154,7 @@ impl Pierzeja {
         };
         let m = pc::generate_from_spec(&spec);
         let name = std::path::Path::new(&path.to_string()).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or("budynek".into());
-        let glb = pc::to_glb(&[pc::ExportNode { name, mesh: &m.mesh, offset: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }]);
+        let glb = pc::to_glb(&[pc::ExportNode { name, mesh: &m.mesh, offset: None, parent: None, rotation: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }]);
         let real = ProjectSettings::singleton().globalize_path(&path).to_string();
         match std::fs::write(&real, glb) {
             Ok(()) => GString::new(),
@@ -323,6 +325,170 @@ impl PierzejaBuilding {
             base.set_mesh(&mesh);
             // ściany bez grubości: cień z obu stron, inaczej oficyny rzucają tylko obrys
             base.set_cast_shadows_setting(ShadowCastingSetting::DOUBLE_SIDED);
+        }
+    }
+}
+
+// ------------------------------------------------------------------ Tabor (pojazdy)
+
+fn parse_tabor(spec_json: &GString) -> Result<TaborSpec, String> {
+    let s = spec_json.to_string();
+    let spec: TaborSpec = if s.trim().is_empty() { TaborSpec::default() } else { serde_json::from_str(&s).map_err(|e| format!("Błędny JSON spec: {e}"))? };
+    let td = tc::data();
+    let bad: Vec<&str> = spec.mix.archetype.iter().map(String::as_str).chain(spec.mix.weights.iter().flat_map(|w| w.keys().map(String::as_str))).filter(|k| td.archetype(k).is_none()).collect();
+    if bad.is_empty() { Ok(spec) } else { Err(format!("Nieznane archetypy: {}", bad.join(", "))) }
+}
+
+/// Statyczne API pojazdów — ten sam kształt co `Pierzeja` (panel edytora przełącza tylko nazwę klasy).
+/// Pozycje w `build`: Godot-owe współrzędne rdzenia (przód +Z, bez przeliczenia na konwencję glTF).
+#[derive(GodotClass)]
+#[class(init, base=RefCounted)]
+pub struct Tabor;
+
+#[godot_api]
+impl Tabor {
+    #[func]
+    fn archetypes_json() -> GString {
+        let rows: Vec<Value> = tc::data().archetypes.iter().map(|a| json!({ "id": a.id, "name": a.name, "short": a.short, "years": a.years, "map": a.map, "description": a.description })).collect();
+        gs(&rows)
+    }
+
+    #[func]
+    fn params_json() -> GString {
+        gs(&tc::data().params)
+    }
+
+    #[func]
+    fn groups_json() -> GString {
+        let d = tc::data();
+        gs(&json!({ "groups": d.groups, "mapYears": d.map_years, "eras": d.eras }))
+    }
+
+    /// Mieszanie bez geometrii: `{params, weights, seed}` albo `{error}`.
+    #[func]
+    fn resolve(spec_json: GString) -> GString {
+        match parse_tabor(&spec_json) {
+            Ok(spec) => {
+                let r = tc::resolve(&spec);
+                gs(&json!({ "params": r.params, "weights": r.weights, "seed": r.seed }))
+            }
+            Err(e) => gs(&json!({ "error": e })),
+        }
+    }
+
+    /// Budowa: `{body: ArrayMesh, wheel: ArrayMesh (wspólna), wheels: [{name, pos}], seats: [Vector3], stats: String(JSON), error: String}`.
+    #[func]
+    fn build(spec_json: GString, night: bool) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        match parse_tabor(&spec_json) {
+            Ok(spec) => {
+                let m = tc::generate(&spec);
+                d.set("body", &to_array_mesh(&m.body, night));
+                d.set("wheel", &to_array_mesh(&m.wheel, night));
+                let v3 = |p: &[f64; 3]| Vector3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+                let mut wheels = VarArray::new();
+                for (name, pos) in &m.wheels {
+                    let mut e = VarDictionary::new();
+                    e.set("name", &GString::from(*name));
+                    e.set("pos", v3(pos));
+                    wheels.push(&e.to_variant());
+                }
+                d.set("wheels", &wheels);
+                d.set("seats", &m.seats.iter().map(v3).collect::<PackedVector3Array>());
+                d.set("stats", &gs(&m.stats));
+                d.set("error", &GString::new());
+            }
+            Err(e) => d.set("error", &GString::from(e.as_str())),
+        }
+        d
+    }
+
+    /// Zapis GLB (ścieżka `res://`, `user://` albo systemowa). Zwraca komunikat błędu albo pusty tekst.
+    #[func]
+    fn export_glb(spec_json: GString, path: GString) -> GString {
+        let spec = match parse_tabor(&spec_json) {
+            Ok(s) => s,
+            Err(e) => return e.as_str().into(),
+        };
+        let glb = tc::to_glb(&tc::generate(&spec));
+        let real = ProjectSettings::singleton().globalize_path(&path).to_string();
+        match std::fs::write(&real, glb) {
+            Ok(()) => GString::new(),
+            Err(e) => format!("{real}: {e}").as_str().into(),
+        }
+    }
+}
+
+/// Pojazd generowany na żywo (`spec` = JSON `TaborSpec`). Nadwozie i koła to dzieci tworzone
+/// w locie (bez właściciela — nie trafiają do .tscn); koła współdzielą jedną siatkę.
+#[derive(GodotClass)]
+#[class(tool, base=Node3D)]
+pub struct TaborVehicle {
+    #[export(multiline)]
+    #[var(set = set_spec)]
+    spec: GString,
+    /// Reflektory i światła tylne świecą (emisja).
+    #[export]
+    #[var(set = set_night)]
+    night: bool,
+    /// Metryka ostatniej budowy (JSON) albo komunikat błędu.
+    #[var(no_set)]
+    stats: GString,
+    base: Base<Node3D>,
+}
+
+#[godot_api]
+impl INode3D for TaborVehicle {
+    fn init(base: Base<Node3D>) -> Self {
+        Self { spec: r#"{"archetype": "hatchback", "seed": 1}"#.into(), night: false, stats: GString::new(), base }
+    }
+    fn ready(&mut self) {
+        self.rebuild();
+    }
+}
+
+#[godot_api]
+impl TaborVehicle {
+    #[func]
+    fn set_spec(&mut self, spec: GString) {
+        self.spec = spec;
+        self.rebuild();
+    }
+    #[func]
+    fn set_night(&mut self, night: bool) {
+        self.night = night;
+        self.rebuild();
+    }
+    #[func]
+    fn rebuild(&mut self) {
+        let d = Tabor::build(self.spec.clone(), self.night);
+        let err: GString = d.get("error").map(|v| v.to::<GString>()).unwrap_or_default();
+        if !err.is_empty() {
+            godot_warn!("TaborVehicle: {err}");
+            self.stats = err;
+            return;
+        }
+        self.stats = d.get("stats").map(|v| v.to::<GString>()).unwrap_or_default();
+        let mut base = self.base_mut();
+        for mut c in base.get_children().iter_shared() {
+            c.queue_free();
+        }
+        let mut add = |name: &str, mesh: &Gd<ArrayMesh>, pos: Vector3| {
+            let mut mi = MeshInstance3D::new_alloc();
+            mi.set_name(name);
+            mi.set_mesh(mesh);
+            mi.set_position(pos);
+            mi.set_cast_shadows_setting(ShadowCastingSetting::DOUBLE_SIDED);
+            base.add_child(&mi);
+        };
+        let body: Gd<ArrayMesh> = d.get("body").unwrap().to();
+        let wheel: Gd<ArrayMesh> = d.get("wheel").unwrap().to();
+        add("Body", &body, Vector3::ZERO);
+        let wheels: VarArray = d.get("wheels").map(|v| v.to()).unwrap_or_default();
+        for w in wheels.iter_shared() {
+            let e: VarDictionary = w.to();
+            let name: GString = e.get("name").map(|v| v.to()).unwrap_or_default();
+            add(&name.to_string(), &wheel, e.get("pos").map(|v| v.to()).unwrap_or_default());
         }
     }
 }

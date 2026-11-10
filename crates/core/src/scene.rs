@@ -7,7 +7,7 @@
 //! - rondo miejskie jednopasowe: średnica zewnętrzna 35 m, pierścień 6 m (katalog GDDKiA do WR-D-31-3);
 //! - jezdnia 2 × 3,5 m + opaski, chodniki 3,6 m (jak w trybie ulicy).
 
-use crate::blend::{normalize_weights, BuildingSpec};
+use crate::blend::{normalize_weights, BuildingSpec, MixSpec};
 use crate::data::{data, WeightMap};
 use crate::footprint::{Footprint, P2};
 use crate::generator::{fixed1, generate_from_spec, BuildingStats};
@@ -195,7 +195,7 @@ fn frontage_row(items: &mut Vec<SceneItem>, placed: &mut Vec<Aabb>, label: &str,
     for i in 0..30 {
         let a = pick_weighted(weights, rnd.next());
         let bseed = (hash01(&[seed as f64, i as f64, 5.0]) * 1e9).floor();
-        let mut spec = BuildingSpec { archetype: Some(a.clone()), seed: Some(bseed), variation: Some(variation), ..Default::default() };
+        let mut spec = BuildingSpec { mix: MixSpec { archetype: Some(a.clone()), seed: Some(bseed), variation: Some(variation), ..Default::default() }, ..Default::default() };
         let mut p = crate::blend::resolve_spec(&spec).params;
         let width = p.segments * p.segment_width;
         let gap = match prev_gap {
@@ -210,7 +210,7 @@ fn frontage_row(items: &mut Vec<SceneItem>, placed: &mut Vec<Aabb>, label: &str,
         let origin = [start[0] + along[0] * c, start[1] + along[1] * c];
         // kolizja z budynkami z prostopadłej ulicy (wnętrze kwartału): najpierw bez oficyn, potem luka
         if placed.iter().any(|b| overlaps(b, &footprint_aabb(&p, n, origin))) {
-            spec.overrides = Some(serde_json::from_value(json!({ "wingLeft": 0, "wingRight": 0, "wingRear": 0 })).unwrap());
+            spec.mix.overrides = Some(serde_json::from_value(json!({ "wingLeft": 0, "wingRight": 0, "wingRear": 0 })).unwrap());
             p = crate::blend::resolve_spec(&spec).params;
             if placed.iter().any(|b| overlaps(b, &footprint_aabb(&p, n, origin))) {
                 s += gap + width;
@@ -459,7 +459,7 @@ fn estate(s: &SceneSpec) -> Scene {
             xmin = xmin.min(cx - w / 2.0);
             xmax = xmax.max(cx + w / 2.0);
             built += w * dep;
-            let name = format!("Rząd {} · {}", r + 1, data().archetype(spec.archetype.as_deref().unwrap_or("")).map_or("blok", |a| a.short.as_str()));
+            let name = format!("Rząd {} · {}", r + 1, data().archetype(spec.mix.archetype.as_deref().unwrap_or("")).map_or("blok", |a| a.short.as_str()));
             items.push(SceneItem { name, mesh: m.mesh.placed([0.0, 1.0], [cx, 0.0, z_front]), spec: Some(spec.clone()), stats: Some(m.stats.clone()) });
             // chodnik wzdłuż frontu (wejścia do klatek) i opaska od tyłu
             ctx.walk(cx - w / 2.0 - 1.0, cx + w / 2.0 + 1.0, z_front, z_front + 2.5);

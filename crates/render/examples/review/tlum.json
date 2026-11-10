@@ -1,0 +1,50 @@
+{
+ "przechodzien_dorosly": {
+  "archetype": "przechodzien_dorosly",
+  "seed": 3
+ },
+ "senior": {
+  "archetype": "senior",
+  "seed": 3
+ },
+ "nastolatek": {
+  "archetype": "nastolatek",
+  "seed": 3
+ },
+ "dziecko": {
+  "archetype": "dziecko",
+  "seed": 3
+ },
+ "robotnik": {
+  "archetype": "robotnik",
+  "seed": 3
+ },
+ "biznes": {
+  "archetype": "biznes",
+  "seed": 3
+ },
+ "policjant_prewencji": {
+  "archetype": "policjant_prewencji",
+  "seed": 3
+ },
+ "policjant_ruchu_drogowego": {
+  "archetype": "policjant_ruchu_drogowego",
+  "seed": 3
+ },
+ "ratownik_medyczny": {
+  "archetype": "ratownik_medyczny",
+  "seed": 3
+ },
+ "strazak_sluzbowy": {
+  "archetype": "strazak_sluzbowy",
+  "seed": 3
+ },
+ "strazak_bojowy": {
+  "archetype": "strazak_bojowy",
+  "seed": 3
+ },
+ "operator_ciezkiego_sprzetu": {
+  "archetype": "operator_ciezkiego_sprzetu",
+  "seed": 3
+ }
+}
