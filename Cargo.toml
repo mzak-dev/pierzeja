@@ -21,3 +21,11 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+
+# Build przeglądarkowy (web/build.sh): mniejszy .wasm.
+[profile.web]
+inherits = "release"
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+strip = true

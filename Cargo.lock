@@ -4763,11 +4763,14 @@ dependencies = [
  "bevy_egui",
  "egui-phosphor",
  "image",
+ "js-sys",
  "pierzeja-core",
  "procedura-kit",
  "serde_json",
  "tabor-core",
  "tlum-core",
+ "wasm-bindgen",
+ "web-sys",
  "winit",
 ]
 

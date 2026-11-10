@@ -61,6 +61,19 @@ cargo run -p pierzeja-app --release
 
 Tryby: Budynek, Wielokąt (edytor obrysu: klik przy krawędzi — punkt, przeciąganie, prawy klik — usuń, kwadrat na krawędzi — rola), Ulica, Osiedle, Skrzyżowanie, Rondo. Mysz: lewy/prawy — obrót, środkowy — przesunięcie, kółko — zoom, `F` — kadruj. Eksport GLB do `PIERZEJA_OUT`. `PIERZEJA_MODE=wielokat|ulica|osiedle|skrzyzowanie|rondo` + `PIERZEJA_SCREENSHOT=plik.png` — zrzut i wyjście.
 
+## Port przeglądarkowy (GitHub Pages)
+
+Ta sama aplikacja (`crates/app`) skompilowana do `wasm32-unknown-unknown` (Bevy na WebGL2). Różnice: kanwa `#pierzeja` z `web/index.html` zamiast okna bez ramki, eksport GLB i zrzuty — pobranie w przeglądarce, `PIERZEJA_MODE`/`PIERZEJA_ARCHETYPE`/`PIERZEJA_POSE`/`PIERZEJA_GIZMO` → parametry adresu `?mode=…&archetype=…&pose=…&gizmo=0`. Bez serwera MCP i folderu wyjściowego.
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.130   # wersja z Cargo.lock
+./web/build.sh            # → dist/ (opcjonalnie wasm-opt z binaryen)
+python3 -m http.server -d dist 8080
+```
+
+CI/CD: `.github/workflows/pages.yml` buduje `dist/` przy każdym PR i wdraża na GitHub Pages po pushu do `main`. Jednorazowo w repo: Settings → Pages → Source: **GitHub Actions**.
+
 ## Testy
 
 ```bash

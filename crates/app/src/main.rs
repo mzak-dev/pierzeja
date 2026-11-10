@@ -10,6 +10,8 @@ mod human;
 mod screens;
 mod theme;
 mod ui;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::visibility::RenderLayers;
@@ -32,12 +34,12 @@ fn main() {
     let (docs, view) = initial_state();
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window { title: "Pierzeja".into(), resolution: (1560, 975).into(), decorations: false, ..default() }),
+            primary_window: Some(primary_window()),
             ..default()
         }))
         .add_plugins((EguiPlugin::default(), FrameTimeDiagnosticsPlugin::default()))
         .insert_resource(ClearColor(SKY))
-        .insert_resource(bevy::light::DirectionalLightShadowMap { size: 4096 })
+        .insert_resource(bevy::light::DirectionalLightShadowMap { size: if WEB { 2048 } else { 4096 } })
         .insert_resource(docs)
         .insert_resource(view)
         .init_resource::<Derived>()
@@ -49,17 +51,46 @@ fn main() {
         .run();
 }
 
+/// Port przeglądarkowy (GitHub Pages) — inne zachowanie okna, eksportu i ustawień.
+pub const WEB: bool = cfg!(target_arch = "wasm32");
+
+#[cfg(not(target_arch = "wasm32"))]
+fn primary_window() -> Window {
+    Window { title: "Pierzeja".into(), resolution: (1560, 975).into(), decorations: false, ..default() }
+}
+
+/// W przeglądarce: kanwa `#pierzeja` z `index.html`, rozciągnięta na rodzica.
+#[cfg(target_arch = "wasm32")]
+fn primary_window() -> Window {
+    Window { title: "Pierzeja".into(), canvas: Some("#pierzeja".into()), fit_canvas_to_parent: true, prevent_default_event_handling: true, ..default() }
+}
+
+/// Zmienna środowiskowa; w przeglądarce parametr adresu (`PIERZEJA_MODE` → `?mode=`).
+fn setting(env: &str, query: &str) -> Option<String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = env;
+        web::query(query)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = query;
+        std::env::var(env).ok()
+    }
+}
+
 const SKY: Color = Color::srgb(0.80, 0.85, 0.88);
 const NIGHT_SKY: Color = Color::srgb(0.04, 0.06, 0.11);
 
 /// `PIERZEJA_MODE=start|mcp|budynek|wielokat|pojazd|czlowiek|ulica|osiedle|skrzyzowanie|rondo` — ekran startowy (zrzuty, testy);
 /// opcjonalnie `PIERZEJA_ARCHETYPE=id` (budynek/pojazd/człowiek), `PIERZEJA_POSE=stand|walk|sit|drive|rest`, `PIERZEJA_GIZMO=0`.
+/// W przeglądarce parametry adresu: `?mode=…&archetype=…&pose=…&gizmo=0`.
 fn initial_state() -> (Docs, View) {
     let mut view = View::default();
     let mut doc = Doc::building("familok");
-    let m = std::env::var("PIERZEJA_MODE").unwrap_or_default();
-    let arch = |default: &str| std::env::var("PIERZEJA_ARCHETYPE").unwrap_or_else(|_| default.into());
-    view.gizmos = std::env::var("PIERZEJA_GIZMO").as_deref() != Ok("0");
+    let m = setting("PIERZEJA_MODE", "mode").unwrap_or_default();
+    let arch = |default: &str| setting("PIERZEJA_ARCHETYPE", "archetype").unwrap_or_else(|| default.into());
+    view.gizmos = setting("PIERZEJA_GIZMO", "gizmo").as_deref() != Some("0");
     match m.as_str() {
         "" | "loading" => view.screen = Screen::Loading,
         "start" => view.screen = Screen::Start,
@@ -76,7 +107,7 @@ fn initial_state() -> (Docs, View) {
         }
         "czlowiek" => {
             doc = Doc::human(&arch(&tlum_core::data().default_archetype));
-            doc.pose = std::env::var("PIERZEJA_POSE").unwrap_or_else(|_| "stand".into());
+            doc.pose = setting("PIERZEJA_POSE", "pose").unwrap_or_else(|| "stand".into());
             view.ribbon = RibbonTab::Czlowiek;
             view.item = Some(Item::Hum("cialo"));
         }
@@ -102,8 +133,10 @@ fn screenshots(mut commands: Commands, mut frame: Local<u32>, mut exit: MessageW
     if view.screenshot {
         view.screenshot = false;
         let dir = out_dir();
-        let _ = std::fs::create_dir_all(&dir);
-        let path = unique(&dir, "zrzut", "png");
+        if !WEB {
+            let _ = std::fs::create_dir_all(&dir);
+        }
+        let path = if WEB { PathBuf::from("zrzut.png") } else { unique(&dir, "zrzut", "png") };
         view.msg = format!("Zrzut: {}", path.display());
         commands.spawn(Screenshot::primary_window()).observe(save_to_disk(path));
     }
@@ -928,6 +961,9 @@ fn orbit(
 // ------------------------------------------------------------------ pliki
 
 pub fn out_dir() -> PathBuf {
+    if WEB {
+        return PathBuf::from("Pobrane (przeglądarka)");
+    }
     std::env::var_os("PIERZEJA_OUT").map(PathBuf::from).unwrap_or_else(|| {
         let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).unwrap_or_default();
         PathBuf::from(home).join("pierzeja-out")
@@ -945,9 +981,25 @@ fn unique(dir: &std::path::Path, name: &str, ext: &str) -> PathBuf {
 }
 
 pub fn export_glb(doc: &Doc) -> Result<PathBuf, String> {
-    let dir = out_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let glb = if let Some(kind) = doc.mode.scene() {
+    let glb = glb_bytes(doc);
+    #[cfg(target_arch = "wasm32")]
+    {
+        let name = format!("{}.glb", doc.name);
+        web::download(&name, &glb, "model/gltf-binary")?;
+        Ok(PathBuf::from(name))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let dir = out_dir();
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = unique(&dir, &doc.name, "glb");
+        std::fs::write(&path, glb).map_err(|e| e.to_string())?;
+        Ok(path)
+    }
+}
+
+fn glb_bytes(doc: &Doc) -> Vec<u8> {
+    if let Some(kind) = doc.mode.scene() {
         let sc = generate_scene(&doc.scene_spec(kind));
         let nodes: Vec<pc::ExportNode> = sc
             .items
@@ -973,10 +1025,7 @@ pub fn export_glb(doc: &Doc) -> Result<PathBuf, String> {
         let spec = doc.spec();
         let m = pc::generate_from_spec(&spec);
         pc::to_glb(&[pc::ExportNode { name: doc.name.clone(), mesh: &m.mesh, offset: None, parent: None, rotation: None, extras: Some(json!({ "spec": spec, "stats": m.stats })) }])
-    };
-    let path = unique(&dir, &doc.name, "glb");
-    std::fs::write(&path, glb).map_err(|e| e.to_string())?;
-    Ok(path)
+    }
 }
 
 #[cfg(test)]
@@ -1019,6 +1068,10 @@ mod tests {
 
 /// Ikona okna i paska zadań. winit pozwala ją ustawić tylko z wątku głównego (stąd NonSendMarker),
 /// a okno powstaje dopiero po starcie pętli zdarzeń, więc próbujemy co klatkę aż się uda.
+#[cfg(target_arch = "wasm32")]
+fn window_icon() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn window_icon(_main: bevy::ecs::system::NonSendMarker, mut done: Local<bool>) {
     if *done {
         return;

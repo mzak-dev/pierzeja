@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Procedura Suite</title>
+  <link rel="icon" href="icon.png">
+  <style>
+    html, body { margin: 0; height: 100%; background: #16181c; color: #c8ccd2; font: 14px system-ui, sans-serif; overflow: hidden; }
+    #pierzeja { display: block; width: 100%; height: 100%; outline: none; }
+    #status { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; }
+    #status.hidden { display: none; }
+    #status .err { color: #ff8a7a; max-width: 36em; }
+  </style>
+</head>
+<body>
+  <canvas id="pierzeja" tabindex="0"></canvas>
+  <div id="status">Ładowanie Procedura Suite…</div>
+  <script type="module">
+    import init from "./pierzeja-app.js";
+    const status = document.getElementById("status");
+    const fail = (e) => {
+      // Bevy na wasm kończy start wyjątkiem sterującym pętlą zdarzeń — to nie błąd.
+      if (String(e).includes("Using exceptions for control flow")) { status.classList.add("hidden"); return; }
+      status.innerHTML = `<div class="err">Nie udało się uruchomić edytora (wymagany WebGL2).<br><small>${e}</small></div>`;
+      console.error(e);
+    };
+    requestAnimationFrame(() => setTimeout(() => status.classList.add("hidden"), 1500));
+    init().catch(fail);
+    document.getElementById("pierzeja").focus();
+  </script>
+</body>
+</html>

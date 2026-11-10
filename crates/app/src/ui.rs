@@ -199,6 +199,9 @@ fn thousands(n: usize) -> String {
 }
 
 fn new_seed() -> u32 {
+    #[cfg(target_arch = "wasm32")]
+    return (crate::web::now_ms() * 1000.0 % 100_000.0) as u32;
+    #[cfg(not(target_arch = "wasm32"))]
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(7, |d| d.subsec_nanos() % 100_000)
 }
 
@@ -351,6 +354,7 @@ fn run(c: Cmd, ctx: &egui::Context, docs: &mut Docs, der: &Derived, view: &mut V
             ctx.copy_text(s.unwrap_or_default());
             view.msg = "Skopiowano spec do schowka".into();
         }
+        Cmd::OpenFolder if crate::WEB => view.msg = "W przeglądarce eksport trafia do pobranych plików".into(),
         Cmd::OpenFolder => {
             let dir = out_dir();
             let _ = std::fs::create_dir_all(&dir);
@@ -571,19 +575,22 @@ fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window,
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 2.0;
-                let close = icon_btn(ui, ic::X, false, "");
-                if close.hovered() {
-                    ui.painter().rect_filled(close.rect, 6, Color32::from_rgb(0xc4, 0x2b, 0x1c));
-                    ui.painter().text(close.rect.center(), Align2::CENTER_CENTER, ic::X, egui::FontId::proportional(17.0), Color32::WHITE);
-                }
-                if close.clicked() {
-                    cmds.push(Cmd::Quit);
-                }
-                if icon_btn(ui, if view.maximized { ic::COPY_SIMPLE } else { ic::SQUARE }, false, "").clicked() {
-                    cmds.push(Cmd::Maximize);
-                }
-                if icon_btn(ui, ic::MINUS, false, "").clicked() {
-                    cmds.push(Cmd::Minimize);
+                // w przeglądarce nie ma okna do zamknięcia/minimalizacji
+                if !crate::WEB {
+                    let close = icon_btn(ui, ic::X, false, "");
+                    if close.hovered() {
+                        ui.painter().rect_filled(close.rect, 6, Color32::from_rgb(0xc4, 0x2b, 0x1c));
+                        ui.painter().text(close.rect.center(), Align2::CENTER_CENTER, ic::X, egui::FontId::proportional(17.0), Color32::WHITE);
+                    }
+                    if close.clicked() {
+                        cmds.push(Cmd::Quit);
+                    }
+                    if icon_btn(ui, if view.maximized { ic::COPY_SIMPLE } else { ic::SQUARE }, false, "").clicked() {
+                        cmds.push(Cmd::Maximize);
+                    }
+                    if icon_btn(ui, ic::MINUS, false, "").clicked() {
+                        cmds.push(Cmd::Minimize);
+                    }
                 }
                 ui.add_space(10.0);
                 ui.label(RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).font(mono(12.0)).color(DIM));
@@ -602,10 +609,10 @@ fn title_bar(root: &mut egui::Ui, docs: &Docs, view: &View, window: &mut Window,
                 }
                 // reszta paska: przeciąganie okna, dwuklik — maksymalizacja
                 let drag = ui.allocate_response(ui.available_size(), Sense::click_and_drag());
-                if drag.drag_started() {
+                if drag.drag_started() && !crate::WEB {
                     window.start_drag_move();
                 }
-                if drag.double_clicked() {
+                if drag.double_clicked() && !crate::WEB {
                     cmds.push(Cmd::Maximize);
                 }
             });
