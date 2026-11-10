@@ -55,9 +55,13 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # pierwszy deploy duzego .wasm potrafi wisiec w "syncing_files" dluzej niz domyslne 10 min
+          timeout: 1800000
