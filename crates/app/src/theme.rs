@@ -1,11 +1,11 @@
 //! Ciemny motyw wg makiety (docs/ui-mock): fonty Lato + Cascadia Mono + ikony Phosphor,
 //! kolory, ramki paneli i małe widżety (pole liczbowe z jednostką, przycisk wstążki, przełącznik).
 
+use crate::anim::{self, hex, mix};
 use bevy_egui::egui::{self, Color32, CornerRadius, FontFamily, FontId, Frame, Margin, RichText, Sense, Stroke, Vec2};
 pub use egui_phosphor::regular as ic;
 
 pub const BG: Color32 = Color32::from_rgb(0x15, 0x15, 0x15);
-pub const BAR: Color32 = Color32::from_rgb(0x1a, 0x1a, 0x1a);
 pub const PANEL: Color32 = Color32::from_rgb(0x1e, 0x1e, 0x1e);
 pub const INPUT: Color32 = Color32::from_rgb(0x16, 0x16, 0x16);
 pub const HOVER: Color32 = Color32::from_rgb(0x2a, 0x2a, 0x2a);
@@ -18,6 +18,10 @@ pub const FAINT: Color32 = Color32::from_rgb(0x66, 0x66, 0x66);
 pub const ACCENT: Color32 = Color32::from_rgb(0xe8, 0x73, 0x5a);
 pub const ACCENT_DIM: Color32 = Color32::from_rgb(0x7a, 0x3b, 0x30);
 pub const WARN: Color32 = Color32::from_rgb(0xe8, 0xc0, 0x5a);
+/// Paski powłoki z mocka „tryby edytora” (tytuł, menu, wstążka, stan).
+pub const BAR2: Color32 = Color32::from_rgb(0x1b, 0x1b, 0x1b);
+pub const LINE: Color32 = Color32::from_rgb(0x26, 0x26, 0x26);
+pub const OK: Color32 = Color32::from_rgb(0x6c, 0xc2, 0x8a);
 
 pub fn bold() -> FontFamily {
     FontFamily::Name("bold".into())
@@ -124,38 +128,59 @@ pub fn floating<R>(ctx: &egui::Context, id: &str, pos: egui::Pos2, width: f32, a
     })
 }
 
+/// Inspektor: wjeżdża z prawej (240 ms) przy otwarciu, treść przenika się (150 ms) przy zmianie elementu.
+pub fn inspector<R>(ctx: &egui::Context, key: impl std::hash::Hash + std::fmt::Debug, pos: egui::Pos2, width: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> egui::InnerResponse<R> {
+    let slide = anim::appear(ctx, egui::Id::new("insp-slide"), anim::MED);
+    let op = anim::appear(ctx, egui::Id::new("insp-op"), anim::FAST);
+    let content = anim::appear(ctx, egui::Id::new(("insp-item", key)), anim::FAST);
+    let pos = pos + Vec2::new((1.0 - slide) * (width + 32.0), 0.0);
+    egui::Area::new(egui::Id::new("inspector")).fixed_pos(pos).constrain(false).order(egui::Order::Middle).show(ctx, |ui| {
+        ui.set_opacity(op);
+        panel_frame()
+            .show(ui, |ui| {
+                ui.set_width(width);
+                ui.set_opacity(op * content);
+                add(ui)
+            })
+            .inner
+    })
+}
+
 /// Przycisk-ikona bez ramki (pasek tytułu, pasek widoku).
 pub fn icon_btn(ui: &mut egui::Ui, icon: &str, on: bool, tip: &str) -> egui::Response {
     let size = Vec2::splat(30.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
-    let bg = if on { ACTIVE } else if resp.hovered() { HOVER } else { Color32::TRANSPARENT };
-    ui.painter().rect_filled(rect, 6, bg);
-    let col = if on { TEXT } else if resp.hovered() { TEXT } else { DIM };
-    ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, icon, FontId::proportional(17.0), col);
+    let ctx = ui.ctx();
+    let h = anim::ease(ctx, resp.id.with("hov"), resp.hovered() as u8 as f32, anim::FAST);
+    let bg = if on { ACTIVE } else { mix(Color32::TRANSPARENT, HOVER, h) };
+    let r = anim::scaled(rect, anim::press(ctx, &resp));
+    ui.painter().rect_filled(r, 6, bg);
+    let col = if on { TEXT } else { mix(DIM, TEXT, h) };
+    ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, icon, FontId::proportional(17.0 * r.width() / rect.width()), col);
     if tip.is_empty() { resp } else { resp.on_hover_text(tip) }
 }
 
 /// Duży przycisk wstążki: ikona nad podpisem.
 pub fn ribbon_btn(ui: &mut egui::Ui, icon: &str, label: &str, on: bool, enabled: bool) -> egui::Response {
-    let font = FontId::proportional(13.0);
-    let w = ui.fonts_mut(|f| f.layout_no_wrap(label.into(), font.clone(), TEXT).size().x).max(44.0) + 18.0;
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 56.0), if enabled { Sense::click() } else { Sense::hover() });
+    let font = FontId::proportional(12.0);
+    let w = (ui.fonts_mut(|f| f.layout_no_wrap(label.into(), font.clone(), TEXT).size().x) + 16.0).max(60.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 52.0), if enabled { Sense::click() } else { Sense::hover() });
+    let ctx = ui.ctx();
+    let h = anim::ease(ctx, resp.id.with("hov"), (resp.hovered() && enabled) as u8 as f32, anim::FAST);
+    let o = anim::ease(ctx, resp.id.with("on"), on as u8 as f32, anim::FAST);
+    let r = anim::scaled(rect, anim::press(ctx, &resp));
     let p = ui.painter();
-    if on {
-        p.rect(rect, 6, ACTIVE, Stroke::new(1.0, BORDER_HI), egui::StrokeKind::Inside);
-    } else if resp.hovered() && enabled {
-        p.rect_filled(rect, 6, HOVER);
-    }
-    let col = if !enabled { FAINT } else if on || resp.hovered() { TEXT } else { Color32::from_rgb(0xd0, 0xd0, 0xd0) };
-    p.text(rect.center_top() + Vec2::new(0.0, 19.0), egui::Align2::CENTER_CENTER, icon, FontId::proportional(22.0), col);
-    p.text(rect.center_bottom() - Vec2::new(0.0, 12.0), egui::Align2::CENTER_CENTER, label, font, col);
+    p.rect(r, 6, mix(mix(Color32::TRANSPARENT, hex(0x262626), h), ACTIVE, o), Stroke::new(1.0, mix(Color32::TRANSPARENT, BORDER_HI, o)), egui::StrokeKind::Inside);
+    let col = if !enabled { FAINT } else { mix(hex(0xd4d4d4), TEXT, h.max(o)) };
+    p.text(r.center_top() + Vec2::new(0.0, 17.0), egui::Align2::CENTER_CENTER, icon, FontId::proportional(20.0), col);
+    p.text(r.center_bottom() - Vec2::new(0.0, 10.0), egui::Align2::CENTER_CENTER, label, font, col);
     resp
 }
 
 /// Grupa wstążki: przyciski w rzędzie, pod nimi szary podpis grupy, z prawej pionowa kreska.
 pub fn ribbon_group(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
-    let text = format!("{label} {}", ic::CARET_DOWN);
-    let lw = ui.fonts_mut(|f| f.layout_no_wrap(text.clone(), FontId::proportional(12.0), DIM).size().x) + 8.0;
+    let text = label.to_string();
+    let lw = ui.fonts_mut(|f| f.layout_no_wrap(text.clone(), FontId::proportional(11.0), DIM).size().x) + 8.0;
     let r = ui.vertical(|ui| {
         ui.set_min_width(lw);
         ui.horizontal(|ui| {
@@ -165,7 +190,7 @@ pub fn ribbon_group(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::
         ui.add_space(-2.0);
         let w = ui.min_rect().width().max(lw);
         ui.allocate_ui_with_layout(Vec2::new(w, 16.0), egui::Layout::top_down(egui::Align::Center), |ui| {
-            ui.add(egui::Label::new(RichText::new(text).size(12.0).color(DIM)).extend());
+            ui.add(egui::Label::new(RichText::new(text).size(11.0).color(hex(0xa0a0a0))).extend());
         });
     });
     let x = r.response.rect.right() + 6.0;
@@ -199,7 +224,7 @@ pub fn prop_row<R>(ui: &mut egui::Ui, label: &str, modified: bool, hint: Option<
 /// Pole liczbowe jak w makiecie: wartość mono z lewej, jednostka z prawej, czerwona ramka po zmianie.
 pub fn num_field(ui: &mut egui::Ui, v: &mut f64, range: std::ops::RangeInclusive<f64>, step: f64, decimals: usize, unit: &str, modified: bool) -> egui::Response {
     let stroke = Stroke::new(1.0, if modified { ACCENT_DIM } else { BORDER_HI });
-    Frame::new()
+    let fr = Frame::new()
         .fill(INPUT)
         .stroke(stroke)
         .corner_radius(5)
@@ -223,8 +248,14 @@ pub fn num_field(ui: &mut egui::Ui, v: &mut f64, range: std::ops::RangeInclusive
                 r
             })
             .inner
-        })
-        .inner
+        });
+    // błysk po wpisaniu / strzałkach (nie przy ciągnięciu — wtedy wartość zmienia się co klatkę)
+    let r = fr.inner;
+    let a = anim::flash(ui.ctx(), r.id.with("flash"), r.changed() && !r.dragged());
+    if a > 0.0 {
+        ui.painter().rect_filled(fr.response.rect, 5, ACCENT.gamma_multiply(a));
+    }
+    r
 }
 
 /// Przełącznik „pigułka” z podpisem.
@@ -234,9 +265,10 @@ pub fn toggle(ui: &mut egui::Ui, on: &mut bool, label: &str) -> egui::Response {
         *on = !*on;
         resp.mark_changed();
     }
-    let t = ui.ctx().animate_bool(resp.id, *on);
+    let t = anim::ease_with(ui.ctx(), resp.id.with("knob"), *on as u8 as f32, anim::FAST, anim::ease_back);
+    let c = anim::ease(ui.ctx(), resp.id.with("track"), *on as u8 as f32, anim::FAST);
     let p = ui.painter();
-    p.rect_filled(rect, 10, if *on { ACCENT } else { Color32::from_rgb(0x3a, 0x3a, 0x3a) });
+    p.rect_filled(rect, 10, mix(Color32::from_rgb(0x3a, 0x3a, 0x3a), ACCENT, c));
     let x = egui::lerp(rect.left() + 10.0..=rect.right() - 10.0, t);
     p.circle_filled(egui::pos2(x, rect.center().y), 7.0, Color32::WHITE);
     let l = ui.add(egui::Label::new(RichText::new(label).color(TEXT)).sense(Sense::click()));
@@ -254,12 +286,4 @@ pub fn pill(ui: &mut egui::Ui, icon: &str, label: &str, primary: bool) -> egui::
     let b = egui::Button::new(rt).min_size(Vec2::new(0.0, 34.0)).corner_radius(6);
     let b = if primary { b.fill(Color32::from_rgb(0xf2, 0xf2, 0xf2)) } else { b.fill(HOVER).stroke(Stroke::new(1.0, BORDER_HI)) };
     ui.add(b)
-}
-
-/// PNG wbudowany w exe → tekstura egui (z mipmapami, bo bywa mocno pomniejszany).
-pub fn texture(ctx: &egui::Context, name: &str, png: &[u8]) -> egui::TextureHandle {
-    let img = image::load_from_memory(png).expect(name).to_rgba8();
-    let (w, h) = img.dimensions();
-    let ci = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], img.as_raw());
-    ctx.load_texture(name, ci, egui::TextureOptions { mipmap_mode: Some(egui::TextureFilter::Linear), ..egui::TextureOptions::LINEAR })
 }
