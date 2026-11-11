@@ -18,6 +18,8 @@ pub(crate) enum Rodzaj {
     Kombi,
     Suv,
     Coupe,
+    /// Furgon / bus z krótką maską (T5, Sprinter) albo półmaską (Lublin).
+    Van,
 }
 
 impl Rodzaj {
@@ -29,6 +31,7 @@ impl Rodzaj {
             "kombi" => Rodzaj::Kombi,
             "suv" => Rodzaj::Suv,
             "coupe" => Rodzaj::Coupe,
+            "van" => Rodzaj::Van,
             _ => return None,
         })
     }
@@ -112,6 +115,10 @@ pub(crate) struct Ksztalt {
     pub z_win_r: f64,
     pub z_b: f64,
     pub z_c_pillar: Option<f64>,
+    /// Słupki między oknami ładowni vana.
+    pub extra_pillars: Vec<f64>,
+    /// Przednia krawędź dachu (nad szybą; w wysokim vanie przed daszkiem).
+    pub z_rf: f64,
     pub x_inner: f64,
     nose: Krzywa,
     tail: Krzywa,
@@ -125,7 +132,7 @@ fn fo(p: &P, k: &str, d: f64) -> f64 {
 
 impl Ksztalt {
     pub fn new(p: &P) -> Ksztalt {
-        let kind = Rodzaj::of(p.s("bodyType")).expect("karoseria: typ osobowy");
+        let kind = Rodzaj::of(p.s("bodyType")).unwrap_or(Rodzaj::Hatch);
         let (l, w, h, wb) = (p.f("length"), p.f("width"), p.f("height"), p.f("wheelbase"));
         let hw = w / 2.0;
         let clr = p.f("clearance");
@@ -149,8 +156,11 @@ impl Ksztalt {
         let y_c = (p.f("hoodHeight") * h).max(belt_f + 0.04);
         let crown_f = 0.03;
         let ws = p.f("windshieldAngle").to_radians().tan();
-        let y_wt = h - crown_f;
+        // górna krawędź szyby: do dachu (osobówki) albo niżej z daszkiem w kolorze nadwozia (wysokie vany)
+        let y_wt = (fo(p, "windshieldTop", 1.0) * h).min(h - crown_f);
         let z_wt = z_c - (y_wt - y_c) / ws;
+        let cap = y_wt < h - 0.06;
+        let z_rf = if cap { z_wt - (h - 0.012 - y_wt) / 70f64.to_radians().tan() } else { z_wt };
         let belt_r = belt_f + fo(p, "beltRise", 0.05);
         let y_tail_top = fo(p, "tailHeight", 0.70) * h;
         let rg = p.f("rearGlassAngle").to_radians().tan();
@@ -171,28 +181,53 @@ impl Ksztalt {
                 (z_gb, y_tail_top, z_gb, y_tail_top)
             }
         };
-        let z_rr = (z_gb + (y_rr - y_gb) / rg).min(z_wt - 0.6);
+        let z_rr = (z_gb + (y_rr - y_gb) / rg).min(z_rf - 0.6);
         let y_tail = y_te;
-        let z_peak = z_wt - fo(p, "roofPeak", 0.4) * (z_wt - z_rr);
+        let z_peak = z_rf - fo(p, "roofPeak", 0.4) * (z_rf - z_rr);
         let hood_mid = lerp(y_he, y_c, 0.82);
         let mut knots = vec![o(z_te, y_te)];
         if z_gb > z_te + 0.02 {
             knots.push(o(z_gb, y_gb));
         }
-        knots.extend([g(z_rr, y_rr), g(z_peak, h), g(z_wt, y_wt), o(z_c, y_c), g(lerp(z_c, z_he, 0.55), hood_mid), o(z_he, y_he), o(zf, y_he - 0.02)]);
+        knots.extend([g(z_rr, y_rr), g(z_peak, h)]);
+        if cap {
+            knots.extend([g(z_rf, h - 0.012), o(z_wt, y_wt)]);
+        } else {
+            knots.push(g(z_wt, y_wt));
+        }
+        knots.extend([o(z_c, y_c), g(lerp(z_c, z_he, 0.55), hood_mid), o(z_he, y_he), o(zf, y_he - 0.02)]);
         let top = Krzywa::new(&knots);
         // czoło: z najbardziej wysuniętego punktu w zależności od wysokości (zderzak wypukły, maska cofnięta)
-        let nose = Krzywa::new(&[g(clr, zf - 0.07), g(clr + 0.17, zf - 0.01), g(0.42, zf), g(lerp(0.42, y_he, 0.6), zf - 0.03), g(y_he, z_he)]);
+        let yb_max = (clr + 0.28).min(y_he - 0.1);
+        let nose = Krzywa::new(&[g(clr, zf - 0.07), g(clr + 0.17, zf - 0.01), g(yb_max, zf), g(lerp(yb_max, y_he, 0.6), zf - 0.03), g(y_he, z_he)]);
         let bumper_top = fo(p, "rearBumperTop", 0.40) * h;
         let tail = Krzywa::new(&[g(clr, zr + 0.10), g(clr + 0.2, zr + 0.01), g(bumper_top, zr), g(y_te, z_te)]);
 
         // okna: tył kabiny (słupek C/D) i słupek B między drzwiami
+        // bez szyby za drzwiami (Golf) okna kończą się nad przodem tylnego koła, za nimi szeroki słupek C
+        let quarter = fo(p, "quarterWindow", 1.0) > 0.5;
+        let cargo_windows = fo(p, "cargoWindows", 0.0) > 0.5;
+        // van: drzwi kabiny ok. 0,95 m za podstawą szyby (słupek B), dalej ładownia
+        let van_door = (0.33 * wb).clamp(0.85, 1.15);
         let z_win_r = match kind {
             Rodzaj::Sedan | Rodzaj::Liftback | Rodzaj::Coupe => lerp(z_rr, z_gb, 0.25),
+            Rodzaj::Van if cargo_windows => z_rr + 0.25,
+            Rodzaj::Van => z_c - van_door + 0.05,
+            _ if !quarter => zar + 0.3 * ra,
             _ => z_rr + 0.06,
         };
-        let z_b = lerp(z_c, z_win_r, if kind == Rodzaj::Coupe { 0.62 } else { 0.42 });
-        let z_c_pillar = matches!(kind, Rodzaj::Hatch | Rodzaj::Kombi | Rodzaj::Suv).then(|| lerp(z_b, z_win_r, if kind == Rodzaj::Kombi { 0.55 } else { 0.72 }));
+        let z_b = match kind {
+            Rodzaj::Van => z_c - van_door,
+            Rodzaj::Coupe => lerp(z_c, z_win_r, 0.62),
+            _ => lerp(z_c, z_win_r, if quarter { 0.42 } else { 0.5 }),
+        };
+        let z_c_pillar = (quarter && matches!(kind, Rodzaj::Hatch | Rodzaj::Kombi | Rodzaj::Suv)).then(|| lerp(z_b, z_win_r, if kind == Rodzaj::Kombi { 0.55 } else { 0.72 }));
+        // van z oknami w ładowni: słupki co ok. 1 m
+        let mut extra_pillars = Vec::new();
+        if kind == Rodzaj::Van && cargo_windows {
+            let n = ((z_b - z_win_r) / 1.0).round().max(1.0) as usize;
+            extra_pillars.extend((1..n).map(|i| lerp(z_b, z_win_r, i as f64 / n as f64)));
+        }
 
         Ksztalt {
             kind,
@@ -220,12 +255,14 @@ impl Ksztalt {
             belt_f,
             belt_r,
             shoulder_drop: fo(p, "shoulderDrop", 0.10),
-            tumble: (8.0 + 120.0 * p.f("tumblehome").max(0.0)).min(32.0).to_radians(), // 0,09 → ok. 19°
+            tumble: (200.0 * p.f("tumblehome").max(0.0)).min(35.0).to_radians(), // 0,1 → 20°, 0,03 → 6°
             crown: fo(p, "roofCrown", 0.045),
             sill_tuck: fo(p, "sillTuck", 0.035),
             z_win_r,
             z_b,
             z_c_pillar,
+            extra_pillars,
+            z_rf,
             x_inner,
             nose,
             tail,
@@ -332,7 +369,7 @@ impl Ksztalt {
     /// Okno boczne w `z` (między słupkiem A a tyłem kabiny, bez słupków B i C).
     pub fn window(&self, z: f64) -> bool {
         let pillar = |zp: f64, half: f64| (z - zp).abs() < half;
-        z < self.z_c && z > self.z_win_r && !pillar(self.z_b, 0.045) && !self.z_c_pillar.is_some_and(|zc| pillar(zc, 0.06))
+        z < self.z_c && z > self.z_win_r && !pillar(self.z_b, 0.045) && !self.z_c_pillar.is_some_and(|zc| pillar(zc, 0.06)) && !self.extra_pillars.iter().any(|&zp| pillar(zp, 0.05))
     }
 }
 
@@ -533,7 +570,7 @@ pub(crate) fn livery(mb: &mut procedura_kit::mesh::MeshBuilder, p: &P, seed: u32
         zs: &w.zs,
         half: &half,
         top: &top,
-        van: false,
+        van: k.kind == Rodzaj::Van,
         h: k.h,
         yb: k.belt_f,
         clr: k.clr,
@@ -543,12 +580,39 @@ pub(crate) fn livery(mb: &mut procedura_kit::mesh::MeshBuilder, p: &P, seed: u32
         zr: k.zr,
         zg: k.z_gb,
         cowl: k.z_c,
-        roof_f: k.z_wt,
+        roof_f: k.z_rf,
         roof_r: k.z_rr,
-        z_dw: f64::NEG_INFINITY,
+        // van: ściana ładowni bez okien zaczyna się za drzwiami kabiny
+        z_dw: if k.kind == Rodzaj::Van { k.z_win_r } else { f64::NEG_INFINITY },
         surf: Some(&surf),
     };
-    crate::sluzba::apply(mb, p, seed, &hull)
+    // oklejenie powstaje płasko na płaszczyźnie tyłu z = zr; tu jest rzutowane na klapę i zderzak
+    let mut tmp = procedura_kit::mesh::MeshBuilder::default();
+    let bar = crate::sluzba::apply(&mut tmp, p, seed, &hull);
+    let mut m = tmp.build(vec![]);
+    let rear = Rzutnik::limited(&w.powloka, CREASE, Widok::Tyl, -k.zr - 0.6);
+    for part in &mut m.parts {
+        let n = part.normals.clone();
+        for (v, nv) in part.positions.chunks_exact_mut(3).zip(n.chunks_exact(3)) {
+            let (x, y, z) = (v[0] as f64, v[1] as f64, v[2] as f64);
+            if nv[2] > -0.9 || z > k.zr + 0.001 || z < k.zr - 0.03 {
+                continue;
+            }
+            // odstęp warstwy (pas, wzór, napis) zachowany; poza powierzchnią — przesunięcie ku osi
+            let lift = z - k.zr;
+            let mut xx = x;
+            for _ in 0..40 {
+                if let Some(h) = rear.hit(xx, y) {
+                    v[0] = xx as f32;
+                    v[2] = (h.p[2] + lift) as f32;
+                    break;
+                }
+                xx *= 0.97;
+            }
+        }
+    }
+    mb.push(&m, &procedura_kit::mesh::Xform::identity());
+    bar
 }
 
 #[cfg(test)]
@@ -588,7 +652,7 @@ mod tests {
 
     #[test]
     fn car_shells_are_watertight_and_face_outward() {
-        for a in ["hatchback", "hatch_miejski", "sedan_liftback", "coupe", "kombi", "suv", "suv_duzy"] {
+        for a in ["hatchback", "hatch_miejski", "sedan_liftback", "coupe", "kombi", "suv", "suv_duzy", "van_sredni", "van_polmaska", "van"] {
             let (w, bv) = shell(json!({ "archetype": a, "seed": 3 }));
             check(a, &w, bv);
         }
@@ -596,7 +660,7 @@ mod tests {
 
     #[test]
     fn random_mixes_and_overrides_stay_valid() {
-        let cars = ["hatchback", "hatch_miejski", "sedan_liftback", "coupe", "kombi", "suv", "suv_duzy"];
+        let cars = ["hatchback", "hatch_miejski", "sedan_liftback", "coupe", "kombi", "suv", "suv_duzy", "van_sredni", "van_polmaska", "van"];
         for seed in 0..40u32 {
             let (a, b) = (cars[seed as usize % cars.len()], cars[(seed as usize * 3 + 1) % cars.len()]);
             let t = (seed as f64 * 0.137).fract();

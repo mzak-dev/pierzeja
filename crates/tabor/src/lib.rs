@@ -3,7 +3,6 @@
 //! stacji + jedna siatka koła + kotwice). Konwencja: przód +Z, Y w górę, lewa strona +X,
 //! origin = środek między osiami na gruncie.
 
-mod body;
 mod ciezkie;
 mod detale;
 mod karoseria;
@@ -22,6 +21,19 @@ use procedura_kit::random::hash01_seeded;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::OnceLock;
+
+/// Układ wyliczony przez budowniczego nadwozia (osobowe i vany: `karoseria`, ciężkie: `ciezkie`).
+pub(crate) struct Layout {
+    pub wheelbase: f64,
+    /// Rozstaw środków opon.
+    pub track: f64,
+    /// Liczba stacji powłoki albo lofta kabiny.
+    pub stations: usize,
+    /// Szerokość nadwozia bez lusterek (tak podają producenci i dyrektywa 96/53/WE).
+    pub body_width: f64,
+    /// Belka świetlna służby (siatka, przesunięcie od origin); `None` dla cywilnego.
+    pub lightbar: Option<(MeshData, V3)>,
+}
 
 /// Dane Tabora: wektory, parametry, archetypy, mapa rok designu × klasa wielkości.
 pub fn data() -> &'static Dataset {
@@ -163,15 +175,13 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
     let mut mb = MeshBuilder::default();
     let layout = if heavy {
         ciezkie::build(&p, r.seed, &mut mb)
-    } else if karoseria::Rodzaj::of(p.s("bodyType")).is_some() {
+    } else {
         let roof_mat = if roll(r.seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
         let w = karoseria::build(&p, roof_mat, karoseria::Gestosc::LOD0);
         w.powloka.emit(&mut mb, karoseria::CREASE);
         detale::build(&mut mb, &p, r.seed, &w.ksztalt, &w.powloka, roll(r.seed, 2.0, p.f("claddingBlack")));
         let lightbar = karoseria::livery(&mut mb, &p, r.seed, &w);
-        body::Layout { wheelbase: p.f("wheelbase"), track: w.track, stations: w.stations, body_width: w.body_width, lightbar }
-    } else {
-        body::build(&p, r.seed, &mut mb)
+        Layout { wheelbase: p.f("wheelbase"), track: w.track, stations: w.stations, body_width: w.body_width, lightbar }
     };
     let mut body_mats = mats.clone();
     body_mats.extend(tablice::materials());
