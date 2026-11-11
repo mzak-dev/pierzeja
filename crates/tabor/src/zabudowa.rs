@@ -379,7 +379,8 @@ fn fifth_wheel(mb: &mut MeshBuilder, d: &D, sp: &Span, seed: u32) {
     for &za in &d.rear_axles {
         for sx in [1.0f64, -1.0] {
             let (a, b) = (xo * sx, 0.45 * sx);
-            let y = 2.0 * d.r + 0.08;
+            // błotnik nad oponą, ale pod płaszczyzną sprzęgu (naczepa wchodzi nad niego)
+            let y = (2.0 * d.r + 0.03).min(h - 0.06);
             mb.bx(MatKey::Plastic, [a.min(b), y, za - 0.6], [a.max(b), y + 0.02, za + 0.6]);
             let (c, e) = (xo * sx, (xo - 0.02) * sx);
             mb.bx(MatKey::Plastic, [c.min(e), d.r + 0.05, za - 0.6], [c.max(e), y, za - 0.57]);

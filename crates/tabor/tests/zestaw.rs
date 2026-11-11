@@ -54,3 +54,29 @@ fn wheel_nodes_follow_axles_and_twins() {
         assert!(m.bounds().min[1].abs() < 1e-6, "koła na gruncie");
     }
 }
+
+#[test]
+fn coupled_set_has_no_overlap_around_the_fifth_wheel() {
+    let t = make(json!({ "archetype": "ciagnik_siodlowy", "seed": 1 }));
+    let s = make(json!({ "archetype": "naczepa_kurtynowa", "seed": 1 }));
+    let fw = anchor(&t, "Anchor_FifthWheel");
+    let legs = anchor(&s, "Anchor_LandingGear");
+    let verts = |m: &VehicleModel| -> Vec<[f64; 3]> { m.body.parts.iter().flat_map(|p| p.positions.chunks_exact(3).map(|v| [v[0] as f64, v[1] as f64, v[2] as f64])).collect() };
+    // naczepa: przed nogami nic poniżej płaszczyzny sprzęgu (poza samym sworzniem Ø 9 cm)
+    for v in verts(&s) {
+        if v[2] > legs[2] + 0.3 && v[0].hypot(v[2]) > 0.06 {
+            assert!(v[1] >= fw[1] - 1e-6, "naczepa schodzi pod siodło w {v:?}");
+        }
+    }
+    // ciągnik: za kabiną, w promieniu skrętu naczepy, nic ponad płaszczyznę sprzęgu
+    let cab_back = fw[2] + 1.5;
+    for v in verts(&t) {
+        if v[2] < cab_back && (v[2] - fw[2]).abs() < 2.1 {
+            // 3 mm luzu na naklejki (wycięcie siodła leży na płycie)
+            assert!(v[1] <= fw[1] + 0.003, "ciągnik wystaje nad siodło w {v:?}");
+        }
+    }
+    // nogi podporowe poza zderzakiem ciągnika
+    let tail = t.bounds().min[2];
+    assert!(fw[2] + legs[2] < tail - 0.3, "nogi naczepy ({}) nad zderzakiem ciągnika ({tail})", fw[2] + legs[2]);
+}
