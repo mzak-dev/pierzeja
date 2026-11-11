@@ -17,5 +17,15 @@
   "SCRt": { "archetype": "podwozie_srednie", "seed": 7, "overrides": { "wheelbase": 4.6, "seats": 3, "module": "techniczny", "moduleLength": 4.4, "compartments": 3, "passThrough": 0, "crane": 1, "winch": 1, "roofRack": 1 } },
   "GBA": { "archetype": "podwozie_srednie", "seed": 3 },
   "podwozie-lekkie": { "archetype": "podwozie_lekkie", "seed": 3 },
-  "podwozie-ciezkie": { "archetype": "podwozie_ciezkie", "seed": 3 }
+  "podwozie-ciezkie": { "archetype": "podwozie_ciezkie", "seed": 3 },
+  "hatch-miejski": { "archetype": "hatch_miejski", "seed": 3 },
+  "coupe": { "archetype": "coupe", "seed": 3 },
+  "suv-duzy": { "archetype": "suv_duzy", "seed": 3 },
+  "van-sredni-T5": { "archetype": "van_sredni", "seed": 3 },
+  "bus-T5-okna": { "archetype": "van_sredni", "seed": 4, "overrides": { "cargoWindows": 1 } },
+  "van-polmaska-Lublin": { "archetype": "van_polmaska", "seed": 3 },
+  "ciagnik-siodlowy": { "archetype": "ciagnik_siodlowy", "seed": 3 },
+  "wywrotka-8x4": { "archetype": "wywrotka_8x4", "seed": 3 },
+  "naczepa-kurtynowa": { "archetype": "naczepa_kurtynowa", "seed": 3 },
+  "daily-kontener": { "archetype": "podwozie_lekkie", "seed": 3, "overrides": { "service": "cywilny", "module": "kontener" } }
 }
