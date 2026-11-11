@@ -52,11 +52,12 @@ fn dist(p: V, [a, b, c]: [V; 3]) -> f64 {
     dot(d, d).sqrt()
 }
 
-fn tris(m: &procedura_kit::mesh::MeshData) -> Vec<[V; 3]> {
+fn tris(m: &procedura_kit::mesh::MeshData) -> Vec<([V; 3], String)> {
     let mut out = Vec::new();
     for part in &m.parts {
         let v = |i: u32| -> V { std::array::from_fn(|k| part.positions[i as usize * 3 + k] as f64) };
-        out.extend(part.indices.chunks_exact(3).map(|t| [v(t[0]), v(t[1]), v(t[2])]));
+        let mat = format!("{:?}", part.material);
+        out.extend(part.indices.chunks_exact(3).map(|t| ([v(t[0]), v(t[1]), v(t[2])], mat.clone())));
     }
     out
 }
@@ -70,15 +71,16 @@ fn nadwozie_jest_lustrzane() {
         let t = tris(&m.body);
         let off: Vec<f64> = t
             .iter()
-            .map(|tri| {
+            .map(|(tri, _)| {
                 let c: V = std::array::from_fn(|k| (tri[0][k] + tri[1][k] + tri[2][k]) / 3.0);
                 let c = [-c[0], c[1], c[2]];
-                t.iter().map(|o| dist(c, *o)).fold(f64::MAX, f64::min)
+                t.iter().map(|o| dist(c, o.0)).fold(f64::MAX, f64::min)
             })
             .collect();
         let bad = off.iter().filter(|&&d| d > tol).count();
-        let worst = off.iter().cloned().fold(0.0, f64::max);
-        println!("{a}: nadwozie {} tr., koło {} tr. ×4, niesymetrycznych {bad}, największy błąd {:.0} mm", t.len(), m.wheel.triangles(), worst * 1000.0);
+        let (wi, worst) = off.iter().copied().enumerate().fold((0, 0.0), |b, (i, d)| if d > b.1 { (i, d) } else { b });
+        let wc: V = std::array::from_fn(|k| (t[wi].0[0][k] + t[wi].0[1][k] + t[wi].0[2][k]) / 3.0);
+        println!("{a}: nadwozie {} tr., koło {} tr. ×4, niesymetrycznych {bad}, największy błąd {:.0} mm ({} w {wc:.3?})", t.len(), m.wheel.triangles(), worst * 1000.0, t[wi].1);
         fails += (bad > 0) as usize;
     }
     assert_eq!(fails, 0, "nadwozia bez symetrii lustrzanej");

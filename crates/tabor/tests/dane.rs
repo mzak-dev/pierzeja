@@ -8,7 +8,7 @@ fn loads_and_groups_are_fixed() {
     let ds = data();
     let ids: Vec<&str> = ds.groups.iter().map(|g| g.id.as_str()).collect();
     assert_eq!(ids, ["bryla", "sylwetka", "podwozie", "zabudowa", "sluzba", "material"]);
-    assert_eq!(ds.archetypes.len(), 8);
+    assert_eq!(ds.archetypes.len(), 11);
     assert!(ds.archetype(&ds.default_archetype).is_some());
     assert!(ds.params.iter().all(|p| ids.contains(&p.group.as_str())));
 }
