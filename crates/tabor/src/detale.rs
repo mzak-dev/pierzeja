@@ -10,8 +10,8 @@ use procedura_kit::mesh::{MatKey, MeshBuilder};
 use procedura_kit::powloka::Powloka;
 use procedura_kit::rzutnik::{Rzutnik, Widok};
 
-/// Krok siatki naklejek (m): drobny, bo naklejka ma iść za krzywizną.
-const STEP: f64 = 0.035;
+/// Krok siatki naklejek (m) wg LOD: drobny, bo naklejka ma iść za krzywizną; niżej rzadszy.
+const STEPS: [f64; 4] = [0.035, 0.08, 0.18, 0.4];
 
 fn sym(poly: &[[f64; 2]]) -> Vec<[f64; 2]> {
     poly.iter().map(|q| [-q[0], q[1]]).collect()
@@ -44,20 +44,22 @@ fn grow(poly: &[[f64; 2]], d: f64) -> Vec<[f64; 2]> {
     }).collect()
 }
 
-pub(crate) fn build(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, pw: &Powloka, cladding: bool) {
+/// `lod` ≥ 1: bez szczelin, klamek, wycieraczek i słupków (lampy, grill, tablice i lusterka zostają).
+pub(crate) fn build(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, pw: &Powloka, cladding: bool, lod: u8) {
     // każdy widok widzi tylko zewnętrzną warstwę nadwozia (bez wnęk kół i podłogi)
     let front = Rzutnik::limited(pw, CREASE, Widok::Przod, k.zf - 0.6);
     let rear = Rzutnik::limited(pw, CREASE, Widok::Tyl, -k.zr - 0.6);
     let left = Rzutnik::limited(pw, CREASE, Widok::Lewy, k.hw - 0.3);
     let right = Rzutnik::limited(pw, CREASE, Widok::Prawy, k.hw - 0.3);
     let top = Rzutnik::new(pw, CREASE, Widok::Gora);
+    let step = STEPS[lod.min(3) as usize];
     let both = |mb: &mut MeshBuilder, r: &Rzutnik, mat: MatKey, poly: &[[f64; 2]], lift: f64| {
-        r.patch(mb, mat, poly, STEP, lift);
-        r.patch(mb, mat, &sym(poly), STEP, lift);
+        r.patch(mb, mat, poly, step, lift);
+        r.patch(mb, mat, &sym(poly), step, lift);
     };
     let sides = |mb: &mut MeshBuilder, mat: MatKey, poly: &[[f64; 2]], lift: f64| {
-        left.patch(mb, mat, poly, STEP, lift);
-        right.patch(mb, mat, poly, STEP, lift);
+        left.patch(mb, mat, poly, step, lift);
+        right.patch(mb, mat, poly, step, lift);
     };
     let hw = k.hw;
     let clr = k.clr;
@@ -71,8 +73,10 @@ pub(crate) fn build(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, pw: &Po
         }
     };
     if k.kind == Rodzaj::Van {
-        van(mb, p, seed, k, &front, &rear, &left, &right);
-        wipers(mb);
+        van(mb, p, seed, k, &front, &rear, &left, &right, lod);
+        if lod == 0 {
+            wipers(mb);
+        }
         mirrors(mb, k, if k.cab_only { 1.6 } else { 1.5 });
         return;
     }
@@ -147,6 +151,11 @@ pub(crate) fn build(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, pw: &Po
         plate(mb, seed, 7.0, [0.0, py, h.p[2] - 0.012], -1.0);
     }
 
+    if lod >= 1 {
+        // lusterka zostają na każdym poziomie: wyznaczają szerokość z lusterkami
+        mirrors(mb, k, 1.0);
+        return;
+    }
     // ---------------------------------------------------------------- bok
     let sill = k.bottom(0.0) + 0.11;
     let w = 0.006;
@@ -212,14 +221,15 @@ pub(crate) fn build(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, pw: &Po
 /// Detale vana: pionowe lampy, duży grill, czarne zderzaki z narożnikami, listwy boczne, drzwi
 /// kabiny, drzwi przesuwne tylko po prawej (−X, ruch prawostronny), dwuskrzydłowe tylne drzwi z szybami.
 #[allow(clippy::too_many_arguments)]
-fn van(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, front: &Rzutnik, rear: &Rzutnik, left: &Rzutnik, right: &Rzutnik) {
+fn van(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, front: &Rzutnik, rear: &Rzutnik, left: &Rzutnik, right: &Rzutnik, lod: u8) {
+    let step = STEPS[lod.min(3) as usize];
     let both = |mb: &mut MeshBuilder, r: &Rzutnik, mat: MatKey, poly: &[[f64; 2]], lift: f64| {
-        r.patch(mb, mat, poly, STEP, lift);
-        r.patch(mb, mat, &sym(poly), STEP, lift);
+        r.patch(mb, mat, poly, step, lift);
+        r.patch(mb, mat, &sym(poly), step, lift);
     };
     let sides = |mb: &mut MeshBuilder, mat: MatKey, poly: &[[f64; 2]], lift: f64| {
-        left.patch(mb, mat, poly, STEP, lift);
-        right.patch(mb, mat, poly, STEP, lift);
+        left.patch(mb, mat, poly, step, lift);
+        right.patch(mb, mat, poly, step, lift);
     };
     let (hw, clr, h) = (k.hw, k.clr, k.h);
     let bumper_top = clr + 0.34;
@@ -244,6 +254,9 @@ fn van(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, front: &Rzutnik, rea
     for i in 1..slats {
         let y = lerp(gb, gt, i as f64 / slats as f64);
         both(mb, front, MatKey::Bumper, &[[0.0, y - 0.008], [gx - 0.02, y - 0.008], [gx - 0.02, y + 0.008], [0.0, y + 0.008]], 0.006);
+    }
+    if k.cab_only && lod >= 1 {
+        return;
     }
     if k.cab_only {
         // kabina ciężarówki: zderzak, tablica i tył ma rama; tu tylko drzwi i stopnie
@@ -304,6 +317,9 @@ fn van(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, front: &Rzutnik, rea
         plate(mb, seed, 7.0, [0.0, bumper_top - 0.13, hh.p[2] - 0.014], -1.0);
     }
 
+    if lod >= 1 {
+        return;
+    }
     // --- bok: drzwi kabiny po obu stronach, listwa ochronna
     let sill = k.bottom(0.0) + 0.1;
     let w = 0.007;
@@ -326,10 +342,10 @@ fn van(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, front: &Rzutnik, rea
     let (zs0, zs1) = (k.z_b - 0.04, k.z_b - 0.04 - (1.25f64).min(0.42 * (k.z_b - k.zr)));
     let ys = roof_seam(zs0);
     for s in [line([zs0, sill], [zs0, ys], w), line([zs1, sill + 0.05], [zs1, ys], w), line([zs1, ys], [zs0, ys], w)] {
-        right.patch(mb, MatKey::Plastic, &s, STEP, 0.0015);
+        right.patch(mb, MatKey::Plastic, &s, step, 0.0015);
     }
-    right.patch(mb, MatKey::Plastic, &line([zs1, belt(zs1) - 0.02], [k.zr + 0.05, belt(zs1) - 0.02], 0.022), STEP, 0.004);
-    right.patch(mb, MatKey::Plastic, &[[zs0 - 0.2, belt(zs0) - 0.11], [zs0 - 0.05, belt(zs0) - 0.11], [zs0 - 0.05, belt(zs0) - 0.07], [zs0 - 0.2, belt(zs0) - 0.07]], STEP, 0.004);
+    right.patch(mb, MatKey::Plastic, &line([zs1, belt(zs1) - 0.02], [k.zr + 0.05, belt(zs1) - 0.02], 0.022), step, 0.004);
+    right.patch(mb, MatKey::Plastic, &[[zs0 - 0.2, belt(zs0) - 0.11], [zs0 - 0.05, belt(zs0) - 0.11], [zs0 - 0.05, belt(zs0) - 0.07], [zs0 - 0.2, belt(zs0) - 0.07]], step, 0.004);
 }
 
 /// Lusterka: ramię i obudowa (superelipsa w przekroju), szkło od tyłu, kierunkowskaz z przodu.

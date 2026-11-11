@@ -52,6 +52,16 @@ pub(crate) struct Gestosc {
 
 impl Gestosc {
     pub const LOD0: Gestosc = Gestosc { ds: 0.07, arch_deg: 7.5, end: 9, sub: 2 };
+
+    /// Gęstość dla poziomu szczegółów 0–3 (linie cech i stacje okien zostają na każdym).
+    pub fn lod(lod: u8) -> Gestosc {
+        match lod {
+            0 => Gestosc::LOD0,
+            1 => Gestosc { ds: 0.16, arch_deg: 15.0, end: 5, sub: 1 },
+            2 => Gestosc { ds: 0.35, arch_deg: 30.0, end: 3, sub: 0 },
+            _ => Gestosc { ds: 0.7, arch_deg: 45.0, end: 2, sub: 0 },
+        }
+    }
 }
 
 /// Kluczowe rzędy przekroju (lewa połowa, od osi spodu do osi dachu).
