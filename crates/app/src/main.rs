@@ -393,7 +393,7 @@ impl Doc {
         d
     }
     pub fn vehicle_spec(&self) -> tabor_core::TaborSpec {
-        tabor_core::TaborSpec { mix: self.spec().mix, version: None }
+        tabor_core::TaborSpec { mix: self.spec().mix, version: None, lod: None }
     }
     pub fn scene_spec(&self, kind: SceneKind) -> SceneSpec {
         SceneSpec { kind, seed: Some(self.scene_seed as f64), spacing: Some(self.spacing), rows: Some(self.rows), profile: Some(self.profile.clone()), arm: Some(self.arm), variation: None }
