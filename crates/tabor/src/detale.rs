@@ -110,7 +110,8 @@ pub(crate) fn build(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, pw: &Po
     sides(mb, MatKey::Headlight, &wrap_f, 0.006);
     // kierunkowskaz w zewnętrznym dolnym rogu lampy
     both(mb, &front, MatKey::Indicator, &[[xo - 0.11, hb + 0.012], [xo - 0.02, hb + 0.032], [xo - 0.02, hb + 0.05], [xo - 0.11, hb + 0.04]], 0.008);
-    let grill = p.f("grill");
+    // elektryczne (`powertrain` = ev): zamknięty grill w kolorze nadwozia
+    let grill = if p.s("powertrain") == "ev" { 0.0 } else { p.f("grill") };
     // grill między reflektorami, większy w dół przy dużym `grill`
     let gb = (hb - grill * 0.16).max(clr + 0.30);
     let gpoly = [[0.0, gb], [xi - 0.03, gb + 0.015], [xi - 0.015, ht - 0.03], [0.0, ht - 0.025]];
@@ -379,7 +380,8 @@ fn mirrors(mb: &mut MeshBuilder, k: &Ksztalt, size: f64) {
             // tył obudowy (−z) to szkło
             let back = (j as f64 / n as f64 * std::f64::consts::TAU).cos() < -0.55;
             pw.set_group(u16::from(back));
-            pw.quad(ids[i][a], ids[i + 1][a], ids[i + 1][b], ids[i][b], if back { MatKey::Glass } else { MatKey::Paint });
+            // lustro: ciemne (szkło pojazdu jest półprzezroczyste, tu byłaby dziura)
+            pw.quad(ids[i][a], ids[i + 1][a], ids[i + 1][b], ids[i][b], if back { MatKey::Plastic } else { MatKey::Paint });
         }
     }
     pw.mirror_x();
@@ -401,7 +403,8 @@ fn mirrors(mb: &mut MeshBuilder, k: &Ksztalt, size: f64) {
 pub(crate) fn interior(mb: &mut MeshBuilder, k: &Ksztalt, seats: &[[f64; 3]]) {
     use crate::karoseria::{R_BELT, R_GT, R_LOW, R_RAIL, R_SH, R_TOP};
     // wykładzina: przekroje kabiny cofnięte o 3 cm do środka, normalne do wnętrza
-    let (z0, z1) = ((k.z_win_r - 0.1).max(k.zr + 0.15), k.z_c + 0.02);
+    // od tyłu kabiny/bagażnika (widać go przez tylną szybę) do podstawy szyby czołowej
+    let (z0, z1) = (k.zr + 0.2, k.z_c + 0.02);
     let floor = k.clr + 0.12;
     let n = ((z1 - z0) / 0.1).ceil().max(2.0) as usize;
     let mut pw = Powloka::default();

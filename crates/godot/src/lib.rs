@@ -376,7 +376,7 @@ impl Tabor {
         }
     }
 
-    /// Budowa: `{body: ArrayMesh, wheel: ArrayMesh (wspólna), wheels: [{name, pos}], lightbar: ArrayMesh?, lightbar_pos: Vector3?, seats: [Vector3], stats: String(JSON), error: String}`.
+    /// Budowa: `{body: ArrayMesh, wheel: ArrayMesh (wspólna), wheels: [{name, pos}], lightbar: ArrayMesh?, lightbar_pos: Vector3?, anchors: [{name, pos}], seats: [Vector3], stats: String(JSON), error: String}`.
     #[func]
     fn build(spec_json: GString, night: bool) -> VarDictionary {
         let mut d = VarDictionary::new();
@@ -400,6 +400,15 @@ impl Tabor {
                     d.set("lightbar_pos", v3(o));
                 }
                 d.set("seats", &m.seats.iter().map(v3).collect::<PackedVector3Array>());
+                // kotwice sprzęgu (ciągnik: Anchor_FifthWheel, naczepa: Anchor_Kingpin, Anchor_LandingGear)
+                let mut anchors = VarArray::new();
+                for (name, pos) in &m.anchors {
+                    let mut e = VarDictionary::new();
+                    e.set("name", &GString::from(name.as_str()));
+                    e.set("pos", v3(pos));
+                    anchors.push(&e.to_variant());
+                }
+                d.set("anchors", &anchors);
                 d.set("stats", &gs(&m.stats));
                 d.set("error", &GString::new());
             }

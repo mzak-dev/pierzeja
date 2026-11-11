@@ -194,7 +194,8 @@ impl Ksztalt {
         let z_rf = if cap { z_wt - (h - 0.012 - y_wt) / 70f64.to_radians().tan() } else { z_wt };
         let belt_r = belt_f + fo(p, "beltRise", 0.05);
         let y_tail_top = fo(p, "tailHeight", 0.70) * h;
-        let rg = p.f("rearGlassAngle").to_radians().tan();
+        // sedan: tylna szyba stromsza niż w liftbacku (≥ 40°)
+        let rg = if kind == Rodzaj::Sedan { p.f("rearGlassAngle").max(40.0) } else { p.f("rearGlassAngle") }.to_radians().tan();
         // tył: (z_gb, y_gb) dolna krawędź szyby tylnej, (z_te, y_te) koniec górnej powierzchni
         // (dalej w dół idzie już profil tyłu: klapa / pas tylny do zderzaka)
         let roof_drop = fo(p, "roofDrop", 0.04);
@@ -202,7 +203,8 @@ impl Ksztalt {
         let (z_gb, y_gb, z_te, y_te) = match kind {
             Rodzaj::Sedan | Rodzaj::Liftback | Rodzaj::Coupe => {
                 // pokrywa bagażnika (sedan długa, liftback/coupé krótki kuferek ze spojlerem)
-                let deck = fo(p, "deckLength", if kind == Rodzaj::Sedan { 0.2 } else { 0.06 }) * l;
+                // sedan: trzy bryły — pokrywa co najmniej 0,17 L (parametr ma wartość domyślną liftbacka)
+                let deck = if kind == Rodzaj::Sedan { fo(p, "deckLength", 0.2).max(0.17) } else { fo(p, "deckLength", 0.06) } * l;
                 let z_te = zr + fo(p, "tailLean", 0.06);
                 (z_te + deck, y_tail_top, z_te, y_tail_top - 0.015)
             }
@@ -300,8 +302,9 @@ impl Ksztalt {
             x_inner,
             nose,
             tail,
-            r_front: fo(p, "cornerRadius", 0.32),
-            r_rear: fo(p, "cornerRadius", 0.32) * 0.75,
+            // `roundness` (0–1) skaluje promień naroży w planie: 0,6 = wartość z danych
+            r_front: fo(p, "cornerRadius", 0.32) * (0.7 + 0.5 * p.f("roundness")),
+            r_rear: fo(p, "cornerRadius", 0.32) * (0.7 + 0.5 * p.f("roundness")) * 0.75,
         }
     }
 
@@ -729,6 +732,45 @@ mod tests {
         for a in ["hatchback", "hatch_miejski", "sedan_liftback", "coupe", "kombi", "suv", "suv_duzy", "van_sredni", "van_polmaska", "van"] {
             let (w, bv) = shell(json!({ "archetype": a, "seed": 3 }));
             check(a, &w, bv);
+        }
+    }
+
+    #[test]
+    fn shells_stay_watertight_at_every_lod() {
+        for a in ["hatchback", "sedan_liftback", "suv", "van_polmaska", "van"] {
+            for lod in 0..4u8 {
+                let spec: TaborSpec = serde_json::from_value(json!({ "archetype": a, "seed": 3 })).expect("spec");
+                let r = resolve(&spec);
+                let p = P(&r.params);
+                let w = build(&p, MatKey::Paint, Gestosc::lod(lod));
+                check(&format!("{a} LOD{lod}"), &w, p.f("length") * p.f("width") * p.f("height"));
+            }
+        }
+    }
+
+    /// Proporcje mierzone na powłoce (nie wejściowe parametry) vs cele z referencji
+    /// (diagnoza 2026-11-11: dach ≈ 0,72 W, szyby boczne 18–25°, opona 10–20 mm w głębi,
+    /// maska 0,24–0,36 L, koło ≈ 0,43–0,48 H).
+    #[test]
+    fn measured_proportions_hit_reference_targets() {
+        for a in ["hatchback", "hatch_miejski", "sedan_liftback", "kombi", "suv", "suv_duzy", "coupe"] {
+            let spec: TaborSpec = serde_json::from_value(json!({ "archetype": a, "seed": 3 })).expect("spec");
+            let r = resolve(&spec);
+            let p = P(&r.params);
+            let w = build(&p, MatKey::Paint, Gestosc::LOD0);
+            let k = &w.ksztalt;
+            let q = k.key(lerp(k.z_rf, k.z_rr, 0.4));
+            let roof = q[R_RAIL][0] / k.hw;
+            let glass = ((q[R_BELT][0] - q[R_GT][0]) / (q[R_GT][1] - q[R_BELT][1])).atan().to_degrees();
+            let inset = k.hw - k.track / 2.0 - p.f("tyreWidth") / 2.0;
+            let hood = (k.zf - k.z_c) / (k.zf - k.zr);
+            let wheel = 2.0 * k.r / k.h;
+            let msg = format!("{a}: dach/W {roof:.2}, szyby {glass:.1}°, opona w głębi {:.0} mm, maska/L {hood:.2}, koło/H {wheel:.2}", inset * 1000.0);
+            assert!((0.62..=0.82).contains(&roof), "{msg}");
+            assert!((16.0..=30.0).contains(&glass), "{msg}");
+            assert!((0.008..=0.025).contains(&inset), "{msg}");
+            assert!((0.24..=0.40).contains(&hood), "{msg}");
+            assert!((0.38..=0.50).contains(&wheel), "{msg}");
         }
     }
 
