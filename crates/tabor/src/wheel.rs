@@ -26,7 +26,7 @@ const SIDES: usize = 32;
 pub fn build(p: &P, materials: Vec<MaterialSpec>) -> MeshData {
     let r = p.f("wheelDiameter") / 2.0;
     let hw = p.f("tyreWidth") / 2.0;
-    let truck = p.s("bodyType") == "podwozie";
+    let truck = matches!(p.s("bodyType"), "podwozie" | "naczepa");
     let steel = materials.iter().any(|m| m.key == MatKey::Rim && m.metalness < 0.5);
     let felga = if truck {
         Felga::Ciezarowa

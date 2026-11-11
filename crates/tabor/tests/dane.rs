@@ -8,7 +8,7 @@ fn loads_and_groups_are_fixed() {
     let ds = data();
     let ids: Vec<&str> = ds.groups.iter().map(|g| g.id.as_str()).collect();
     assert_eq!(ids, ["bryla", "sylwetka", "podwozie", "zabudowa", "sluzba", "material"]);
-    assert_eq!(ds.archetypes.len(), 15);
+    assert_eq!(ds.archetypes.len(), 16);
     assert!(ds.archetype(&ds.default_archetype).is_some());
     assert!(ds.params.iter().all(|p| ids.contains(&p.group.as_str())));
 }
@@ -31,9 +31,16 @@ fn archetypes_have_sources_and_vectors_in_range() {
                 ParamKind::Color => assert!(v.as_str().is_some_and(|s| s.len() == 7 && s.starts_with('#')), "{}.{} = {v}", a.id, p.key),
             }
         }
-        // zwisy i rozstaw dają długość (zespół tylny tylko przy ≥ 3 osiach)
+        // zwisy i rozstaw dają długość: odstępy osi tylnych poza rozstawem (8x4: druga przednia
+        // w rozstawie; naczepa: wszystkie osie za „rozstawem” sworzeń → pierwsza oś)
         let f = |k: &str| a.vector[k].as_f64().unwrap();
-        let gap = if f("axles") > 2.0 { f("axleGap") } else { 0.0 };
+        let s = |k: &str| a.vector[k].as_str().unwrap();
+        let rear_gaps = match (s("bodyType"), s("drive")) {
+            ("naczepa", _) => f("axles") - 1.0,
+            (_, "8x4") => f("axles") - 3.0,
+            _ => f("axles") - 2.0,
+        };
+        let gap = rear_gaps.max(0.0) * f("axleGap");
         let sum = f("length") * (f("frontOverhang") + f("rearOverhang")) + f("wheelbase") + gap;
         assert!((sum - f("length")).abs() < 0.01, "{}: zwisy + rozstaw ≠ długość ({sum})", a.id);
     }

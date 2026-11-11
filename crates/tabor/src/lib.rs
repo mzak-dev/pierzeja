@@ -6,6 +6,7 @@
 mod ciezkie;
 mod detale;
 mod karoseria;
+mod naczepa;
 mod sluzba;
 mod tablice;
 mod wheel;
@@ -141,7 +142,7 @@ fn materials(p: &P, seed: u32) -> Vec<MaterialSpec> {
         mat(MatKey::Plastic, "Plastik", p.s("plasticColor"), 0.8, 0.0),
         mat(MatKey::Glass, "Szyby", p.s("glassColor"), 0.08, 0.5),
         mat(MatKey::Tyre, "Opony", "#17181a", 0.95, 0.0),
-        mat(MatKey::Rim, "Felgi", match (steel, p.s("bodyType") == "podwozie") { (true, true) => "#b4b9bd", (true, false) => "#5d6368", _ => "#bcc1c5" }, 0.4, if steel { 0.3 } else { 0.8 }),
+        mat(MatKey::Rim, "Felgi", match (steel, matches!(p.s("bodyType"), "podwozie" | "naczepa")) { (true, true) => "#b4b9bd", (true, false) => "#5d6368", _ => "#bcc1c5" }, 0.4, if steel { 0.3 } else { 0.8 }),
         MaterialSpec { emissive: Some("#fff3c4"), ..mat(MatKey::Headlight, "Reflektory", "#f2efe2", 0.2, 0.2) },
         MaterialSpec { emissive: Some("#ff2a1a"), ..mat(MatKey::Taillight, "Światła tylne", "#a31a1a", 0.3, 0.0) },
     ]
@@ -175,14 +176,17 @@ fn seat_points(p: &P) -> Vec<V3> {
 pub fn generate(spec: &TaborSpec) -> VehicleModel {
     let r = resolve(spec);
     let p = P(&r.params);
-    let heavy = p.s("bodyType") == "podwozie";
+    let trailer = p.s("bodyType") == "naczepa";
+    let heavy = p.s("bodyType") == "podwozie" || trailer;
     let mut mats = materials(&p, r.seed);
     if heavy {
         mats.extend(ciezkie::extra_materials(&p));
     }
 
     let mut mb = MeshBuilder::default();
-    let layout = if heavy {
+    let layout = if trailer {
+        naczepa::build(&p, r.seed, &mut mb)
+    } else if heavy {
         ciezkie::build(&p, r.seed, &mut mb)
     } else {
         let roof_mat = if roll(r.seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
@@ -207,7 +211,7 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
             ("Wheel_RR".into(), [-hub_x, rad, -layout.wheelbase / 2.0]),
         ]
     });
-    let seats = if heavy { ciezkie::seat_points(&p) } else { seat_points(&p) };
+    let seats = if trailer { Vec::new() } else if heavy { ciezkie::seat_points(&p) } else { seat_points(&p) };
     let mut m = VehicleModel {
         body,
         wheel,
