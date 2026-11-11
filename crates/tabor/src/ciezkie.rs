@@ -15,20 +15,6 @@ pub(crate) fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }
 
-/// Interpolacja liniowa po punktach (z rosnące), poza zakresem stała.
-fn pl(pts: &[(f64, f64)], z: f64) -> f64 {
-    if z <= pts[0].0 {
-        return pts[0].1;
-    }
-    for w in pts.windows(2) {
-        if z <= w[1].0 {
-            let d = w[1].0 - w[0].0;
-            return if d < 1e-9 { w[1].1 } else { lerp(w[0].1, w[1].1, (z - w[0].0) / d) };
-        }
-    }
-    pts[pts.len() - 1].1
-}
-
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum Cab {
     /// 1+1: krótka kabina dzienna.
@@ -61,12 +47,23 @@ pub(crate) struct D {
     pub seats: usize,
     /// Rzędy tylne kabiny brygadowej.
     pub rows: usize,
-    pub cab_len: f64,
     /// Czoło i tył kabiny.
     pub zc: f64,
     pub zb: f64,
     pub cab_top: f64,
     pub ycb: f64,
+    /// Półmaska przed kabiną (Daily); 0 = kabina nad silnikiem.
+    pub nose: f64,
+    /// Osie przednie i tylne (z); pierwsza przednia = `zaf`, pierwsza tylna = `zar`.
+    pub front_axles: Vec<f64>,
+    pub rear_axles: Vec<f64>,
+    /// Ostatnia oś tylna (kąt zejścia, zwis tylny).
+    pub zlr: f64,
+    /// Bliźniacze koła tylne.
+    pub dual: bool,
+    pub tw: f64,
+    /// Ciągnik siodłowy: wysokość siodła (m) i jego położenie (z).
+    pub fifth_wheel: Option<(f64, f64)>,
 }
 
 impl D {
@@ -74,9 +71,20 @@ impl D {
         let (l, w, h, wb) = (p.f("length"), p.f("width"), p.f("height"), p.f("wheelbase"));
         let (clr, r, tw) = (p.f("clearance"), p.f("wheelDiameter") / 2.0, p.f("tyreWidth"));
         let (fo, ro) = (p.f("frontOverhang"), p.f("rearOverhang"));
-        let oh = (l - wb).max(0.8);
+        // osie: 8x4 ma dwie przednie (druga 1,95 m za pierwszą, w rozstawie), reszta tylne co `axleGap`
+        let axles = (p.f("axles").round() as usize).clamp(2, 4);
+        let front_n = if p.s("drive") == "8x4" && axles >= 3 { 2 } else { 1 };
+        let rear_n = axles - front_n;
+        let gap = p.f("axleGap");
+        let oh = (l - wb - gap * (rear_n - 1) as f64).max(0.8);
         let (zaf, zar) = (wb / 2.0, -wb / 2.0);
-        let (zf, zr) = (zaf + oh * fo / (fo + ro), zar - oh * ro / (fo + ro));
+        let zlr = zar - gap * (rear_n - 1) as f64;
+        let (zf, zr) = (zaf + oh * fo / (fo + ro), zlr - oh * ro / (fo + ro));
+        let front_axles: Vec<f64> = (0..front_n).map(|i| zaf - 1.95 * i as f64).collect();
+        let rear_axles: Vec<f64> = (0..rear_n).map(|i| zar - gap * i as f64).collect();
+        let dual = p.s("rearTyres") == "dual";
+        // siodło 0,5 m przed tylną osią (środkiem tandemu), wysokość ok. 1,15 m
+        let fifth_wheel = (p.s("module") == "siodlo").then(|| (p.0.get("couplingHeight").and_then(|v| v.as_f64()).unwrap_or(1.15), (zar + zlr) / 2.0 + 0.5));
         let ra = r + p.f("wheelArchGap");
         let seats = p.f("seats") as usize;
         let rows = if seats > 3 { ((seats - 2).div_ceil(2)).min(2) } else { 0 };
@@ -85,13 +93,19 @@ impl D {
             3 => Cab::Day,
             _ => Cab::Crew,
         };
-        let cab_len = match cab {
-            Cab::Short => 1.6,
-            Cab::Day => 1.83,
-            Cab::Crew => 1.83 + 0.72 * rows as f64,
+        // długość kabiny: jawna (`cabLength`), sypialna 2,28 m (Scania R/S), inaczej z liczby Miejsc
+        let cab_len = match (p.f("cabLength"), p.s("cabType")) {
+            (l, _) if l > 0.5 => l,
+            (_, "sleeper") => 2.28,
+            _ => match cab {
+                Cab::Short => 1.6,
+                Cab::Day => 1.83,
+                Cab::Crew => 1.83 + 0.72 * rows as f64,
+            },
         };
         let y_fr = r + 0.36;
         let zc = zf - 0.14;
+        let nose = p.0.get("cabNose").and_then(|v| v.as_f64()).unwrap_or(0.0);
         D {
             w,
             h,
@@ -110,11 +124,18 @@ impl D {
             cab,
             seats,
             rows,
-            cab_len,
             zc,
-            zb: zc - cab_len,
+            zb: zc - cab_len - nose,
             cab_top: p.f("cabHeight").min(h),
-            ycb: y_fr - 0.25,
+            // półmaska: kabina niżej, podłoga tuż nad ramą
+            ycb: if nose > 0.05 { y_fr - 0.05 } else { y_fr - 0.25 },
+            nose,
+            front_axles,
+            rear_axles,
+            zlr,
+            dual,
+            tw,
+            fifth_wheel,
         }
         .with_cab_floor()
     }
@@ -130,9 +151,46 @@ impl D {
         -(1.0 / ANGLE.to_radians().cos() - 1.0)
     }
 
-    /// Najniższa dozwolona wysokość za tylną osią (kąt zejścia), 0 przed nią.
+    /// Najniższa dozwolona wysokość za ostatnią osią tylną (kąt zejścia), 0 przed nią.
     pub fn dep(&self, z: f64) -> f64 {
-        if z < self.zar { (ANGLE.to_radians().tan() * (self.zar - z) + Self::off() * self.r).max(0.0) } else { 0.0 }
+        if z < self.zlr { (ANGLE.to_radians().tan() * (self.zlr - z) + Self::off() * self.r).max(0.0) } else { 0.0 }
+    }
+
+    /// Obrys nadkoli wszystkich osi tylnych (wysokość dolnej krawędzi boku zabudowy).
+    pub fn arch_r(&self, z: f64) -> f64 {
+        self.rear_axles.iter().map(|&za| self.arch(z, za)).fold(0.0, f64::max)
+    }
+
+    /// Piasty kół: osie przednie `Wheel_F*`, tylne `Wheel_R*`; bliźniak wewnętrzny z sufiksem `i`.
+    pub fn wheels(&self) -> Vec<(String, V3)> {
+        let mut out = Vec::new();
+        let name = |front: bool, i: usize| format!("{}{}", if front { "F" } else { "R" }, if i == 0 { String::new() } else { (i + 1).to_string() });
+        for (i, &z) in self.front_axles.iter().enumerate() {
+            let x = self.track / 2.0;
+            out.push((format!("Wheel_{}L", name(true, i)), [x, self.r, z]));
+            out.push((format!("Wheel_{}R", name(true, i)), [-x, self.r, z]));
+        }
+        for (i, &z) in self.rear_axles.iter().enumerate() {
+            let n = name(false, i);
+            if self.dual {
+                // bliźniaki: zewnętrzne lico przy szerokości całkowitej, wewnętrzne 3 cm obok
+                let xo = self.w / 2.0 - 0.02 - self.tw / 2.0;
+                let xi = xo - self.tw - 0.03;
+                out.extend([(format!("Wheel_{n}L"), [xo, self.r, z]), (format!("Wheel_{n}R"), [-xo, self.r, z]), (format!("Wheel_{n}Li"), [xi, self.r, z]), (format!("Wheel_{n}Ri"), [-xi, self.r, z])]);
+            } else {
+                let x = self.track / 2.0;
+                out.extend([(format!("Wheel_{n}L"), [x, self.r, z]), (format!("Wheel_{n}R"), [-x, self.r, z])]);
+            }
+        }
+        // kolejność węzłów: FL, FR, RL, RR (kontrakt), potem pozostałe
+        let rank = |n: &str| ["Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR"].iter().position(|k| *k == n).unwrap_or(4);
+        out.sort_by_key(|(n, _)| rank(n));
+        out
+    }
+
+    /// Kotwice: siodło ciągnika.
+    pub fn anchors(&self) -> Vec<(String, V3)> {
+        self.fifth_wheel.map(|(h, z)| vec![("Anchor_FifthWheel".to_string(), [0.0, h, z])]).unwrap_or_default()
     }
 
     /// Jak `dep`, ale przed przednią osią (kąt najazdu).
@@ -152,9 +210,9 @@ impl D {
         }
     }
 
-    /// Współrzędna z, przy której linia zejścia osiąga wysokość `y` (za tylną osią).
+    /// Współrzędna z, przy której linia zejścia osiąga wysokość `y` (za ostatnią osią tylną).
     pub fn kick_z(&self, y: f64) -> f64 {
-        self.zar - (y - Self::off() * self.r) / ANGLE.to_radians().tan()
+        self.zlr - (y - Self::off() * self.r) / ANGLE.to_radians().tan()
     }
 }
 
@@ -177,7 +235,7 @@ pub(crate) fn seat_points(p: &P) -> Vec<V3> {
     };
     let mut out = Vec::new();
     // punkt H 1,08 m za czołem kabiny: stopy w pozie `drive` (ok. 0,7 m przed H) zostają w kabinie
-    let zf0 = d.zc - 1.08;
+    let zf0 = d.zc - d.nose - 1.08 + if d.nose > 0.05 { 0.25 } else { 0.0 };
     let front = match d.cab {
         Cab::Day => 3,
         _ => d.seats.min(2),
@@ -287,7 +345,7 @@ pub(crate) fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     crate::zabudowa::module(mb, &d, p, seed);
     // oklejenie kabiny i belka na dachu kabiny (zabudowa: tylko lampy i obrysówki)
     let lightbar = crate::sluzba::apply_heavy(mb, p, seed, &geom);
-    Layout { wheelbase: d.wb, track: d.track, stations, body_width: d.w, lightbar }
+    Layout { wheelbase: d.wb, track: d.track, stations, body_width: d.w, lightbar, wheels: Some(d.wheels()), anchors: d.anchors() }
 }
 
 /// Podłużnice (z kopniakiem na tyle), poprzeczki, osie z resorami, zbiornik i akumulator.
@@ -297,7 +355,7 @@ fn frame(mb: &mut MeshBuilder, d: &D) {
     let z_front = d.zc - 0.05;
     let z_end = d.zr + 0.12;
     // punkt, w którym linia zejścia przecina spód podłużnicy
-    let zk = d.kick_z(yb).clamp(z_end, d.zar);
+    let zk = d.kick_z(yb).clamp(z_end, d.zlr);
     for side in [1.0f64, -1.0] {
         let (a, b) = (x0 * side, x1 * side);
         let (xa, xb) = (a.min(b), a.max(b));
@@ -312,7 +370,7 @@ fn frame(mb: &mut MeshBuilder, d: &D) {
     }
     // osie: belka, resory; tylna z mostem
     let ax = d.track / 2.0 - 0.1;
-    for z in [d.zaf, d.zar] {
+    for &z in d.front_axles.iter().chain(&d.rear_axles) {
         mb.bx(MatKey::Metal, [-ax, d.r - 0.08, z - 0.09], [ax, d.r + 0.08, z + 0.09]);
         for side in [1.0f64, -1.0] {
             let (a, b) = (0.30 * side, 0.46 * side);
@@ -320,143 +378,72 @@ fn frame(mb: &mut MeshBuilder, d: &D) {
         }
     }
     let dh = 0.2;
-    mb.bx(MatKey::Metal, [-0.26, (d.r - dh).max(d.clr), d.zar - 0.22], [0.26, d.r + dh, d.zar + 0.22]);
+    for &z in &d.rear_axles {
+        mb.bx(MatKey::Metal, [-0.26, (d.r - dh).max(d.clr), z - 0.22], [0.26, d.r + dh, z + 0.22]);
+    }
     // zbiornik paliwa (lewa) i akumulatory (prawa) między osiami
     mb.bx(MatKey::Frame, [0.46, yb - 0.05, -0.5], [0.92, yb + 0.35, 0.3]);
     mb.bx(MatKey::Plastic, [-0.8, yb, -0.3], [-0.46, yb + 0.3, 0.3]);
 }
 
-/// Kabina: loft ze stacji (profil boku z nadkolem, szyba pochylona wg `windshieldAngle`, nad nią
-/// pas blachy zaokrąglony do dachu), potem okna, drzwi, lampy, grill, lusterka, stopnie.
+/// Kabina na powłoce `karoseria` (rodzaj Van z jawnym układem osi): nad silnikiem (czoło prawie
+/// pionowe, podłoga nad kołem) albo z półmaską (`cabNose` > 0, Daily). Przednie nadkole wycięte
+/// w kabinie, tył ucięty przed zabudową. Detale (lampy, grill, drzwi, lusterka) jak w vanie.
 fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> (usize, crate::sluzba::HeavyCab) {
-    let hwc = d.w / 2.0 - 0.03;
-    let (zc, zb, top, ycb) = (d.zc, d.zb, d.cab_top, d.ycb);
-    // dolna krawędź szyby nad kołem przednim (TGL/Eurocargo ok. 1,4 m, TGM 4x4 ok. 1,6 m)
-    let ywsb = (ycb + 0.38 * (top - ycb)).max(2.0 * d.r + 0.6);
-    let ybel = ywsb + 0.1;
-    // szyba (MAN TGM, Scania P): ok. 1,1 m wysokości, kończy się ok. 0,3 m pod dachem
-    let y_wt = (top - 0.32).max(ywsb + 0.6);
-    let z_wt = zc - ((y_wt - ywsb) / p.f("windshieldAngle").to_radians().tan()).max(0.12);
-    let z_rf = z_wt - 0.16;
-    let prof = [(zb, top), (z_rf, top), (z_wt, y_wt), (zc, ywsb)];
-    let tumble = p.f("tumblehome");
-    let half = |z: f64| -> Half {
-        let tz = pl(&prof, z);
-        let g = ((tz - ybel) / (top - ybel)).clamp(0.0, 1.0);
-        let hr = hwc * (1.0 - tumble * g);
-        // zaokrąglona krawędź dachu; górna krawędź okien bocznych na wysokości górnej krawędzi szyby
-        let cc = 0.2f64.min(0.3 * hr);
-        let y4 = (tz - cc).min(y_wt);
-        let bel = ybel.min(y4 - 0.03);
-        let sill = ycb.max(d.arch(z, d.zaf));
-        let mid = (ycb + 0.25).max(sill + 0.07).min(bel - 0.04);
-        let sill = sill.min(mid - 0.02);
-        [[0.0, ycb, z], [hwc * 0.97, sill, z], [hwc, mid, z], [hwc, bel, z], [hr, y4, z], [hr - cc, tz, z], [0.0, tz, z]]
+    use crate::karoseria::{self, Rama};
+    use serde_json::json;
+    let (top, ycb) = (d.cab_top, d.ycb);
+    let semi = d.nose > 0.05;
+    // dolna krawędź szyby: nad kołem (kabina nad silnikiem) albo nad maską (półmaska)
+    let ywsb = if semi { (ycb + 0.62).max(d.r * 2.0 + 0.35) } else { (ycb + 0.38 * (top - ycb)).max(2.0 * d.r + 0.6) };
+    let y_wt = if semi { (top - 0.22).max(ywsb + 0.6) } else { (top - 0.32).max(ywsb + 0.6) };
+    let (zf, zr) = (d.zc, d.zb);
+    let len = zf - zr;
+    let mut m = p.0.clone();
+    let mut set = |k: &str, v: serde_json::Value| {
+        m.insert(k.to_string(), v);
     };
-    // stacje: końce i szyba (priorytet), nadkole
-    let mut zs = vec![zb, z_rf, z_wt, zc];
-    let mut arches: Vec<f64> = [d.zaf - d.arch_a, d.zaf - d.arch_at, d.zaf + d.arch_at, d.zaf + d.arch_a].into_iter().filter(|&z| z > zb + 0.05 && z < zc - 0.05).collect();
-    arches.retain(|&z| zs.iter().all(|k| (k - z).abs() > 0.08));
-    arches.dedup_by(|a, b| (*a - *b).abs() < 0.08);
-    zs.extend(arches);
-    zs.sort_by(|a, b| a.total_cmp(b));
-    let rings: Vec<Vec<V3>> = zs.iter().map(|&z| full_ring(half(z))).collect();
+    set("bodyType", json!("van"));
+    set("length", json!(len));
+    set("height", json!(top));
+    set("width", json!(d.w - 0.06));
+    set("clearance", json!(ycb));
+    set("beltline", json!((ywsb + 0.08) / top));
+    set("hoodHeight", json!(ywsb / top));
+    set("noseHeight", json!(if semi { (ycb + 0.36) / top } else { (ywsb - 0.05) / top }));
+    set("noseRake", json!(if semi { 0.08 } else { 0.03 }));
+    set("hoodLength", json!(if semi { d.nose + 0.05 } else { 0.07 } / len));
+    set("windshieldAngle", json!(if semi { 60.0 } else { 82.0 }));
+    set("windshieldTop", json!(y_wt / top));
+    set("rearGlassAngle", json!(90.0));
+    set("tailLean", json!(0.0));
+    set("tailHeight", json!(0.99));
+    set("roofDrop", json!(0.0));
+    set("roofCrown", json!(0.03));
+    set("roofPeak", json!(0.2));
+    set("tumblehome", json!(0.02));
+    set("cornerRadius", json!(if semi { 0.22 } else { 0.16 }));
+    set("shoulderDrop", json!(0.22));
+    set("sillTuck", json!(0.01));
+    set("beltRise", json!(0.0));
+    set("quarterWindow", json!(0));
+    set("cargoWindows", json!(if d.cab == Cab::Crew { 1 } else { 0 }));
+    set("rearBumperTop", json!(0.3));
+    let pc = P(&m);
     let roof_mat = if roll(seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
-    mb.loft_with(&rings, Some(MatKey::Paint), |i, s| {
-        let zm = (zs[i] + zs[i + 1]) / 2.0;
-        let wind = zm > z_wt;
-        match half_seg(s) {
-            0 => MatKey::Plastic,
-            1 => MatKey::Plastic,
-            3 => MatKey::Glass,
-            4 | 5 if wind => MatKey::Glass,
-            4 | 5 => roof_mat,
-            _ => MatKey::Paint,
-        }
-    });
-
-    // pas na ściance bocznej między segmentami półprzekroju (po obu stronach)
-    let strip = |mb: &mut MeshBuilder, mat: MatKey, (za, zb2): (f64, f64), (k0, k1): (usize, usize), e: f64| {
-        let (a, b) = (half(za), half(zb2));
-        for k in k0..k1 {
-            for side in [1.0f64, -1.0] {
-                let q = |v: V3| [(v[0] + e) * side, v[1], v[2]];
-                mb.quad(mat, q(a[k]), q(b[k]), q(b[k + 1]), q(a[k + 1]), Some([side, 0.0, 0.0]));
-            }
-        }
-    };
-    // szwy drzwi i słupki: A/B (+ C w brygadowej), grube na szkle jako słupki
-    let door_z = |i: usize| zc - 0.2 - 1.0 * i as f64;
-    let mut seams = vec![door_z(0), door_z(1)];
-    if d.cab == Cab::Crew {
-        seams.push(door_z(1) - (d.cab_len - 1.5).max(0.8) * 0.5);
-        seams.push(zb + 0.12);
-    }
-    seams.retain(|&z| z > zb + 0.05 && z < z_rf);
-    for z in &seams {
-        strip(mb, MatKey::Frame, (z - 0.015, z + 0.015), (1, 3), 0.004);
-        strip(mb, MatKey::Frame, (z - 0.04, z + 0.04), (3, 4), 0.004);
-    }
-    let handle = |mb: &mut MeshBuilder, z: f64| {
-        let bel = half(z)[3];
-        side_quad(mb, MatKey::Plastic, bel[0] + 0.005, bel[1] - 0.2, bel[1] - 0.17, z - 0.09, z + 0.09);
-    };
-    handle(mb, door_z(0) - 0.12);
-    if d.cab == Cab::Crew {
-        handle(mb, door_z(1) - 0.12);
-    }
-
-    // czoło: grill, reflektory z oprawą, wycieraczki, daszek
-    let hz = |z: f64| half(z)[2][0];
-    let (zfc, hf) = (zc + 0.004, hz(zc));
-    let (yg0, yg1) = (ycb + 0.22, ycb + 0.22 + 0.5 * (ywsb - ycb - 0.2));
-    let gx = 0.40 * hf;
-    mb.quad(MatKey::Plastic, [-gx, yg0, zfc], [gx, yg0, zfc], [gx, yg1, zfc], [-gx, yg1, zfc], Some([0.0, 0.0, 1.0]));
-    let g = p.f("grill").max(0.2);
-    for i in 1..=3 {
-        let y = lerp(yg0, yg1, i as f64 / 4.0);
-        mb.quad(MatKey::Metal, [-gx * (0.5 + 0.5 * g), y - 0.012, zfc + 0.003], [gx * (0.5 + 0.5 * g), y - 0.012, zfc + 0.003], [gx * (0.5 + 0.5 * g), y + 0.012, zfc + 0.003], [-gx * (0.5 + 0.5 * g), y + 0.012, zfc + 0.003], Some([0.0, 0.0, 1.0]));
-    }
-    let (ly0, ly1) = (ycb + 0.2, ycb + 0.2 + 0.2);
+    let w = karoseria::build_with(&pc, roof_mat, karoseria::Gestosc::LOD0, Some(Rama { zaf: d.zaf, zar: -1.0e3, zf, zr }));
+    w.powloka.emit(mb, karoseria::CREASE);
+    crate::detale::build(mb, &pc, seed, &w.ksztalt, &w.powloka, false);
+    let k = &w.ksztalt;
+    // stopnie pod drzwiami
     for side in [1.0f64, -1.0] {
-        let q = |x: f64, y: f64, dz: f64| [x * side, y, zfc + dz];
-        mb.quad(MatKey::Plastic, q(0.50 * hf, ly0 - 0.02, 0.0), q(0.97 * hf, ly0 - 0.02, 0.0), q(0.97 * hf, ly1 + 0.02, 0.0), q(0.50 * hf, ly1 + 0.02, 0.0), Some([0.0, 0.0, 1.0]));
-        mb.quad(MatKey::Headlight, q(0.54 * hf, ly0, 0.003), q(0.93 * hf, ly0, 0.003), q(0.93 * hf, ly1, 0.003), q(0.54 * hf, ly1, 0.003), Some([0.0, 0.0, 1.0]));
+        let z0 = k.z_b + 0.05;
+        let (sa, sb) = ((k.hw - 0.02) * side, (k.hw - 0.3) * side);
+        let ys = (ycb - 0.22).max(d.app(z0 + 0.7) + 0.02);
+        mb.bx(MatKey::Plastic, [sa.min(sb), ys, z0], [sa.max(sb), ys + 0.04, z0 + 0.7]);
     }
-    // kierunkowskazy: nad reflektorem w narożu czoła i boczne na ściance kabiny za nadkolem
-    for side in [1.0f64, -1.0] {
-        let q = |x: f64, y: f64| [x * side, y, zfc + 0.004];
-        mb.quad(MatKey::Indicator, q(0.70 * hf, ly1 + 0.04), q(0.95 * hf, ly1 + 0.04), q(0.95 * hf, ly1 + 0.1), q(0.70 * hf, ly1 + 0.1), Some([0.0, 0.0, 1.0]));
-        let (zr0, x) = (d.zaf - d.arch_a - 0.05, (hz(d.zaf - d.arch_a - 0.1) + 0.004) * side);
-        let yr = (d.archtop + 0.08).max(ycb + 0.1);
-        mb.quad(MatKey::Indicator, [x, yr, zr0 - 0.12], [x, yr, zr0], [x, yr + 0.05, zr0], [x, yr + 0.05, zr0 - 0.12], Some([side, 0.0, 0.0]));
-    }
-    // daszek nad szybą
-    // osłona przeciwsłoneczna nad szybą
-    let ho = hwc * 0.8;
-    mb.bx(MatKey::Plastic, [-ho, y_wt + 0.01, z_wt - 0.06], [ho, y_wt + 0.06, z_wt + 0.14]);
-
-    // lusterka (do szerokości całkowitej) i stopnie
-    for side in [1.0f64, -1.0] {
-        let (xa, xb) = (hwc * side, (d.w / 2.0 + 0.12) * side);
-        let zm = zc - 0.3;
-        let ym = ywsb + 0.25;
-        mb.bx(MatKey::Plastic, [xa.min(xb), ym + 0.05, zm - 0.03], [xa.max(xb), ym + 0.08, zm + 0.03]);
-        let xh = if side > 0.0 { (xb - 0.05, xb) } else { (xb, xb + 0.05) };
-        mb.bx(MatKey::Plastic, [xh.0, ym - 0.2, zm - 0.07], [xh.1, ym + 0.12, zm + 0.07]);
-        let z0 = door_z(0) - 0.85;
-        let (sa, sb) = (hwc * side, (hwc - 0.3) * side);
-        let ys = (ycb - 0.2).max(d.app(z0 + 0.75) + 0.02);
-        mb.bx(MatKey::Plastic, [sa.min(sb), ys, z0], [sa.max(sb), ys + 0.04, z0 + 0.75]);
-    }
-    // wycieraczki: dwa ramiona leżące na dole szyby
-    let ws = |y: f64| zc - (zc - z_wt) * (y - ywsb) / (y_wt - ywsb) + 0.012;
-    for x0 in [-0.92 * hwc, 0.05] {
-        let (ya, yb2) = (ywsb + 0.05, ywsb + 0.08);
-        mb.quad(MatKey::Plastic, [x0, ya, ws(ya)], [x0 + 0.85 * hwc, ya, ws(ya)], [x0 + 0.85 * hwc, yb2, ws(yb2)], [x0, yb2, ws(yb2)], Some([0.0, 0.5, 1.0]));
-    }
-    let geom = crate::sluzba::HeavyCab { hwc, top, y_wt, z_wt, z_rf, ybel, door: (door_z(0) - 0.95, door_z(0) - 0.05) };
-    (zs.len(), geom)
+    let geom = crate::sluzba::HeavyCab { hwc: k.hw, top, y_wt, z_wt: k.z_wt, z_rf: k.z_rf, ybel: k.belt_f, door: (k.z_b + 0.05, k.z_c - 0.12) };
+    (w.stations, geom)
 }
 
 /// Zderzak przedni (kolor `bumperColor`), z wyciągarką w otworze i tablicą (przy wyciągarce

@@ -33,7 +33,11 @@ pub(crate) fn module(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) {
         "laweta" => laweta(mb, d, &sp, seed),
         "pozarniczy" => rescue(mb, d, p, &sp, false, seed),
         "techniczny" => rescue(mb, d, p, &sp, true, seed),
-        // ponytail: furgon, doka, wywrotka, chłodnia, minibus to issue 10–11; na razie skrzynia
+        "furgon" | "chlodnia" | "kontener" => box_body(mb, d, &sp, seed, false),
+        "plandeka" => box_body(mb, d, &sp, seed, true),
+        "wywrotka" => tipper(mb, d, &sp, seed),
+        "siodlo" => fifth_wheel(mb, d, &sp, seed),
+        // ponytail: doka i minibus jeszcze jako skrzynia
         _ => flatbed(mb, d, &sp, seed),
     }
     if p.f("crane") > 0.5 {
@@ -171,13 +175,16 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool, seed: u32) 
     let ymid = 0.5 * (sp.ytop + 1.2);
     let half = |z: f64| -> [V3; 7] {
         let yb = base.max(d.dep(z));
-        let sl = yb.max(d.arch(z, d.zar));
+        let sl = yb.max(d.arch_r(z));
         [[0.0, yb, z], [hx - 0.06, sl, z], [hx, sl + 0.06, z], [hx, ymid.max(sl + 0.1), z], [hx, sp.ytop - 0.05, z], [hx - 0.05, sp.ytop, z], [0.0, sp.ytop, z]]
     };
     // powłoka zamknięta aż do przodu zabudowy; przedział przelotowy to skrytka z żaluzjami po obu stronach
     let mut zs = vec![sp.z_r, sp.z_f];
     let kick = d.kick_z(base);
-    zs.extend([kick, d.zar - d.arch_a, d.zar - d.arch_at, d.zar + d.arch_at, d.zar + d.arch_a].into_iter().filter(|&z| z > sp.z_r + 0.05 && z < sp.z_f - 0.05));
+    zs.push(kick);
+    for &za in &d.rear_axles {
+        zs.extend([za - d.arch_a, za - d.arch_at, za + d.arch_at, za + d.arch_a].into_iter().filter(|&z| z > sp.z_r + 0.05 && z < sp.z_f - 0.05));
+    }
     zs.sort_by(|a, b| a.total_cmp(b));
     zs.dedup_by(|a, b| (*a - *b).abs() < 0.08);
     let rings: Vec<Vec<V3>> = zs.iter().map(|&z| full_ring(half(z))).collect();
@@ -201,7 +208,7 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool, seed: u32) 
             shutter(mb, hx, za, zb, yu0, yu1);
             let mut yl0 = base + 0.12;
             // nadkole: tylko jeśli kolumna zachodzi na trapez
-            if zb > d.zar - d.arch_a && za < d.zar + d.arch_a {
+            if d.rear_axles.iter().any(|&ax| zb > ax - d.arch_a && za < ax + d.arch_a) {
                 yl0 = yl0.max(d.archtop + 0.06);
             }
             yl0 = yl0.max(d.dep(za) + 0.06);
@@ -218,7 +225,7 @@ fn rescue(mb: &mut MeshBuilder, d: &D, p: &P, sp: &Span, tech: bool, seed: u32) 
     }
 
     // tył: zderzak z lampami, skrytka tylna; boczne obrysówki nad dolną krawędzią
-    side_markers(mb, hx, &|z| (base + 0.1).max(d.arch(z, d.zar) + 0.1).max(d.dep(z) + 0.1), sp.z_r + 0.3, z_a - 0.3);
+    side_markers(mb, hx, &|z| (base + 0.1).max(d.arch_r(z) + 0.1).max(d.dep(z) + 0.1), sp.z_r + 0.3, z_a - 0.3);
     rear(mb, d, hx - 0.05, seed);
     let zt = sp.z_r - 0.004;
     let yb = base.max(d.dep(sp.z_r));
@@ -292,4 +299,93 @@ fn crane(mb: &mut MeshBuilder, d: &D, p: &P) {
     let p2 = [0.0, yc, (d.zb + 1.4).min(d.zc - 0.9)];
     beam(mb, MatKey::Metal, p1, p2, 0.09, 0.1);
     mb.bx(MatKey::Plastic, [-0.06, yc - 0.3, p2[2] - 0.05], [0.06, yc - 0.1, p2[2] + 0.05]);
+}
+
+// ───────────────────────── kontener, plandeka, wywrotka, siodło ─────────────────────────
+
+/// Kontener (furgon, chłodnia) albo plandeka na podwoziu: skrzynia z narożnymi słupkami
+/// i ramą z aluminium, tylne drzwi z ryglami; plandeka ma pionowe pasy napinające.
+fn box_body(mb: &mut MeshBuilder, d: &D, sp: &Span, seed: u32, curtain: bool) {
+    let yt = deck(mb, d, sp);
+    let hx = d.w / 2.0 - 0.01;
+    let (z0, z1, y1) = (sp.z_r + 0.06, sp.z_f, sp.ytop);
+    mb.bx(MatKey::Paint, [-hx, yt, z0], [hx, y1, z1]);
+    // słupki narożne i ramy dachu / podłogi (aluminium)
+    let p = 0.05;
+    for sx in [1.0f64, -1.0] {
+        for &zz in &[z0, z1 - p] {
+            let (a, b) = ((hx + 0.006) * sx, (hx - p) * sx);
+            mb.bx(MatKey::Metal, [a.min(b), yt, zz], [a.max(b), y1 + 0.006, zz + p]);
+        }
+        side_quad(mb, MatKey::Metal, hx + 0.004, y1 - 0.07, y1, z0, z1);
+        side_quad(mb, MatKey::Metal, hx + 0.004, yt, yt + 0.09, z0, z1);
+    }
+    if curtain {
+        // pasy napinające plandeki co ok. 0,6 m i dolna listwa
+        let n = ((z1 - z0) / 0.6).floor() as usize;
+        for i in 1..n {
+            let zz = lerp(z0, z1, i as f64 / n as f64);
+            side_quad(mb, MatKey::Plastic, hx + 0.005, yt + 0.09, y1 - 0.07, zz - 0.02, zz + 0.02);
+        }
+    }
+    // tylne drzwi: szczelina środkowa i rygle
+    let zr = z0 - 0.003;
+    let q = |mb: &mut MeshBuilder, m: MatKey, x0: f64, x1: f64, ya: f64, yb: f64| mb.quad(m, [x1, ya, zr], [x0, ya, zr], [x0, yb, zr], [x1, yb, zr], Some([0.0, 0.0, -1.0]));
+    q(mb, MatKey::Plastic, -0.006, 0.006, yt + 0.05, y1 - 0.05);
+    for x in [-0.55 * hx, -0.25 * hx, 0.25 * hx, 0.55 * hx] {
+        q(mb, MatKey::Metal, x - 0.015, x + 0.015, yt + 0.12, y1 - 0.1);
+    }
+    side_markers(mb, hx + 0.006, &|_| yt + 0.05, sp.z_r + 0.3, sp.z_f - 0.3);
+    rear(mb, d, hx - 0.05, seed);
+}
+
+/// Skrzynia wywrotki: burty stalowe z żebrami, czołownica wyższa nad kabinę, klapa tylna,
+/// siłownik przed skrzynią.
+fn tipper(mb: &mut MeshBuilder, d: &D, sp: &Span, seed: u32) {
+    let yt = deck(mb, d, sp);
+    let hx = d.w / 2.0 - 0.03;
+    let wall = (sp.ytop - yt).clamp(0.4, 1.5);
+    let (z0, z1) = (sp.z_r + 0.1, sp.z_f - 0.25);
+    for sx in [1.0f64, -1.0] {
+        let (a, b) = (hx * sx, (hx - 0.05) * sx);
+        mb.bx(MatKey::Paint, [a.min(b), yt, z0], [a.max(b), yt + wall, z1]);
+        // pionowe żebra burty
+        let n = ((z1 - z0) / 0.7).floor() as usize;
+        for i in 0..=n {
+            let zz = lerp(z0 + 0.05, z1 - 0.05, i as f64 / n.max(1) as f64);
+            let (c, e) = ((hx + 0.03) * sx, hx * sx);
+            mb.bx(MatKey::Paint, [c.min(e), yt, zz - 0.04], [c.max(e), yt + wall, zz + 0.04]);
+        }
+    }
+    // czołownica z daszkiem nad kabiną i klapa tylna
+    mb.bx(MatKey::Paint, [-hx, yt, z1], [hx, yt + wall + 0.25, z1 + 0.06]);
+    mb.bx(MatKey::Paint, [-hx, yt + wall + 0.2, z1], [hx, yt + wall + 0.25, z1 + 0.45]);
+    mb.bx(MatKey::Paint, [-hx, yt, z0 - 0.06], [hx, yt + wall, z0]);
+    mb.bx(MatKey::Frame, [-hx + 0.05, yt, z0], [hx - 0.05, yt + 0.02, z1]);
+    cyl(mb, MatKey::Metal, [0.0, d.y_fr, z1 + 0.15], [0.0, yt + 0.4, z1 + 0.15], 0.07, 8, true);
+    rear(mb, d, hx - 0.05, seed);
+}
+
+/// Siodło ciągnika: płyta siodła na mocowaniu, błotniki nad osiami tylnymi, pomost za kabiną,
+/// zderzak tylny z lampami (ciągnik nie ma zabudowy).
+fn fifth_wheel(mb: &mut MeshBuilder, d: &D, sp: &Span, seed: u32) {
+    let (h, zc) = d.fifth_wheel.unwrap_or((1.15, d.zar + 0.5));
+    // mocowanie i płyta (Ø ok. 0,9 m) z wycięciem na sworzeń od tyłu
+    mb.bx(MatKey::Frame, [-0.45, d.y_fr, zc - 0.45], [0.45, h - 0.08, zc + 0.45]);
+    cyl(mb, MatKey::Frame, [0.0, h - 0.08, zc], [0.0, h, zc], 0.46, 16, true);
+    mb.quad(MatKey::Plastic, [-0.06, h + 0.001, zc - 0.47], [0.06, h + 0.001, zc - 0.47], [0.06, h + 0.001, zc], [-0.06, h + 0.001, zc], Some([0.0, 1.0, 0.0]));
+    // błotniki nad osiami tylnymi (od zewnętrznego koła do ramy)
+    let xo = d.w / 2.0 - 0.02;
+    for &za in &d.rear_axles {
+        for sx in [1.0f64, -1.0] {
+            let (a, b) = (xo * sx, 0.45 * sx);
+            let y = 2.0 * d.r + 0.08;
+            mb.bx(MatKey::Plastic, [a.min(b), y, za - 0.6], [a.max(b), y + 0.02, za + 0.6]);
+            let (c, e) = (xo * sx, (xo - 0.02) * sx);
+            mb.bx(MatKey::Plastic, [c.min(e), d.r + 0.05, za - 0.6], [c.max(e), y, za - 0.57]);
+        }
+    }
+    // pomost (blacha ryflowana) za kabiną
+    mb.bx(MatKey::Metal, [-0.5, d.y_fr, sp.z_f - 0.6], [0.5, d.y_fr + 0.02, sp.z_f]);
+    rear(mb, d, d.w / 2.0 - 0.15, seed);
 }

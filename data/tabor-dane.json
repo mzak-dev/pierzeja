@@ -757,6 +757,18 @@
         {
           "value": "laweta",
           "label": "Laweta"
+        },
+        {
+          "value": "kontener",
+          "label": "Kontener"
+        },
+        {
+          "value": "plandeka",
+          "label": "Plandeka"
+        },
+        {
+          "value": "siodlo",
+          "label": "Siodło (ciągnik)"
         }
       ],
       "default": "none",
@@ -825,6 +837,32 @@
       "jitter": 0.02,
       "unit": "m",
       "hint": "Dach kabiny nad gruntem; dla bodyType ≠ podwozie równa wysokości."
+    },
+    {
+      "key": "cabNose",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Półmaska",
+      "min": 0,
+      "max": 1.2,
+      "step": 0.01,
+      "default": 0,
+      "jitter": 0,
+      "unit": "m",
+      "hint": "Długość krótkiej maski przed kabiną (Daily ok. 0,6 m); 0 = kabina nad silnikiem."
+    },
+    {
+      "key": "couplingHeight",
+      "group": "zabudowa",
+      "kind": "number",
+      "label": "Wysokość siodła",
+      "min": 0.9,
+      "max": 1.35,
+      "step": 0.01,
+      "default": 1.15,
+      "jitter": 0,
+      "unit": "m",
+      "hint": "Wysokość płyty siodła ciągnika / sworznia naczepy (typowo 1,12–1,15 m)."
     },
     {
       "key": "compartments",
@@ -1133,7 +1171,9 @@
     "cornerRadius": 0.32,
     "quarterWindow": 1,
     "windshieldTop": 1.0,
-    "cargoWindows": 0
+    "cargoWindows": 0,
+    "cabNose": 0,
+    "couplingHeight": 1.15
   },
   "archetypes": [
     {
@@ -1906,7 +1946,7 @@
     },
     {
       "id": "podwozie_lekkie",
-      "name": "Podwozie lekkie (≤ 7,5 t)",
+      "name": "Podwozie lekkie z kabiną (wzorzec: Iveco Daily 70C)",
       "short": "Lekkie",
       "years": [
         2000,
@@ -1918,12 +1958,21 @@
       },
       "description": "Klasa L (EN 1846): 3,5–7,5 t, kabina dzienna cab-over, skrzynia lub zabudowa; baza lekkich wozów (np. pomoc drogowa) i dostawczych ciężarówek.",
       "features": [
-        "klasa L: ≤ 7,5 t, wysokość ≤ 2,6 m",
-        "kabina cab-over 1+2, szyba prawie pionowa",
-        "4x4, bliźniacze opony z tyłu",
-        "rozstaw osi 4,2 m"
+        "6999 mm przy rozstawie 4100 mm (Daily 70C, podwozie z kabiną)",
+        "półmaska ok. 0,6 m przed kabiną, kabina 2,05 m szerokości",
+        "koła bliźniacze 195/75 R16C ≈ 0,70 m"
       ],
       "sources": [
+        {
+          "title": "Wikipedia — Iveco Daily (długości 5040–7674, rozstawy 3000–4750)",
+          "url": "https://en.wikipedia.org/wiki/Iveco_Daily",
+          "verified": true
+        },
+        {
+          "title": "PK Trucks — Iveco Daily 70C15 karta (5989 / 6999 mm przy 3450 / 4100) [wyszukiwarka]",
+          "url": "https://cdn.pktrucks.com/specsheets/iv5305-iveco-daily-70c15-4x2-chassis-cabin-datasheet.pdf",
+          "verified": false
+        },
         {
           "title": "BiTP 2013, CNBOP — klasy masy EN 1846 (L ≤ 7,5 t, M ≤ 16 t, S > 16 t)",
           "url": "https://sft.cnbop.pl/en/bi-tp-vol-32-issue-4-2013-firefighting-vehicles-classification-labelling-and-division",
@@ -1946,41 +1995,42 @@
         }
       ],
       "overrides": {
+        "length": 6.999,
+        "width": 2.15,
+        "height": 3.1,
+        "wheelbase": 4.1,
+        "frontOverhang": 0.1429,
+        "rearOverhang": 0.2713,
         "bodyType": "podwozie",
-        "length": 7.0,
-        "frontOverhang": 0.14,
-        "wheelbase": 4.2,
-        "rearOverhang": 0.26,
-        "width": 2.25,
-        "height": 2.6,
         "beltline": 0.6,
         "hoodHeight": 0.9,
-        "windshieldAngle": 75,
+        "windshieldAngle": 60,
         "rearGlassAngle": 90,
-        "roundness": 0.15,
-        "tumblehome": 0.05,
+        "roundness": 0.3,
+        "tumblehome": 0.02,
         "chamfer": 0.03,
         "lampStyle": "trapezoid",
         "grill": 0.55,
-        "wheelDiameter": 0.8,
-        "tyreWidth": 0.235,
-        "rimRatio": 0.556,
-        "clearance": 0.25,
+        "wheelDiameter": 0.7,
+        "tyreWidth": 0.195,
+        "rimRatio": 0.57,
+        "clearance": 0.2,
         "trackRatio": 0.8,
-        "wheelArchGap": 0.07,
+        "wheelArchGap": 0.06,
         "steelWheels": 1,
-        "drive": "4x4",
+        "drive": "4x2",
         "rearTyres": "dual",
         "module": "skrzynia",
-        "moduleLength": 5.0,
+        "moduleLength": 4.6,
         "cabType": "day",
-        "cabLength": 1.83,
-        "cabHeight": 2.55,
+        "cabLength": 1.6,
+        "cabHeight": 2.45,
+        "cabNose": 0.6,
         "seats": 3,
         "service": "techniczne",
         "paintColor": "#f1f2f0",
         "roofColor": "#f1f2f0",
-        "bumperColor": "#f1f2f0",
+        "bumperColor": "#2b2d2f",
         "chassisColor": "#0a0a0d",
         "liveryColor": "#e15501",
         "weathering": 0.35
@@ -2187,6 +2237,155 @@
         "chassisColor": "#0a0a0d",
         "liveryColor": "#c1121c",
         "weathering": 0.3
+      }
+    },
+    {
+      "id": "ciagnik_siodlowy",
+      "name": "Ciągnik siodłowy 4x2 (wzorzec: Scania R)",
+      "short": "Ciągnik",
+      "years": [
+        2004,
+        2026
+      ],
+      "map": {
+        "year": 2018,
+        "scale": 0.6
+      },
+      "description": "Najczęstszy ciężki pojazd na drogach: ciągnik 4x2 z kabiną sypialną nad silnikiem, siodło 1,15 m, koła 315/80 R22.5, tylne bliźniacze.",
+      "features": [
+        "ok. 6,0 × 2,55 m, rozstaw ok. 3,75 m",
+        "kabina sypialna ok. 2,3 m długości, wysoki dach",
+        "siodło ok. 1,15 m, 0,5 m przed tylną osią"
+      ],
+      "sources": [
+        {
+          "title": "Scania — R-series specifications (wysokość kabin) [wyszukiwarka]",
+          "url": "https://www.scania.com/hk/en/home/products/trucks/r-series/r-series-specifications.html",
+          "verified": false
+        },
+        {
+          "title": "Wikimedia Commons — Scania R440 Stobart (widok z boku)",
+          "url": "https://commons.wikimedia.org/wiki/File:Stobart_H6662_%22Olivia_Jacqueline%22_(PO13_KZT)_2013_Scania_R440,_10_October_2013.jpg",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "length": 6.0,
+        "width": 2.55,
+        "height": 3.6,
+        "wheelbase": 3.75,
+        "frontOverhang": 0.2417,
+        "rearOverhang": 0.1333,
+        "bodyType": "podwozie",
+        "beltline": 0.58,
+        "hoodHeight": 0.92,
+        "windshieldAngle": 82,
+        "rearGlassAngle": 90,
+        "roundness": 0.15,
+        "tumblehome": 0.02,
+        "chamfer": 0.03,
+        "lampStyle": "trapezoid",
+        "grill": 0.7,
+        "wheelDiameter": 1.076,
+        "tyreWidth": 0.315,
+        "rimRatio": 0.53,
+        "clearance": 0.3,
+        "trackRatio": 0.8,
+        "wheelArchGap": 0.09,
+        "steelWheels": 1,
+        "rearTyres": "dual",
+        "service": "cywilny",
+        "lightbarLamps": 0,
+        "chassisColor": "#0a0a0d",
+        "bumperColor": "#2b2d2f",
+        "weathering": 0.3,
+        "winch": 0,
+        "roofRack": 0,
+        "compartments": 0,
+        "passThrough": 0,
+        "axles": 2,
+        "drive": "4x2",
+        "module": "siodlo",
+        "moduleLength": 0,
+        "cabType": "sleeper",
+        "cabLength": 2.28,
+        "cabHeight": 3.6,
+        "seats": 2,
+        "couplingHeight": 1.15,
+        "paintColor": "#f1f2f0",
+        "roofColor": "#f1f2f0"
+      }
+    },
+    {
+      "id": "wywrotka_8x4",
+      "name": "Wywrotka 8x4",
+      "short": "Wywrotka",
+      "years": [
+        2000,
+        2026
+      ],
+      "map": {
+        "year": 2016,
+        "scale": 0.7
+      },
+      "description": "Czteroosiowa wywrotka budowlana: dwie osie przednie skrętne, tandem tylny z kołami bliźniaczymi, stalowa skrzynia z czołownicą nad kabinę.",
+      "features": [
+        "ok. 9,3 × 2,55 × 3,4 m",
+        "osie: 2 przednie (co 1,95 m) + tandem tylny 1,37 m",
+        "skrzynia ok. 6 m, burty ok. 1,1 m"
+      ],
+      "sources": [
+        {
+          "title": "Scania — karta wywrotki 8x4 (9,2–9,5 m, rozstaw ok. 4,3 m) [wyszukiwarka]",
+          "url": "https://www.scania.com/content/dam/scanianoe/market/in/products-and-services/trucks/SpecSheet_Heavy_Tipper_A4.pdf",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "length": 9.3,
+        "width": 2.55,
+        "height": 3.4,
+        "wheelbase": 4.95,
+        "frontOverhang": 0.1559,
+        "rearOverhang": 0.1645,
+        "bodyType": "podwozie",
+        "beltline": 0.58,
+        "hoodHeight": 0.92,
+        "windshieldAngle": 82,
+        "rearGlassAngle": 90,
+        "roundness": 0.15,
+        "tumblehome": 0.02,
+        "chamfer": 0.03,
+        "lampStyle": "trapezoid",
+        "grill": 0.7,
+        "wheelDiameter": 1.076,
+        "tyreWidth": 0.315,
+        "rimRatio": 0.53,
+        "clearance": 0.3,
+        "trackRatio": 0.8,
+        "wheelArchGap": 0.09,
+        "steelWheels": 1,
+        "rearTyres": "dual",
+        "service": "cywilny",
+        "lightbarLamps": 0,
+        "chassisColor": "#0a0a0d",
+        "bumperColor": "#2b2d2f",
+        "weathering": 0.3,
+        "winch": 0,
+        "roofRack": 0,
+        "compartments": 0,
+        "passThrough": 0,
+        "axles": 4,
+        "axleGap": 1.37,
+        "drive": "8x4",
+        "module": "wywrotka",
+        "moduleLength": 6.0,
+        "cabType": "day",
+        "cabLength": 1.83,
+        "cabHeight": 3.1,
+        "seats": 2,
+        "paintColor": "#e8762a",
+        "roofColor": "#e8762a"
       }
     }
   ]
