@@ -5,6 +5,8 @@
 
 mod body;
 mod ciezkie;
+mod detale;
+mod karoseria;
 mod sluzba;
 mod tablice;
 mod wheel;
@@ -159,7 +161,18 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
     }
 
     let mut mb = MeshBuilder::default();
-    let layout = if heavy { ciezkie::build(&p, r.seed, &mut mb) } else { body::build(&p, r.seed, &mut mb) };
+    let layout = if heavy {
+        ciezkie::build(&p, r.seed, &mut mb)
+    } else if karoseria::Rodzaj::of(p.s("bodyType")).is_some() {
+        let roof_mat = if roll(r.seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
+        let w = karoseria::build(&p, roof_mat, karoseria::Gestosc::LOD0);
+        w.powloka.emit(&mut mb, karoseria::CREASE);
+        detale::build(&mut mb, &p, r.seed, &w.ksztalt, &w.powloka, roll(r.seed, 2.0, p.f("claddingBlack")));
+        let lightbar = karoseria::livery(&mut mb, &p, r.seed, &w);
+        body::Layout { wheelbase: p.f("wheelbase"), track: w.track, stations: w.stations, body_width: w.body_width, lightbar }
+    } else {
+        body::build(&p, r.seed, &mut mb)
+    };
     let mut body_mats = mats.clone();
     body_mats.extend(tablice::materials());
     body_mats.extend(sluzba::materials(&p));

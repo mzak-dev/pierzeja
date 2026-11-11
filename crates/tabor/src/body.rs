@@ -298,7 +298,7 @@ pub fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     }
 
     details(mb, p, seed, &Ctx { kind, hw, h, clr, ynose, yf, zn, ytail, yb, zf, zr, cowl, z_dw, run, z_sg, zar }, &half, &taper);
-    let hull = Hull { zs: &zs, half: &half, top: &t_at, van: kind == Kind::Van, h, yb, clr, ytail, zf, zn, zr, zg, cowl, roof_f, roof_r, z_dw };
+    let hull = Hull { zs: &zs, half: &half, top: &t_at, van: kind == Kind::Van, h, yb, clr, ytail, zf, zn, zr, zg, cowl, roof_f, roof_r, z_dw, surf: None };
     let lightbar = sluzba::apply(mb, p, seed, &hull);
     Layout { wheelbase: wb, track, stations: zs.len(), body_width: 2.0 * hw, lightbar }
 }

@@ -84,6 +84,10 @@
           "label": "Kombi"
         },
         {
+          "value": "coupe",
+          "label": "Coupé"
+        },
+        {
           "value": "suv",
           "label": "SUV"
         },
@@ -244,11 +248,11 @@
       "kind": "number",
       "label": "Zwężenie dachu",
       "min": 0,
-      "max": 0.2,
+      "max": 0.25,
       "step": 0.005,
       "default": 0.09,
       "jitter": 0.03,
-      "hint": "Zmniejszenie półszerokości dachu względem nadwozia (ułamek)."
+      "hint": "Pochylenie szyb bocznych do środka: kąt = 8° + 120°·wartość (0,1 ≈ 20°)."
     },
     {
       "key": "chamfer",
@@ -262,6 +266,182 @@
       "jitter": 0.03,
       "unit": "m",
       "hint": "Szerokość fazki 45° na krawędziach dach–bok i maska–czoło."
+    },
+    {
+      "key": "hoodLength",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Długość maski",
+      "min": 0.04,
+      "max": 0.45,
+      "step": 0.005,
+      "default": 0.3,
+      "jitter": 0.01,
+      "hint": "Od przodu zderzaka do podstawy szyby czołowej w osi / długość całkowita."
+    },
+    {
+      "key": "noseHeight",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Krawędź maski",
+      "min": 0.3,
+      "max": 0.8,
+      "step": 0.005,
+      "default": 0.52,
+      "jitter": 0.015,
+      "hint": "Wysokość przedniej krawędzi maski / wysokość całkowita."
+    },
+    {
+      "key": "noseRake",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Cofnięcie maski",
+      "min": 0,
+      "max": 0.4,
+      "step": 0.005,
+      "default": 0.09,
+      "jitter": 0.01,
+      "unit": "m",
+      "hint": "O ile krawędź maski jest cofnięta względem najbardziej wysuniętego zderzaka."
+    },
+    {
+      "key": "roofPeak",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Szczyt dachu",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.4,
+      "jitter": 0.05,
+      "hint": "Położenie najwyższego punktu dachu między szybą czołową (0) a tylną (1)."
+    },
+    {
+      "key": "roofDrop",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Spadek dachu",
+      "min": 0,
+      "max": 0.3,
+      "step": 0.005,
+      "default": 0.04,
+      "jitter": 0.01,
+      "unit": "m",
+      "hint": "O ile dach opada od szczytu do tylnej krawędzi."
+    },
+    {
+      "key": "roofCrown",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Wypukłość dachu",
+      "min": 0,
+      "max": 0.1,
+      "step": 0.005,
+      "default": 0.045,
+      "jitter": 0.005,
+      "unit": "m",
+      "hint": "Różnica wysokości osi dachu i rynny."
+    },
+    {
+      "key": "deckLength",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Pokrywa bagażnika",
+      "min": 0,
+      "max": 0.35,
+      "step": 0.005,
+      "default": 0.06,
+      "jitter": 0.01,
+      "hint": "Długość pokrywy za tylną szybą / długość całkowita (sedan ok. 0,2, liftback i coupé 0,04–0,06)."
+    },
+    {
+      "key": "tailHeight",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Dolna krawędź tylnej szyby",
+      "min": 0.4,
+      "max": 1.0,
+      "step": 0.005,
+      "default": 0.7,
+      "jitter": 0.015,
+      "hint": "Wysokość dolnej krawędzi szyby tylnej / wysokość całkowita."
+    },
+    {
+      "key": "tailLean",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Pochylenie tyłu",
+      "min": 0,
+      "max": 0.5,
+      "step": 0.005,
+      "default": 0.12,
+      "jitter": 0.01,
+      "unit": "m",
+      "hint": "O ile klapa (pas tylny) przy szybie jest cofnięta względem zderzaka."
+    },
+    {
+      "key": "rearBumperTop",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Zderzak tylny",
+      "min": 0.15,
+      "max": 0.6,
+      "step": 0.005,
+      "default": 0.4,
+      "jitter": 0.01,
+      "hint": "Wysokość górnej krawędzi tylnego zderzaka / wysokość całkowita."
+    },
+    {
+      "key": "beltRise",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Wznios linii okien",
+      "min": -0.05,
+      "max": 0.2,
+      "step": 0.005,
+      "default": 0.05,
+      "jitter": 0.01,
+      "unit": "m",
+      "hint": "O ile linia okien podnosi się od słupka A do tyłu."
+    },
+    {
+      "key": "shoulderDrop",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Bark pod linią okien",
+      "min": 0.03,
+      "max": 0.3,
+      "step": 0.005,
+      "default": 0.1,
+      "jitter": 0.01,
+      "unit": "m",
+      "hint": "Odległość barku (najszerszego miejsca boku) pod linią okien."
+    },
+    {
+      "key": "sillTuck",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Schowanie progu",
+      "min": 0,
+      "max": 0.08,
+      "step": 0.002,
+      "default": 0.035,
+      "jitter": 0.005,
+      "unit": "m",
+      "hint": "O ile próg jest schowany względem barku."
+    },
+    {
+      "key": "cornerRadius",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Promień naroży",
+      "min": 0.1,
+      "max": 0.6,
+      "step": 0.005,
+      "default": 0.32,
+      "jitter": 0.02,
+      "unit": "m",
+      "hint": "Promień zaokrąglenia przednich naroży w planie (tylne 0,75 tego)."
     },
     {
       "key": "lampStyle",
@@ -900,12 +1080,26 @@
     "liveryColor": "#154889",
     "twoToneRoof": 0,
     "claddingBlack": 0.3,
-    "weathering": 0.25
+    "weathering": 0.25,
+    "hoodLength": 0.3,
+    "noseHeight": 0.52,
+    "noseRake": 0.09,
+    "roofPeak": 0.4,
+    "roofDrop": 0.04,
+    "roofCrown": 0.045,
+    "deckLength": 0.06,
+    "tailHeight": 0.7,
+    "tailLean": 0.12,
+    "rearBumperTop": 0.4,
+    "beltRise": 0.05,
+    "shoulderDrop": 0.1,
+    "sillTuck": 0.035,
+    "cornerRadius": 0.32
   },
   "archetypes": [
     {
       "id": "hatchback",
-      "name": "Hatchback klasy C",
+      "name": "Hatchback klasy C (wzorzec: Golf 8)",
       "short": "Hatchback",
       "years": [
         2000,
@@ -917,12 +1111,22 @@
       },
       "description": "Najczęstsza osobówka na polskiej ulicy: kompakt z importu 2004–2013, owalne reflektory, mały grill, szara lub srebrna karoseria.",
       "features": [
-        "rozstaw/długość ≈ 0,61, zwis przedni ≈ 0,20",
-        "koło/wysokość ≈ 0,43",
-        "owalne reflektory i mały grill (epoka 2000–2010)",
-        "stalowe felgi z kołpakami częste"
+        "4284 × 1789 × 1456 mm, rozstaw 2636 mm (Golf 8)",
+        "koło 205/55 R16 ≈ 0,63 m (0,43 H)",
+        "maska ≈ 0,30 L do podstawy szyby, szyba tylna ≈ 42°",
+        "linia okien ≈ 0,65 H, szyby boczne pochylone ≈ 20°"
       ],
       "sources": [
+        {
+          "title": "Wikipedia — Volkswagen Golf Mk8 (wymiary)",
+          "url": "https://en.wikipedia.org/wiki/Volkswagen_Golf_Mk8",
+          "verified": true
+        },
+        {
+          "title": "Wikimedia Commons — 2020 Volkswagen Golf Style 1.5 Side (widok z boku)",
+          "url": "https://commons.wikimedia.org/wiki/File:2020_Volkswagen_Golf_Style_1.5_Side.jpg",
+          "verified": true
+        },
         {
           "title": "autotijd — Volkswagen Golf 8 (4284×1789×1483 mm)",
           "url": "https://autotijd.be/en/dimensions/volkswagen/golf",
@@ -945,22 +1149,100 @@
         }
       ],
       "overrides": {
-        "length": 4.28,
-        "wheelbase": 2.62,
-        "rearOverhang": 0.188,
-        "width": 1.79,
-        "roundness": 0.65,
+        "length": 4.284,
+        "width": 1.789,
+        "height": 1.456,
+        "wheelbase": 2.636,
+        "frontOverhang": 0.2007,
+        "rearOverhang": 0.1839,
+        "beltline": 0.655,
+        "hoodHeight": 0.68,
+        "noseHeight": 0.52,
+        "hoodLength": 0.3,
+        "windshieldAngle": 28,
+        "rearGlassAngle": 42,
+        "roofDrop": 0.06,
+        "tailHeight": 0.71,
+        "tailLean": 0.13,
+        "rearBumperTop": 0.4,
+        "wheelDiameter": 0.632,
+        "tyreWidth": 0.205,
+        "clearance": 0.135,
         "tumblehome": 0.1,
-        "chamfer": 0.04,
+        "lampStyle": "trapezoid",
         "grill": 0.45,
         "steelWheels": 0.5,
         "weathering": 0.35,
-        "claddingBlack": 0.1
+        "claddingBlack": 0.1,
+        "roundness": 0.65,
+        "chamfer": 0.04
+      }
+    },
+    {
+      "id": "hatch_miejski",
+      "name": "Hatchback miejski klasy B (wzorzec: Fabia IV)",
+      "short": "Miejski",
+      "years": [
+        2007,
+        2026
+      ],
+      "map": {
+        "year": 2016,
+        "scale": 0.18
+      },
+      "description": "Mały pięciodrzwiowy hatchback: krótka maska, krótki zwis tylny, koła 15–16″. Częsty w miastach i flotach.",
+      "features": [
+        "4108 × 1780 × 1459 mm, rozstaw 2564 mm (Fabia IV)",
+        "zwisy 809 / 735 mm",
+        "koło 185/65 R15 ≈ 0,62 m"
+      ],
+      "sources": [
+        {
+          "title": "Wikipedia — Škoda Fabia (IV: 4107 × 1780 × 1460, rozstaw 2564)",
+          "url": "https://en.wikipedia.org/wiki/%C5%A0koda_Fabia",
+          "verified": true
+        },
+        {
+          "title": "auto-data — Fabia IV zwisy 809/735 mm",
+          "url": "https://www.auto-data.net/en/compare&carId1=44473&carId2=&carId3=",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "length": 4.107,
+        "width": 1.78,
+        "height": 1.46,
+        "wheelbase": 2.564,
+        "frontOverhang": 0.197,
+        "rearOverhang": 0.1787,
+        "beltline": 0.65,
+        "hoodHeight": 0.68,
+        "noseHeight": 0.53,
+        "hoodLength": 0.29,
+        "windshieldAngle": 29,
+        "rearGlassAngle": 45,
+        "roofDrop": 0.05,
+        "tailHeight": 0.7,
+        "tailLean": 0.12,
+        "rearBumperTop": 0.4,
+        "wheelDiameter": 0.621,
+        "tyreWidth": 0.185,
+        "rimRatio": 0.62,
+        "clearance": 0.14,
+        "tumblehome": 0.1,
+        "lampStyle": "trapezoid",
+        "grill": 0.5,
+        "steelWheels": 0.6,
+        "paintColor": "#a32b2b",
+        "roofColor": "#a32b2b",
+        "bumperColor": "#a32b2b",
+        "claddingBlack": 0.05,
+        "weathering": 0.3
       }
     },
     {
       "id": "sedan_liftback",
-      "name": "Sedan / liftback klasy C–D",
+      "name": "Liftback klasy C/D (wzorzec: Octavia IV)",
       "short": "Sedan",
       "years": [
         2000,
@@ -978,6 +1260,11 @@
         "linia okien wyższa niż w latach 2000"
       ],
       "sources": [
+        {
+          "title": "Škoda — Octavia IV dane techniczne (4689 × 1829 × 1470, rozstaw 2686)",
+          "url": "https://cdn.skoda-storyboard.com/2020/07/TD-OCTAVIA-COMBI-petrol-en.pdf",
+          "verified": true
+        },
         {
           "title": "autotijd — Škoda Octavia Combi IV (4689×1829×1468 mm, rozstaw 2686 mm)",
           "url": "https://autotijd.be/en/dimensions/skoda/octavia-combi-2020-2024",
@@ -1000,17 +1287,24 @@
         }
       ],
       "overrides": {
+        "length": 4.689,
+        "width": 1.829,
+        "height": 1.47,
+        "wheelbase": 2.686,
+        "frontOverhang": 0.1962,
+        "rearOverhang": 0.231,
         "bodyType": "liftback",
-        "length": 4.6,
-        "frontOverhang": 0.195,
-        "wheelbase": 2.7,
-        "rearOverhang": 0.218,
-        "width": 1.82,
-        "height": 1.45,
         "beltline": 0.66,
-        "hoodHeight": 0.64,
-        "windshieldAngle": 29,
-        "rearGlassAngle": 22,
+        "hoodHeight": 0.67,
+        "noseHeight": 0.52,
+        "hoodLength": 0.3,
+        "windshieldAngle": 28,
+        "rearGlassAngle": 24,
+        "roofDrop": 0.08,
+        "deckLength": 0.04,
+        "tailLean": 0.05,
+        "tailHeight": 0.7,
+        "rearBumperTop": 0.4,
         "lampStyle": "trapezoid",
         "grill": 0.65,
         "rearLightBar": 0.05,
@@ -1018,17 +1312,84 @@
         "tyreWidth": 0.215,
         "rimRatio": 0.66,
         "powertrain": "hybrid",
-        "cabHeight": 1.45,
+        "cabHeight": 1.47,
         "paintColor": "#17191b",
         "roofColor": "#17191b",
         "bumperColor": "#17191b",
         "claddingBlack": 0.1,
-        "weathering": 0.2
+        "weathering": 0.2,
+        "clearance": 0.14
+      }
+    },
+    {
+      "id": "coupe",
+      "name": "Coupé (wzorzec: BMW serii 4 G22)",
+      "short": "Coupé",
+      "years": [
+        2005,
+        2026
+      ],
+      "map": {
+        "year": 2021,
+        "scale": 0.12
+      },
+      "description": "Dwudrzwiowe coupé: długa maska, nisko, kabina cofnięta, mocno pochylona szyba tylna i duży tumblehome.",
+      "features": [
+        "4768 × 1852 × 1387 mm, rozstaw 2851 mm (G22)",
+        "koło 225/45 R18 ≈ 0,66 m (0,48 H)",
+        "maska ≈ 0,36 L, szyby boczne pochylone ≈ 25°"
+      ],
+      "sources": [
+        {
+          "title": "Wikipedia — BMW 4 Series (G22: 4768 × 1852 × 1387, rozstaw 2851)",
+          "url": "https://en.wikipedia.org/wiki/BMW_4_Series_(G22)",
+          "verified": true
+        }
+      ],
+      "overrides": {
+        "length": 4.768,
+        "width": 1.852,
+        "height": 1.387,
+        "wheelbase": 2.851,
+        "frontOverhang": 0.1699,
+        "rearOverhang": 0.2322,
+        "bodyType": "coupe",
+        "beltline": 0.68,
+        "hoodHeight": 0.68,
+        "noseHeight": 0.5,
+        "hoodLength": 0.36,
+        "noseRake": 0.07,
+        "windshieldAngle": 25,
+        "rearGlassAngle": 21,
+        "roofPeak": 0.3,
+        "roofDrop": 0.1,
+        "deckLength": 0.05,
+        "tailLean": 0.06,
+        "tailHeight": 0.73,
+        "rearBumperTop": 0.38,
+        "roundness": 0.7,
+        "tumblehome": 0.14,
+        "lampStyle": "strip",
+        "grill": 0.55,
+        "rearLightBar": 0.0,
+        "wheelDiameter": 0.66,
+        "tyreWidth": 0.225,
+        "rimRatio": 0.7,
+        "clearance": 0.13,
+        "steelWheels": 0.0,
+        "cabHeight": 1.387,
+        "seats": 4,
+        "paintColor": "#1d3a6e",
+        "roofColor": "#1d3a6e",
+        "bumperColor": "#1d3a6e",
+        "claddingBlack": 0.0,
+        "weathering": 0.1,
+        "shoulderDrop": 0.09
       }
     },
     {
       "id": "kombi",
-      "name": "Kombi klasy C–D",
+      "name": "Kombi klasy C (wzorzec: Octavia IV Combi)",
       "short": "Kombi",
       "years": [
         2000,
@@ -1046,6 +1407,11 @@
       ],
       "sources": [
         {
+          "title": "Škoda — Octavia IV Combi dane techniczne (4689 × 1829 × 1468, rozstaw 2686)",
+          "url": "https://cdn.skoda-storyboard.com/2020/07/TD-OCTAVIA-COMBI-petrol-en.pdf",
+          "verified": true
+        },
+        {
           "title": "autotijd — Škoda Octavia Combi IV (4689×1829×1468 mm, rozstaw 2686 mm)",
           "url": "https://autotijd.be/en/dimensions/skoda/octavia-combi-2020-2024",
           "verified": true
@@ -1062,16 +1428,25 @@
         }
       ],
       "overrides": {
+        "length": 4.689,
+        "width": 1.829,
+        "height": 1.468,
+        "wheelbase": 2.686,
+        "frontOverhang": 0.1962,
+        "rearOverhang": 0.231,
         "bodyType": "kombi",
-        "length": 4.65,
-        "frontOverhang": 0.195,
-        "wheelbase": 2.69,
-        "rearOverhang": 0.227,
-        "width": 1.83,
-        "hoodHeight": 0.64,
-        "rearGlassAngle": 62,
+        "beltline": 0.655,
+        "hoodHeight": 0.67,
+        "noseHeight": 0.52,
+        "hoodLength": 0.3,
+        "windshieldAngle": 28,
+        "rearGlassAngle": 64,
+        "roofDrop": 0.03,
+        "tailHeight": 0.69,
+        "tailLean": 0.08,
+        "rearBumperTop": 0.4,
         "roundness": 0.5,
-        "tumblehome": 0.08,
+        "tumblehome": 0.09,
         "lampStyle": "trapezoid",
         "grill": 0.6,
         "rearLightBar": 0.05,
@@ -1081,12 +1456,13 @@
         "paintColor": "#bfc3c7",
         "roofColor": "#bfc3c7",
         "bumperColor": "#bfc3c7",
-        "claddingBlack": 0.1
+        "claddingBlack": 0.1,
+        "clearance": 0.14
       }
     },
     {
       "id": "suv",
-      "name": "SUV / crossover klasy C",
+      "name": "SUV klasy B/C (wzorzec: Duster III)",
       "short": "SUV",
       "years": [
         2008,
@@ -1104,6 +1480,11 @@
         "wąskie reflektory, listwa świetlna z tyłu"
       ],
       "sources": [
+        {
+          "title": "Wikipedia — Dacia Duster (III: 4343 × 1813 × 1656, rozstaw 2657)",
+          "url": "https://en.wikipedia.org/wiki/Dacia_Duster",
+          "verified": true
+        },
         {
           "title": "autotijd — Hyundai Tucson IV (4510×1865×1650 mm)",
           "url": "https://autotijd.be/en/dimensions/hyundai/tucson",
@@ -1126,35 +1507,105 @@
         }
       ],
       "overrides": {
+        "length": 4.343,
+        "width": 1.813,
+        "height": 1.656,
+        "wheelbase": 2.657,
+        "frontOverhang": 0.2026,
+        "rearOverhang": 0.1856,
         "bodyType": "suv",
-        "length": 4.5,
-        "frontOverhang": 0.21,
-        "wheelbase": 2.7,
-        "rearOverhang": 0.19,
-        "width": 1.86,
-        "height": 1.65,
-        "beltline": 0.68,
-        "hoodHeight": 0.66,
+        "beltline": 0.63,
+        "hoodHeight": 0.7,
+        "noseHeight": 0.58,
+        "hoodLength": 0.29,
         "windshieldAngle": 32,
-        "rearGlassAngle": 65,
+        "rearGlassAngle": 58,
+        "roofDrop": 0.04,
+        "tailHeight": 0.69,
+        "tailLean": 0.1,
+        "rearBumperTop": 0.38,
         "roundness": 0.45,
-        "tumblehome": 0.06,
+        "tumblehome": 0.08,
         "lampStyle": "strip",
         "grill": 0.75,
         "rearLightBar": 0.35,
-        "wheelDiameter": 0.72,
-        "tyreWidth": 0.235,
-        "rimRatio": 0.635,
-        "clearance": 0.18,
+        "wheelDiameter": 0.69,
+        "tyreWidth": 0.215,
+        "rimRatio": 0.63,
+        "clearance": 0.205,
         "steelWheels": 0.03,
         "powertrain": "hybrid",
-        "cabHeight": 1.65,
+        "cabHeight": 1.656,
         "paintColor": "#f1f2f0",
         "roofColor": "#17191b",
         "bumperColor": "#f1f2f0",
         "twoToneRoof": 0.3,
         "claddingBlack": 1.0,
-        "weathering": 0.1
+        "weathering": 0.1,
+        "shoulderDrop": 0.12
+      }
+    },
+    {
+      "id": "suv_duzy",
+      "name": "SUV klasy D (wzorzec: RAV4)",
+      "short": "SUV duży",
+      "years": [
+        2013,
+        2026
+      ],
+      "map": {
+        "year": 2023,
+        "scale": 0.3
+      },
+      "description": "Większy SUV z napędem hybrydowym: długa maska, wysoka linia okien, czarne nadkola.",
+      "features": [
+        "4600 × 1855 × 1685 mm, rozstaw 2690 mm (RAV4 XA50)",
+        "koło 225/60 R18 ≈ 0,73 m"
+      ],
+      "sources": [
+        {
+          "title": "Wikipedia — Toyota RAV4 (XA50: 4600 × 1855 × 1685, rozstaw 2690)",
+          "url": "https://en.wikipedia.org/wiki/Toyota_RAV4",
+          "verified": true
+        }
+      ],
+      "overrides": {
+        "length": 4.6,
+        "width": 1.855,
+        "height": 1.685,
+        "wheelbase": 2.69,
+        "frontOverhang": 0.2065,
+        "rearOverhang": 0.2087,
+        "bodyType": "suv",
+        "beltline": 0.63,
+        "hoodHeight": 0.71,
+        "noseHeight": 0.59,
+        "hoodLength": 0.3,
+        "windshieldAngle": 31,
+        "rearGlassAngle": 52,
+        "roofDrop": 0.05,
+        "tailHeight": 0.68,
+        "tailLean": 0.14,
+        "rearBumperTop": 0.38,
+        "roundness": 0.4,
+        "tumblehome": 0.08,
+        "lampStyle": "strip",
+        "grill": 0.85,
+        "rearLightBar": 0.2,
+        "wheelDiameter": 0.727,
+        "tyreWidth": 0.225,
+        "rimRatio": 0.63,
+        "clearance": 0.195,
+        "steelWheels": 0.0,
+        "powertrain": "hybrid",
+        "cabHeight": 1.685,
+        "paintColor": "#2d3a4a",
+        "roofColor": "#17191b",
+        "bumperColor": "#2d3a4a",
+        "twoToneRoof": 0.2,
+        "claddingBlack": 1.0,
+        "weathering": 0.1,
+        "shoulderDrop": 0.12
       }
     },
     {

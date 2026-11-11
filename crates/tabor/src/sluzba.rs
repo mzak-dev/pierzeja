@@ -205,11 +205,14 @@ pub(crate) struct Hull<'a> {
     pub roof_f: f64,
     pub roof_r: f64,
     pub z_dw: f64,
+    /// Rzeczywista powierzchnia boku (x lewej burty w (z, y)), jeśli nadwozie to powłoka.
+    pub surf: Option<&'a dyn Fn(f64, f64) -> Option<f64>>,
 }
 
 struct Wall<'a> {
     zs: &'a [f64],
     hs: Vec<Half>,
+    surf: Option<&'a dyn Fn(f64, f64) -> Option<f64>>,
 }
 
 impl Wall<'_> {
@@ -223,6 +226,9 @@ impl Wall<'_> {
     }
     /// x burty w (z, y): bok jest pochylony, więc idzie po łamanej talia → linia okien → róg szyby → dach.
     fn x(&self, z: f64, y: f64) -> f64 {
+        if let Some(x) = self.surf.and_then(|f| f(z, y)) {
+            return x;
+        }
         let i = self.zs.windows(2).position(|w| z <= w[1]).unwrap_or(self.zs.len() - 2);
         let (z0, z1) = (self.zs[i], self.zs[i + 1]);
         let t = if z1 - z0 < 1e-9 { 0.0 } else { ((z - z0) / (z1 - z0)).clamp(0.0, 1.0) };
@@ -295,13 +301,21 @@ fn band(mb: &mut MeshBuilder, w: &Wall, m: MatKey, (z0, z1): (f64, f64), (y0, y1
         })
         .collect();
     // ponytail: kolejne stacje o tej samej geometrii nie są scalane (tylko ~1 kwadrat na stację)
+    // pas cięty w pionie na plasterki ≤ 4 cm, żeby szedł za wypukłością boku (powłoka jest zakrzywiona)
+    let n = if w.surf.is_some() { ((y1 - y0) / 0.04).ceil().max(1.0) as usize } else { 1 };
     for k in pts.windows(2) {
         let (a, b) = (k[0], k[1]);
         if a.3 - a.2 < 0.002 && b.3 - b.2 < 0.002 {
             continue;
         }
-        for side in [1.0, -1.0] {
-            mb.quad(m, sided(side, [a.1, a.2, a.0]), sided(side, [b.1, b.2, b.0]), sided(side, [b.4, b.3, b.0]), sided(side, [a.4, a.3, a.0]), Some([side, 0.0, 0.0]));
+        for i in 0..n {
+            let (ta, tb) = (i as f64 / n as f64, (i + 1) as f64 / n as f64);
+            let ya = |p: &(f64, f64, f64, f64, f64), t: f64| p.2 + (p.3 - p.2) * t;
+            let xa = |p: &(f64, f64, f64, f64, f64), t: f64| if n == 1 { if t < 0.5 { p.1 } else { p.4 } } else { w.x(p.0, ya(p, t)) + e };
+            let q = [[xa(&a, ta), ya(&a, ta), a.0], [xa(&b, ta), ya(&b, ta), b.0], [xa(&b, tb), ya(&b, tb), b.0], [xa(&a, tb), ya(&a, tb), a.0]];
+            for side in [1.0, -1.0] {
+                mb.quad(m, sided(side, q[0]), sided(side, q[1]), sided(side, q[2]), sided(side, q[3]), Some([side, 0.0, 0.0]));
+            }
         }
     }
 }
@@ -407,7 +421,7 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
     }
     let (a, b) = (MatKey::Accent, MatKey::Trim);
     let checker = checker_of(p);
-    let w = Wall { zs: g.zs, hs: g.zs.iter().map(|&z| (g.half)(z)).collect() };
+    let w = Wall { zs: g.zs, hs: g.zs.iter().map(|&z| (g.half)(z)).collect(), surf: g.surf };
     // pas leży poniżej linii okien (§ 36 ust. 2) i poniżej podstawy szyby, żeby biegł od błotnika do tyłu
     let ytop = g.yb.min((g.top)(g.cowl)) - 0.03;
     let span = (g.zr + 0.05, (g.zf - 0.05).min(g.cowl + 0.15)); // pas kończy się na błotniku, nie schodzi na maskę

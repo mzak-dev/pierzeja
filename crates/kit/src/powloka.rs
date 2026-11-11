@@ -134,6 +134,86 @@ impl Powloka {
         (self.tris, self.mats, self.groups) = (tris, mats, groups);
     }
 
+    /// Leczy T-złącza: trójkąt z otwartą krawędzią, na której leżą wierzchołki innych otwartych
+    /// krawędzi (bliżej niż `eps` od odcinka), dzielony jest na wachlarz przez te wierzchołki.
+    /// Typowe przy łatach zbiegających się w linię (dno czoła, styk łat).
+    pub fn heal_t_junctions(&mut self, eps: f64) {
+        for _ in 0..4 {
+            let open = self.open_edges();
+            if open.is_empty() {
+                return;
+            }
+            let mut cand: Vec<u32> = open.iter().flat_map(|e| [e.0, e.1]).collect();
+            cand.sort_unstable();
+            cand.dedup();
+            let mut edge_tri: HashMap<(u32, u32), usize> = HashMap::new();
+            for (t, tri) in self.tris.iter().enumerate() {
+                for k in 0..3 {
+                    edge_tri.insert((tri[k], tri[(k + 1) % 3]), t);
+                }
+            }
+            let mut splits: Vec<(usize, u32, u32, Vec<u32>)> = Vec::new();
+            for &(a, b, _) in &open {
+                let (pa, pb) = (self.pos[a as usize], self.pos[b as usize]);
+                let ab = sub(pb, pa);
+                let l2 = dot(ab, ab);
+                if l2 < 1e-18 {
+                    continue;
+                }
+                let mut on: Vec<(f64, u32)> = cand
+                    .iter()
+                    .filter(|&&v| v != a && v != b)
+                    .filter_map(|&v| {
+                        let ap = sub(self.pos[v as usize], pa);
+                        let t = dot(ap, ab) / l2;
+                        let d = sub(ap, scale(ab, t));
+                        (t > 1e-6 && t < 1.0 - 1e-6 && len(d) < eps).then_some((t, v))
+                    })
+                    .collect();
+                if on.is_empty() {
+                    continue;
+                }
+                // trójkąt z krawędzią a→b albo b→a
+                let (t, from, to) = match (edge_tri.get(&(a, b)), edge_tri.get(&(b, a))) {
+                    (Some(&t), _) => (t, a, b),
+                    (_, Some(&t)) => (t, b, a),
+                    _ => continue,
+                };
+                if from != a {
+                    on.iter_mut().for_each(|x| x.0 = 1.0 - x.0);
+                }
+                on.sort_by(|x, y| x.0.total_cmp(&y.0));
+                splits.push((t, from, to, on.into_iter().map(|x| x.1).collect()));
+            }
+            if splits.is_empty() {
+                return;
+            }
+            let mut dead = vec![false; self.tris.len()];
+            for (t, from, to, mids) in splits {
+                if dead[t] {
+                    continue;
+                }
+                dead[t] = true;
+                let tri = self.tris[t];
+                let c = *tri.iter().find(|&&v| v != from && v != to).expect("trzeci wierzchołek");
+                let (mat, group) = (self.mats[t], self.groups[t]);
+                let mut chain = vec![from];
+                chain.extend(mids);
+                chain.push(to);
+                for w in chain.windows(2) {
+                    self.tris.push([w[0], w[1], c]);
+                    self.mats.push(mat);
+                    self.groups.push(group);
+                    dead.push(false);
+                }
+            }
+            let keep: Vec<usize> = (0..self.tris.len()).filter(|&t| !dead[t]).collect();
+            self.tris = keep.iter().map(|&t| self.tris[t]).collect();
+            self.mats = keep.iter().map(|&t| self.mats[t]).collect();
+            self.groups = keep.iter().map(|&t| self.groups[t]).collect();
+        }
+    }
+
     /// Normalna ściany i pole.
     pub fn face(&self, t: usize) -> (V3, f64) {
         let [a, b, c] = self.tris[t].map(|i| self.pos[i as usize]);
@@ -157,12 +237,11 @@ impl Powloka {
         v
     }
 
-    /// Wypuszcza powłokę do `MeshBuilder`: normalne wierzchołków uśrednione (ważone kątem) po
-    /// trójkątach tej samej grupy, których normalne różnią się o mniej niż `crease_deg`.
-    pub fn emit(&self, mb: &mut MeshBuilder, crease_deg: f64) {
+    /// Normalne w narożnikach trójkątów: uśrednione (ważone kątem) po trójkątach tej samej grupy,
+    /// których normalne różnią się o mniej niż `crease_deg`.
+    pub fn corner_normals(&self, crease_deg: f64) -> Vec<[V3; 3]> {
         let cos_lim = crease_deg.to_radians().cos();
         let faces: Vec<(V3, f64)> = (0..self.tris.len()).map(|t| self.face(t)).collect();
-        // trójkąty przy wierzchołku z kątem w tym wierzchołku
         let mut inc: Vec<Vec<(usize, f64)>> = vec![Vec::new(); self.pos.len()];
         for (t, tri) in self.tris.iter().enumerate() {
             for k in 0..3 {
@@ -171,7 +250,26 @@ impl Powloka {
                 inc[tri[k] as usize].push((t, dot(u, v).clamp(-1.0, 1.0).acos()));
             }
         }
-        // części per materiał; wierzchołek wyjściowy = (wierzchołek, zaokrąglona normalna)
+        let mut out = Vec::with_capacity(self.tris.len());
+        for (t, tri) in self.tris.iter().enumerate() {
+            let (nt, _) = faces[t];
+            out.push(tri.map(|vi| {
+                let mut acc = [0.0; 3];
+                for &(u, ang) in &inc[vi as usize] {
+                    if self.groups[u] == self.groups[t] && dot(faces[u].0, nt) >= cos_lim {
+                        acc = add(acc, scale(faces[u].0, ang));
+                    }
+                }
+                if len(acc) < 1e-12 { nt } else { norm(acc) }
+            }));
+        }
+        out
+    }
+
+    /// Wypuszcza powłokę do `MeshBuilder`: części per materiał z normalnymi z `corner_normals`.
+    pub fn emit(&self, mb: &mut MeshBuilder, crease_deg: f64) {
+        let cn = self.corner_normals(crease_deg);
+        // wierzchołek wyjściowy = (wierzchołek, zaokrąglona normalna) w obrębie materiału
         let mut parts: Vec<(MatKey, Vec<V3>, Vec<V3>, Vec<u32>, HashMap<(u32, [i32; 3]), u32>)> = Vec::new();
         for (t, tri) in self.tris.iter().enumerate() {
             let mat = self.mats[t];
@@ -182,19 +280,8 @@ impl Powloka {
                     parts.len() - 1
                 }
             };
-            let (nt, _) = faces[t];
-            for &vi in tri {
-                let mut acc = [0.0; 3];
-                for &(u, ang) in &inc[vi as usize] {
-                    if self.groups[u] != self.groups[t] {
-                        continue;
-                    }
-                    let (nu, _) = faces[u];
-                    if dot(nu, nt) >= cos_lim {
-                        acc = add(acc, scale(nu, ang));
-                    }
-                }
-                let n = if len(acc) < 1e-12 { nt } else { norm(acc) };
+            for (k, &vi) in tri.iter().enumerate() {
+                let n = cn[t][k];
                 let key = (vi, n.map(|c| (c * 4096.0).round() as i32));
                 let part = &mut parts[pi];
                 let id = match part.4.get(&key) {
