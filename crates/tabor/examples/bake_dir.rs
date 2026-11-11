@@ -1,6 +1,7 @@
 //! Katalog spec JSON → GLB + kopia spec obok (np. do `RapidResponse/Assets/Vehicles`):
 //! `cargo run -p tabor-core --example bake_dir --release -- crates/tabor/examples/gra <katalog_wyjściowy>`
-//! Każdy `<nazwa>.json` daje `<nazwa>.glb` i `<nazwa>.json`; na wyjściu tabela statystyk.
+//! Każdy `<nazwa>.json` daje `<nazwa>.glb` (LOD0), `<nazwa>_LOD1..3.glb` i `<nazwa>.json`;
+//! na wyjściu tabela statystyk.
 use tabor_core::{generate, to_glb, TaborSpec};
 
 fn main() {
@@ -15,6 +16,10 @@ fn main() {
         let m = generate(&spec);
         let name = p.file_stem().unwrap().to_string_lossy();
         std::fs::write(format!("{out}/{name}.glb"), to_glb(&m)).expect("glb");
+        for lod in 1..=3u8 {
+            let ml = generate(&TaborSpec { lod: Some(lod), ..spec.clone() });
+            std::fs::write(format!("{out}/{name}_LOD{lod}.glb"), to_glb(&ml)).expect("glb LOD");
+        }
         std::fs::write(format!("{out}/{name}.json"), text).expect("spec");
         let s = &m.stats;
         println!("{name:<10} {:<10} {:>5} tri  {:.2} × {:.2} × {:.2} m  rozstaw {:.2}  miejsca {}", s.body_type, s.triangles, s.length, s.width, s.height, s.wheelbase, s.seats);

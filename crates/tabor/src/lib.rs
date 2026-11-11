@@ -54,6 +54,10 @@ pub struct TaborSpec {
     pub mix: MixSpec,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<u32>,
+    /// Poziom szczegółów: 0 (domyślnie) pełny, 1–3 coraz rzadsza powłoka, mniej boków koła,
+    /// bez drobnych detali i wnętrza. Wymiary, węzły i kotwice są na każdym poziomie te same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lod: Option<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +182,8 @@ fn seat_points(p: &P) -> Vec<V3> {
 pub fn generate(spec: &TaborSpec) -> VehicleModel {
     let r = resolve(spec);
     let p = P(&r.params);
+    let lod = spec.lod.unwrap_or(0).min(3);
+    let gest = karoseria::Gestosc::lod(lod);
     let trailer = p.s("bodyType") == "naczepa";
     let heavy = p.s("bodyType") == "podwozie" || trailer;
     let mut mats = materials(&p, r.seed);
@@ -189,13 +195,15 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
     let layout = if trailer {
         naczepa::build(&p, r.seed, &mut mb)
     } else if heavy {
-        ciezkie::build(&p, r.seed, &mut mb)
+        ciezkie::build(&p, r.seed, &mut mb, lod)
     } else {
         let roof_mat = if roll(r.seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
-        let w = karoseria::build(&p, roof_mat, karoseria::Gestosc::LOD0);
+        let w = karoseria::build(&p, roof_mat, gest);
         w.powloka.emit(&mut mb, karoseria::CREASE);
-        detale::build(&mut mb, &p, r.seed, &w.ksztalt, &w.powloka, roll(r.seed, 2.0, p.f("claddingBlack")));
-        detale::interior(&mut mb, &w.ksztalt, &seat_points(&p));
+        detale::build(&mut mb, &p, r.seed, &w.ksztalt, &w.powloka, roll(r.seed, 2.0, p.f("claddingBlack")), lod);
+        if lod == 0 {
+            detale::interior(&mut mb, &w.ksztalt, &seat_points(&p));
+        }
         let lightbar = karoseria::livery(&mut mb, &p, r.seed, &w);
         Layout { wheelbase: p.f("wheelbase"), track: w.track, stations: w.stations, body_width: w.body_width, lightbar, wheels: None, anchors: Vec::new() }
     };
@@ -203,7 +211,7 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
     body_mats.extend(tablice::materials());
     body_mats.extend(sluzba::materials(&p));
     let body = mb.build(body_mats);
-    let wheel = wheel::build(&p, mats);
+    let wheel = wheel::build(&p, mats, [32, 20, 12, 8][lod as usize]);
 
     let (rad, hub_x) = (p.f("wheelDiameter") / 2.0, layout.track / 2.0);
     let wheels = layout.wheels.unwrap_or_else(|| {

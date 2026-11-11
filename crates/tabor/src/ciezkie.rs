@@ -337,10 +337,10 @@ pub(crate) fn half_seg(s: usize) -> usize {
 
 // ───────────────────────── budowa ─────────────────────────
 
-pub(crate) fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
+pub(crate) fn build(p: &P, seed: u32, mb: &mut MeshBuilder, lod: u8) -> Layout {
     let d = D::new(p);
     frame(mb, &d);
-    let (stations, geom) = cab(mb, &d, p, seed);
+    let (stations, geom) = cab(mb, &d, p, seed, lod);
     front(mb, &d, p, seed);
     crate::zabudowa::module(mb, &d, p, seed);
     // oklejenie kabiny i belka na dachu kabiny (zabudowa: tylko lampy i obrysówki)
@@ -389,7 +389,7 @@ fn frame(mb: &mut MeshBuilder, d: &D) {
 /// Kabina na powłoce `karoseria` (rodzaj Van z jawnym układem osi): nad silnikiem (czoło prawie
 /// pionowe, podłoga nad kołem) albo z półmaską (`cabNose` > 0, Daily). Przednie nadkole wycięte
 /// w kabinie, tył ucięty przed zabudową. Detale (lampy, grill, drzwi, lusterka) jak w vanie.
-fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> (usize, crate::sluzba::HeavyCab) {
+fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32, lod: u8) -> (usize, crate::sluzba::HeavyCab) {
     use crate::karoseria::{self, Rama};
     use serde_json::json;
     let (top, ycb) = (d.cab_top, d.ycb);
@@ -431,11 +431,13 @@ fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> (usize, crate::sluzba::
     set("rearBumperTop", json!(0.3));
     let pc = P(&m);
     let roof_mat = if roll(seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
-    let w = karoseria::build_with(&pc, roof_mat, karoseria::Gestosc::LOD0, Some(Rama { zaf: d.zaf, zar: -1.0e3, zf, zr }));
+    let w = karoseria::build_with(&pc, roof_mat, karoseria::Gestosc::lod(lod), Some(Rama { zaf: d.zaf, zar: -1.0e3, zf, zr }));
     w.powloka.emit(mb, karoseria::CREASE);
-    crate::detale::build(mb, &pc, seed, &w.ksztalt, &w.powloka, false);
+    crate::detale::build(mb, &pc, seed, &w.ksztalt, &w.powloka, false, lod);
     let k = &w.ksztalt;
-    crate::detale::interior(mb, k, &seat_points(p));
+    if lod == 0 {
+        crate::detale::interior(mb, k, &seat_points(p));
+    }
     // stopnie pod drzwiami
     for side in [1.0f64, -1.0] {
         let z0 = k.z_b + 0.05;
