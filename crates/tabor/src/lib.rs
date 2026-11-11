@@ -140,7 +140,9 @@ fn materials(p: &P, seed: u32) -> Vec<MaterialSpec> {
         mat(MatKey::RoofPaint, "Dach", &paint(p.s("roofColor")), 0.42, 0.25),
         mat(MatKey::Bumper, "Zderzaki", &paint(p.s("bumperColor")), 0.5, 0.15),
         mat(MatKey::Plastic, "Plastik", p.s("plasticColor"), 0.8, 0.0),
-        mat(MatKey::Glass, "Szyby", p.s("glassColor"), 0.08, 0.5),
+        // półprzezroczyste (przyciemnione) — przez szyby widać wnętrze i załogę
+        MaterialSpec { opacity: 0.55, ..mat(MatKey::Glass, "Szyby", p.s("glassColor"), 0.08, 0.5) },
+        mat(MatKey::Detail, "Wnętrze", "#2c2e31", 0.85, 0.0),
         mat(MatKey::Tyre, "Opony", "#17181a", 0.95, 0.0),
         mat(MatKey::Rim, "Felgi", match (steel, matches!(p.s("bodyType"), "podwozie" | "naczepa")) { (true, true) => "#b4b9bd", (true, false) => "#5d6368", _ => "#bcc1c5" }, 0.4, if steel { 0.3 } else { 0.8 }),
         MaterialSpec { emissive: Some("#fff3c4"), ..mat(MatKey::Headlight, "Reflektory", "#f2efe2", 0.2, 0.2) },
@@ -193,6 +195,7 @@ pub fn generate(spec: &TaborSpec) -> VehicleModel {
         let w = karoseria::build(&p, roof_mat, karoseria::Gestosc::LOD0);
         w.powloka.emit(&mut mb, karoseria::CREASE);
         detale::build(&mut mb, &p, r.seed, &w.ksztalt, &w.powloka, roll(r.seed, 2.0, p.f("claddingBlack")));
+        detale::interior(&mut mb, &w.ksztalt, &seat_points(&p));
         let lightbar = karoseria::livery(&mut mb, &p, r.seed, &w);
         Layout { wheelbase: p.f("wheelbase"), track: w.track, stations: w.stations, body_width: w.body_width, lightbar, wheels: None, anchors: Vec::new() }
     };
