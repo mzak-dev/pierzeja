@@ -376,7 +376,7 @@ impl Tabor {
         }
     }
 
-    /// Budowa: `{body: ArrayMesh, wheel: ArrayMesh (wspólna), wheels: [{name, pos}], seats: [Vector3], stats: String(JSON), error: String}`.
+    /// Budowa: `{body: ArrayMesh, wheel: ArrayMesh (wspólna), wheels: [{name, pos}], lightbar: ArrayMesh?, lightbar_pos: Vector3?, seats: [Vector3], stats: String(JSON), error: String}`.
     #[func]
     fn build(spec_json: GString, night: bool) -> VarDictionary {
         let mut d = VarDictionary::new();
@@ -394,6 +394,11 @@ impl Tabor {
                     wheels.push(&e.to_variant());
                 }
                 d.set("wheels", &wheels);
+                // belka świetlna służb (osobna siatka i jej położenie względem nadwozia); brak = cywilny
+                if let Some((bar, o)) = &m.lightbar {
+                    d.set("lightbar", &to_array_mesh(bar, night));
+                    d.set("lightbar_pos", v3(o));
+                }
                 d.set("seats", &m.seats.iter().map(v3).collect::<PackedVector3Array>());
                 d.set("stats", &gs(&m.stats));
                 d.set("error", &GString::new());

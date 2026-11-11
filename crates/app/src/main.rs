@@ -822,6 +822,10 @@ fn regenerate(
         for (_, h) in &m.wheels {
             tris += spawn_mesh(b, c, m_, &m.wheel, Vec3::new(h[0] as f32, h[1] as f32, h[2] as f32), night);
         }
+        // belka świetlna służb to osobna siatka (węzeł `Lightbar` w GLB)
+        if let Some((bar, o)) = &m.lightbar {
+            tris += spawn_mesh(b, c, m_, bar, Vec3::new(o[0] as f32, o[1] as f32, o[2] as f32), night);
+        }
         der.tris = tris;
         der.resolved = m.params.clone();
         der.weights = tabor_core::resolve(&doc.vehicle_spec()).weights["bryla"].iter().map(|(k, v)| (k.clone(), *v)).collect();

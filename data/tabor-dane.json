@@ -252,7 +252,7 @@
       "step": 0.005,
       "default": 0.09,
       "jitter": 0.03,
-      "hint": "Pochylenie szyb bocznych do środka: kąt = 8° + 120°·wartość (0,1 ≈ 20°)."
+      "hint": "Pochylenie szyb bocznych do środka: kąt = 200°·wartość (0,1 ≈ 20°, 0,03 ≈ 6°)."
     },
     {
       "key": "chamfer",
@@ -442,6 +442,42 @@
       "jitter": 0.02,
       "unit": "m",
       "hint": "Promień zaokrąglenia przednich naroży w planie (tylne 0,75 tego)."
+    },
+    {
+      "key": "quarterWindow",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Szyba za tylnymi drzwiami",
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "jitter": 0,
+      "hint": "1 = trzecia szyba boczna za tylnymi drzwiami (kombi, SUV, Fabia), 0 = szyby kończą się na drzwiach i szeroki słupek C (Golf)."
+    },
+    {
+      "key": "windshieldTop",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Górna krawędź szyby",
+      "min": 0.5,
+      "max": 1,
+      "step": 0.005,
+      "default": 1.0,
+      "jitter": 0,
+      "hint": "Górna krawędź szyby czołowej / wysokość; poniżej 1 nad szybą jest daszek w kolorze nadwozia (wysokie vany)."
+    },
+    {
+      "key": "cargoWindows",
+      "group": "sylwetka",
+      "kind": "number",
+      "label": "Okna w ładowni",
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "jitter": 0,
+      "hint": "Van: 1 = okna wzdłuż całego boku (bus, kombi), 0 = szyby tylko w kabinie (furgon)."
     },
     {
       "key": "lampStyle",
@@ -1094,7 +1130,10 @@
     "beltRise": 0.05,
     "shoulderDrop": 0.1,
     "sillTuck": 0.035,
-    "cornerRadius": 0.32
+    "cornerRadius": 0.32,
+    "quarterWindow": 1,
+    "windshieldTop": 1.0,
+    "cargoWindows": 0
   },
   "archetypes": [
     {
@@ -1109,7 +1148,7 @@
         "year": 2009,
         "scale": 0.1
       },
-      "description": "Najczęstsza osobówka na polskiej ulicy: kompakt z importu 2004–2013, owalne reflektory, mały grill, szara lub srebrna karoseria.",
+      "description": "Najczęstsza osobówka na polskiej ulicy: kompakt klasy C (wzorzec Golf 8). Pięcioro drzwi, szyby kończą się na tylnych drzwiach, szeroki słupek C, pochylona klapa.",
       "features": [
         "4284 × 1789 × 1456 mm, rozstaw 2636 mm (Golf 8)",
         "koło 205/55 R16 ≈ 0,63 m (0,43 H)",
@@ -1125,7 +1164,7 @@
         {
           "title": "Wikimedia Commons — 2020 Volkswagen Golf Style 1.5 Side (widok z boku)",
           "url": "https://commons.wikimedia.org/wiki/File:2020_Volkswagen_Golf_Style_1.5_Side.jpg",
-          "verified": true
+          "verified": false
         },
         {
           "title": "autotijd — Volkswagen Golf 8 (4284×1789×1483 mm)",
@@ -1175,7 +1214,8 @@
         "weathering": 0.35,
         "claddingBlack": 0.1,
         "roundness": 0.65,
-        "chamfer": 0.04
+        "chamfer": 0.04,
+        "quarterWindow": 0
       }
     },
     {
@@ -1261,9 +1301,9 @@
       ],
       "sources": [
         {
-          "title": "Škoda — Octavia IV dane techniczne (4689 × 1829 × 1470, rozstaw 2686)",
+          "title": "Škoda — Octavia IV dane techniczne (4689 × 1829 × 1470, rozstaw 2686) [wyszukiwarka, PDF nieotwarty]",
           "url": "https://cdn.skoda-storyboard.com/2020/07/TD-OCTAVIA-COMBI-petrol-en.pdf",
-          "verified": true
+          "verified": false
         },
         {
           "title": "autotijd — Škoda Octavia Combi IV (4689×1829×1468 mm, rozstaw 2686 mm)",
@@ -1407,9 +1447,9 @@
       ],
       "sources": [
         {
-          "title": "Škoda — Octavia IV Combi dane techniczne (4689 × 1829 × 1468, rozstaw 2686)",
+          "title": "Škoda — Octavia IV Combi dane techniczne (4689 × 1829 × 1468, rozstaw 2686) [wyszukiwarka, PDF nieotwarty]",
           "url": "https://cdn.skoda-storyboard.com/2020/07/TD-OCTAVIA-COMBI-petrol-en.pdf",
-          "verified": true
+          "verified": false
         },
         {
           "title": "autotijd — Škoda Octavia Combi IV (4689×1829×1468 mm, rozstaw 2686 mm)",
@@ -1474,14 +1514,13 @@
       },
       "description": "SUV to 57–60% rejestracji nowych aut: wysoka linia okien, wąskie paski LED, ogromny grill, czarne nadkola i czasem czarny dach.",
       "features": [
-        "H/L ≈ 0,37, prześwit 0,17–0,19 m",
-        "czarne nadkola i progi",
-        "pływający dach, dwukolorowy z P = 0,3",
-        "wąskie reflektory, listwa świetlna z tyłu"
+        "4343 × 1829 × 1660 mm, rozstaw 2657 mm (Duster III, Wikipedia)",
+        "prześwit ok. 0,21 m (wyszukiwarka)",
+        "czarne nakładki nadkoli i progi"
       ],
       "sources": [
         {
-          "title": "Wikipedia — Dacia Duster (III: 4343 × 1813 × 1656, rozstaw 2657)",
+          "title": "Wikipedia — Dacia Duster (III: długość 4343, szerokość 1829, wysokość 1660, rozstaw 2657)",
           "url": "https://en.wikipedia.org/wiki/Dacia_Duster",
           "verified": true
         },
@@ -1508,8 +1547,8 @@
       ],
       "overrides": {
         "length": 4.343,
-        "width": 1.813,
-        "height": 1.656,
+        "width": 1.829,
+        "height": 1.66,
         "wheelbase": 2.657,
         "frontOverhang": 0.2026,
         "rearOverhang": 0.1856,
@@ -1535,7 +1574,7 @@
         "clearance": 0.205,
         "steelWheels": 0.03,
         "powertrain": "hybrid",
-        "cabHeight": 1.656,
+        "cabHeight": 1.66,
         "paintColor": "#f1f2f0",
         "roofColor": "#17191b",
         "bumperColor": "#f1f2f0",
@@ -1559,12 +1598,12 @@
       },
       "description": "Większy SUV z napędem hybrydowym: długa maska, wysoka linia okien, czarne nadkola.",
       "features": [
-        "4600 × 1855 × 1685 mm, rozstaw 2690 mm (RAV4 XA50)",
+        "4600 × 1855 × 1660 mm, rozstaw 2690 mm (RAV4 XA50, Wikipedia)",
         "koło 225/60 R18 ≈ 0,73 m"
       ],
       "sources": [
         {
-          "title": "Wikipedia — Toyota RAV4 (XA50: 4600 × 1855 × 1685, rozstaw 2690)",
+          "title": "Wikipedia — Toyota RAV4 (XA50: 4570–4600 × 1855 × 1660, rozstaw 2690)",
           "url": "https://en.wikipedia.org/wiki/Toyota_RAV4",
           "verified": true
         }
@@ -1572,7 +1611,7 @@
       "overrides": {
         "length": 4.6,
         "width": 1.855,
-        "height": 1.685,
+        "height": 1.66,
         "wheelbase": 2.69,
         "frontOverhang": 0.2065,
         "rearOverhang": 0.2087,
@@ -1598,7 +1637,7 @@
         "clearance": 0.195,
         "steelWheels": 0.0,
         "powertrain": "hybrid",
-        "cabHeight": 1.685,
+        "cabHeight": 1.66,
         "paintColor": "#2d3a4a",
         "roofColor": "#17191b",
         "bumperColor": "#2d3a4a",
@@ -1609,8 +1648,167 @@
       }
     },
     {
+      "id": "van_sredni",
+      "name": "Van średni (wzorzec: VW Transporter T5)",
+      "short": "Van T5",
+      "years": [
+        2003,
+        2026
+      ],
+      "map": {
+        "year": 2009,
+        "scale": 0.3
+      },
+      "description": "Najczęstszy dostawczy i bus średniej wielkości: krótka pochyła maska, niski dach, szyby w kabinie (furgon) albo wzdłuż boku (Caravelle — cargoWindows 1).",
+      "features": [
+        "4892 × 1904 × 1990 mm, rozstaw 3000 mm (T5 krótki)",
+        "koło 205/65 R16C ≈ 0,67 m"
+      ],
+      "sources": [
+        {
+          "title": "Wikipedia — Volkswagen Transporter (T5): 4892 × 1904 × 1990, rozstaw 3000",
+          "url": "https://en.wikipedia.org/wiki/Volkswagen_Transporter_(T5)",
+          "verified": true
+        },
+        {
+          "title": "Wikimedia Commons — VW T5 Seitenansicht (widok z boku)",
+          "url": "https://commons.wikimedia.org/wiki/File:VW_T5_Doppelkabine-Pritsche-Plane_Seitenansicht-links_LWS3143.JPG",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "length": 4.892,
+        "width": 1.904,
+        "height": 1.99,
+        "wheelbase": 3.0,
+        "frontOverhang": 0.1942,
+        "rearOverhang": 0.1926,
+        "bodyType": "van",
+        "rearGlassAngle": 90,
+        "roofDrop": 0.01,
+        "roofCrown": 0.025,
+        "tailLean": 0.03,
+        "tailHeight": 0.99,
+        "roofPeak": 0.1,
+        "shoulderDrop": 0.16,
+        "sillTuck": 0.02,
+        "beltRise": 0.0,
+        "quarterWindow": 0,
+        "lampStyle": "trapezoid",
+        "steelWheels": 0.7,
+        "beltline": 0.53,
+        "hoodHeight": 0.58,
+        "noseHeight": 0.48,
+        "noseRake": 0.08,
+        "hoodLength": 0.17,
+        "windshieldAngle": 40,
+        "windshieldTop": 1.0,
+        "rearBumperTop": 0.27,
+        "tumblehome": 0.03,
+        "cornerRadius": 0.28,
+        "grill": 0.55,
+        "wheelDiameter": 0.673,
+        "tyreWidth": 0.205,
+        "rimRatio": 0.6,
+        "clearance": 0.17,
+        "trackRatio": 0.86,
+        "wheelArchGap": 0.045,
+        "module": "furgon",
+        "moduleLength": 2.6,
+        "cabHeight": 1.99,
+        "seats": 3,
+        "paintColor": "#c9cccd",
+        "roofColor": "#c9cccd",
+        "bumperColor": "#2b2d2f",
+        "weathering": 0.35,
+        "cargoWindows": 0
+      }
+    },
+    {
+      "id": "van_polmaska",
+      "name": "Furgon z półmaską (wzorzec: FSC / Intrall Lublin 3)",
+      "short": "Lublin",
+      "years": [
+        1993,
+        2007
+      ],
+      "map": {
+        "year": 2001,
+        "scale": 0.55
+      },
+      "description": "Polski dostawczak lat 90. i 2000.: krótka, pochyła półmaska przed wysoką kwadratową kabiną, ładownia wyższa niż przód, stalowe felgi.",
+      "features": [
+        "4797 × 1940 × 2320 mm, rozstaw 2900 mm (Lublin 3, wyszukiwarka; Wikipedia: 4770 / 2320 / 2900)",
+        "maska ≈ 1,05 m, szyba stroma ≈ 58° od poziomu"
+      ],
+      "sources": [
+        {
+          "title": "Wikipedia — FSC Lublin (długość 4770–4870, wysokość 2250–2320, rozstaw 2900 / 3433 / 3750)",
+          "url": "https://en.wikipedia.org/wiki/FSC_Lublin",
+          "verified": true
+        },
+        {
+          "title": "autokatalog — Lublin 3 dane techniczne [wyszukiwarka]",
+          "url": "https://autokatalog.pl/intrall/lublin/3-ciezarowy/dane-techniczne",
+          "verified": false
+        },
+        {
+          "title": "Wikimedia Commons — Lublin 3Mi",
+          "url": "https://commons.wikimedia.org/wiki/File:Lublin3mi.JPG",
+          "verified": false
+        }
+      ],
+      "overrides": {
+        "length": 4.797,
+        "width": 1.94,
+        "height": 2.32,
+        "wheelbase": 2.9,
+        "frontOverhang": 0.2043,
+        "rearOverhang": 0.1912,
+        "bodyType": "van",
+        "rearGlassAngle": 90,
+        "roofDrop": 0.01,
+        "roofCrown": 0.025,
+        "tailLean": 0.03,
+        "tailHeight": 0.99,
+        "roofPeak": 0.1,
+        "shoulderDrop": 0.16,
+        "sillTuck": 0.02,
+        "beltRise": 0.0,
+        "quarterWindow": 0,
+        "lampStyle": "trapezoid",
+        "steelWheels": 1.0,
+        "beltline": 0.52,
+        "hoodHeight": 0.53,
+        "noseHeight": 0.42,
+        "noseRake": 0.1,
+        "hoodLength": 0.22,
+        "windshieldAngle": 58,
+        "windshieldTop": 0.8,
+        "rearBumperTop": 0.26,
+        "tumblehome": 0.02,
+        "cornerRadius": 0.18,
+        "grill": 0.6,
+        "wheelDiameter": 0.713,
+        "tyreWidth": 0.205,
+        "rimRatio": 0.56,
+        "clearance": 0.2,
+        "trackRatio": 0.85,
+        "wheelArchGap": 0.05,
+        "module": "furgon",
+        "moduleLength": 2.7,
+        "cabHeight": 2.32,
+        "seats": 3,
+        "paintColor": "#e9eae6",
+        "roofColor": "#e9eae6",
+        "bumperColor": "#2b2d2f",
+        "weathering": 0.5,
+        "cargoWindows": 0
+      }
+    },
+    {
       "id": "van",
-      "name": "Van klasy Sprintera (L2H2)",
+      "name": "Furgon duży L2H2 (wzorzec: Sprinter W907)",
       "short": "Van",
       "years": [
         2006,
@@ -1622,12 +1820,21 @@
       },
       "description": "Duży dostawczak z napędem na tył, wzorzec: Sprinter L2H2 (5,93 m, 2,62 m). Ta sama bryła i podwozie dla karetki, furgonu policji i serwisu.",
       "features": [
-        "długość 5,93 m, wysokość 2,62 m (H2)",
-        "rozstaw osi 3,67 m (mieści się w ZRM P 3,7 m)",
-        "kabina jednobryłowa, pionowy tył",
-        "biały lakier, > 60% dostawczych"
+        "5932 × 1993 × 2616 mm, rozstaw 3665 mm (Sprinter L2H2)",
+        "krótka maska ≈ 1 m, szyba ok. 52° od poziomu, daszek nad szybą",
+        "drzwi przesuwne tylko po prawej, dwuskrzydłowe tylne"
       ],
       "sources": [
+        {
+          "title": "Wikipedia — Mercedes-Benz Sprinter (W906/W907, długości i wysokości wersji)",
+          "url": "https://en.wikipedia.org/wiki/Mercedes-Benz_Sprinter",
+          "verified": true
+        },
+        {
+          "title": "parkers — Sprinter 2018 L2H2 5932 × 2616 mm [wyszukiwarka]",
+          "url": "https://www.parkers.co.uk/vans-pickups/mercedes-benz/sprinter/2018-dimensions",
+          "verified": false
+        },
         {
           "title": "Vanreviewer — wymiary Sprintera L1–L4, H1–H3",
           "url": "https://vanreviewer.co.uk/mercedes-benz/sprinter/dimensions/2827/",
@@ -1650,21 +1857,35 @@
         }
       ],
       "overrides": {
-        "bodyType": "van",
-        "length": 5.93,
-        "frontOverhang": 0.165,
+        "length": 5.932,
+        "width": 1.993,
+        "height": 2.616,
         "wheelbase": 3.665,
+        "frontOverhang": 0.1652,
         "rearOverhang": 0.217,
-        "width": 2.02,
-        "height": 2.62,
-        "beltline": 0.54,
-        "hoodHeight": 0.48,
-        "windshieldAngle": 52,
+        "bodyType": "van",
         "rearGlassAngle": 90,
-        "roundness": 0.3,
-        "tumblehome": 0.03,
-        "chamfer": 0.04,
+        "roofDrop": 0.01,
+        "roofCrown": 0.025,
+        "tailLean": 0.03,
+        "tailHeight": 0.99,
+        "roofPeak": 0.1,
+        "shoulderDrop": 0.16,
+        "sillTuck": 0.02,
+        "beltRise": 0.0,
+        "quarterWindow": 0,
         "lampStyle": "trapezoid",
+        "steelWheels": 0.7,
+        "beltline": 0.46,
+        "hoodHeight": 0.47,
+        "noseHeight": 0.4,
+        "noseRake": 0.12,
+        "hoodLength": 0.17,
+        "windshieldAngle": 52,
+        "windshieldTop": 0.78,
+        "rearBumperTop": 0.23,
+        "tumblehome": 0.02,
+        "cornerRadius": 0.26,
         "grill": 0.85,
         "wheelDiameter": 0.74,
         "tyreWidth": 0.225,
@@ -1674,12 +1895,13 @@
         "wheelArchGap": 0.05,
         "module": "furgon",
         "moduleLength": 3.3,
-        "cabHeight": 2.62,
+        "cabHeight": 2.616,
         "seats": 3,
         "paintColor": "#f1f2f0",
         "roofColor": "#f1f2f0",
         "bumperColor": "#2b2d2f",
-        "weathering": 0.3
+        "weathering": 0.3,
+        "cargoWindows": 0
       }
     },
     {

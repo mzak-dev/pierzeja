@@ -3,7 +3,7 @@
 //! walec, graniastosłup). Moduły zabudowy na ramie leżą w `zabudowa.rs`.
 //! Konwencja jak w `body.rs`: przód +Z, lewa strona +X, origin = środek między osiami na gruncie.
 
-use crate::body::Layout;
+use crate::Layout;
 use crate::tablice::plate;
 use crate::{roll, P};
 use procedura_kit::mesh::{add, cross, len, norm, scale, sub, MatKey, MaterialSpec, MeshBuilder, V3};
