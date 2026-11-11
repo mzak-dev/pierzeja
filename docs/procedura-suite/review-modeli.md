@@ -138,3 +138,56 @@ na dachu kabiny, trzecie okno kabiny brygadowej wygląda jak drzwi, numer na dac
 2. Budżet człowieka z palcami: do 1500 (było 800–1200); najcięższy archetyp 1406.
 3. Oznakowanie karetki wg Dz.U. 2025 poz. 1768: Gwiazda Życia i wzór pasów — wymaga tekstu rozporządzenia.
 4. Akceptacja modeli przed wypiekaniem do gry (issue 09).
+
+## Runda 3 — przebudowa Tabora (2026-11-11)
+
+Powód: mimo dwóch rund łatek pojazdy wyglądały jak karykatury. Proporcje główne (koło/H, linia
+okien, zwisy, rozstaw kół) były trafione; winny był kształt: łamany profil z 7-punktowego
+półprzekroju, płaskie cieniowanie, kabina-pudełko, nadkola-trapezy, 12-boczne koła, detale jako
+płaskie naklejki. Zamiast kolejnej łaty — nowa geometria. Review modeli z obrazów robi model
+„advisor” (decyzja użytkownika), po każdym etapie.
+
+Co jest teraz:
+
+| Obszar | Rozwiązanie |
+|---|---|
+| Nadwozia osobowe i vany | `karoseria.rs`: powłoka parametryczna — profil boczny z krzywych Hermite'a, przekrój z 11 rzędów na liniach cech (próg, bark, linia okien, krawędź szyby, rynna, oś dachu), okrągłe nadkola, naroża i czoło/tył wg profilu wysokości, gładkie normalne z progiem załamania; powłoka szczelna (test, także 40 losowych mieszanek) |
+| Detale | `detale.rs` + `kit::rzutnik`: lampy z oprawą (przód + zawinięcie na bok), grill, wloty, tablice, szczeliny drzwi, klamki, czarny słupek B, słupek C/D równoległy do tylnej szyby, okładziny nadkoli, wycieraczki, lusterka 3D; van: czarne zderzaki z narożnikami, drzwi przesuwne tylko po prawej, dwuskrzydłowe tylne z szybami |
+| Koła | opona z profilem (32 boki), felgi alu 5/10-ramienne, kołpak, ciężarowa z nakrętkami |
+| Szyby i wnętrze | szkło półprzezroczyste (0,55), wykładzina kabiny od środka, fotele, deska, kierownica |
+| Ciężarowe | kabina tą samą powłoką (nad silnikiem albo półmaska Daily), osie z `axles`/`axleGap`/`drive` (8x4: dwie przednie), bliźniaki, `cabType`/`cabLength`; zabudowy: kontener, plandeka, wywrotka, siodło (+ dotychczasowe) |
+| Ciągnik + naczepa | osobne modele; `Anchor_FifthWheel` / `Anchor_Kingpin` / `Anchor_LandingGear`; naczepa 13,6 m, tridem co 1,31 m, origin pod sworzniem; test braku kolizji wokół siodła |
+| Kontrakt | `wheels: Vec<(String, V3)>` — `Wheel_FL/FR/RL/RR` zostają, dochodzą `Wheel_F2*`, `Wheel_R2*`, `Wheel_R3*`, bliźniaki `Wheel_*i`; kotwice jako puste węzły GLB; belka świetlna w aplikacji i Godocie |
+| LOD | `TaborSpec.lod` 0–3 (gęstość powłoki, boki koła, krok naklejek, bez drobnych detali i wnętrza); `bake_dir` zapisuje `_LOD1..3.glb`; obrys, węzły i kotwice identyczne |
+
+Archetypy wg wzorców (wymiary z en.wikipedia albo wyszukiwarki — flagi `verified` w danych):
+hatchback (Golf 8), hatch_miejski (Fabia IV), sedan_liftback i kombi (Octavia IV), coupe
+(BMW 4 G22), suv (Duster III), suv_duzy (RAV4), van_sredni (T5), van_polmaska (Lublin 3), van
+(Sprinter W907 L2H2), podwozie_lekkie (Daily 70C), podwozie_srednie (GBA), podwozie_ciezkie
+(GCBA 6x6), ciagnik_siodlowy (Scania R 4x2), wywrotka_8x4, naczepa_kurtynowa.
+
+Usterki znalezione w review (advisor) i naprawione: hatchback z trzecią szybą wyglądał jak kombi
+(`quarterWindow`), szyby boczne wysokich vanów i kabin sięgały dachu, pasy służb znikały z tylnych
+drzwi vana, naczepa kolidowała z ciągnikiem (nogi, rama pod siodłem, błotniki), półka na tyle
+hatchbacka, wcięcie przy podstawie szyby, poszarpane naklejki przy narożnikach (limit głębokości
+rzutnika).
+
+Odstępstwa od zatwierdzonego planu (świadome):
+
+- **Brak porównania ze zdjęciami.** `thumb.wikimedia.org` jest blokowany przez proxy sesji,
+  a `upload.wikimedia.org` zwraca 429 z karą 600 s — żadne zdjęcie z Commons się nie pobrało.
+  Sylwetki strojone z wymiarów; testu nakładki obrysu nie ma. Do zrobienia po wrzuceniu zdjęć
+  z boku do repo albo odblokowaniu hosta.
+- **Detale i oklejenie to warstwy 1,5–9 mm nad blachą** (rzutowane na powłokę), a nie regiony
+  powierzchni. W rasteryzatorze bez migotania; w silniku gry niezweryfikowane.
+- **Oklejenie służb** dalej z `sluzba.rs`, z bokiem próbkowanym rzutnikiem i tyłem „drapowanym”
+  na klapę/drzwi; pełne przepisanie (F7: nowa policja, ITD, pomoc drogowa, Straż Miejska jako
+  osobna służba) — otwarte.
+- **LOD3 ma 2,7–5,8 tys. trójkątów** (plan: ok. 300) — koła, lusterka, tablice i zabudowy
+  ciężkich z prostopadłościanów nie mają jeszcze uproszczeń. LOD-y jako osobne pliki
+  (`_LODn.glb`), nie `MSFT_lod`.
+- Zabudowy ciężkich (rama, skrytki, plandeka) nadal z prostopadłościanów — płasko cieniowane.
+
+Zostało (P2–P3): trzy vany mają podobne czoło (T5 / Lublin / Sprinter różnią się bryłą, nie
+detalem), kabina ciągnika bez owiewki dachowej, PD na podwoziu Daily (zmiana wyglądu lawety
+z gry), drobne ząbki naklejek przy narożnikach tylnych lamp T5.
