@@ -187,6 +187,15 @@ Odstępstwa od zatwierdzonego planu (świadome):
   ciężkich z prostopadłościanów nie mają jeszcze uproszczeń. LOD-y jako osobne pliki
   (`_LODn.glb`), nie `MSFT_lod`.
 - Zabudowy ciężkich (rama, skrytki, plandeka) nadal z prostopadłościanów — płasko cieniowane.
+- **Parametry bez działania:** `chamfer`, `liveryColor` i livery `battenburg` nadal nic nie
+  zmieniają (do F7). Podłączone w tej rundzie: `axles`, `axleGap`, `drive`, `rearTyres`,
+  `cabType`, `cabLength`, `roundness` (promień naroży), `powertrain` (ev = zamknięty grill).
+- Szkło półprzezroczyste tylko na LOD0 (z wnętrzem); LOD1–3 mają szkło nieprzezroczyste.
+
+Weryfikacja (2026-11-11): testy `tabor-core` (szczelność powłok na każdym LOD, proporcje mierzone
+na powłoce: dach/W 0,62–0,82, szyby boczne 16–30°, opona 8–25 mm w głębi, maska/L 0,24–0,40,
+koło/H 0,38–0,50; zestaw bez kolizji; LOD), `bake_dir` po wszystkich 17 specyfikacjach gry
+(z LOD1–3), aplikacja `pierzeja-app` sprawdzona pod `wasm32` (rustc 1.97.1).
 
 Zostało (P2–P3): trzy vany mają podobne czoło (T5 / Lublin / Sprinter różnią się bryłą, nie
 detalem), kabina ciągnika bez owiewki dachowej, PD na podwoziu Daily (zmiana wyglądu lawety

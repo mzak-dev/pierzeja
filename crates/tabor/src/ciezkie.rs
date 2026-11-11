@@ -93,15 +93,19 @@ impl D {
             3 => Cab::Day,
             _ => Cab::Crew,
         };
-        // długość kabiny: jawna (`cabLength`), sypialna 2,28 m (Scania R/S), inaczej z liczby Miejsc
-        let cab_len = match (p.f("cabLength"), p.s("cabType")) {
-            (l, _) if l > 0.5 => l,
-            (_, "sleeper") => 2.28,
-            _ => match cab {
-                Cab::Short => 1.6,
-                Cab::Day => 1.83,
-                Cab::Crew => 1.83 + 0.72 * rows as f64,
-            },
+        // długość kabiny: klasa z liczby Miejsc wygrywa; `cabLength` tylko, gdy pasuje do klasy
+        // (brygadowa > 2,5 m, dzienna/sypialna ≤ 2,5 m), sypialna 2,28 m (Scania R/S)
+        let by_seats = match cab {
+            Cab::Short => 1.6,
+            Cab::Day => 1.83,
+            Cab::Crew => 1.83 + 0.72 * rows as f64,
+        };
+        let want = p.f("cabLength");
+        let cab_len = match (cab, p.s("cabType")) {
+            (Cab::Crew, _) if want > 2.5 => want,
+            (Cab::Short | Cab::Day, "sleeper") => if want > 0.5 && want <= 2.5 { want } else { 2.28 },
+            (Cab::Short | Cab::Day, _) if want > 0.5 && want <= 2.5 => want,
+            _ => by_seats,
         };
         let y_fr = r + 0.36;
         let zc = zf - 0.14;
