@@ -228,7 +228,7 @@ fn view_of(args: &Value, default: View) -> View {
 }
 
 fn render_png(items: &[RenderItem], view: View, width: u32, height: u32, night: bool, az: Option<f64>, el: Option<f64>) -> Vec<u8> {
-    render_scene(items, &RenderOptions { width, height, view, night, azimuth: az, elevation: el, ssaa: 2, ..Default::default() }).to_png()
+    render_scene(items, &RenderOptions { width, height, view, night, azimuth: az, elevation: el, ssaa: 2, smooth: true, ..Default::default() }).to_png()
 }
 
 fn stats_text(m: &BuildingModel) -> String {

@@ -42,8 +42,8 @@ impl Naczepa {
             r,
             track: (p.f("trackRatio") * p.f("width")).min(p.f("width") - 0.03 - p.f("tyreWidth")),
             axles,
-            // nogi podporowe ok. 2,9 m za czołem
-            z_legs: zf - 2.9,
+            // nogi podporowe ok. 2,4 m za sworzniem: poza promieniem zderzaka i błotników ciągnika
+            z_legs: -2.4,
         }
     }
 
@@ -63,15 +63,20 @@ pub(crate) fn build(p: &P, seed: u32, mb: &mut MeshBuilder) -> Layout {
     let n = Naczepa::new(p);
     let (zf, zr, hw, deck) = (n.zf, n.zr, n.hw, n.deck);
     // rama: dwie podłużnice, płyta sworznia, poprzeczki
+    // podłużnice: z przodu „szyja” nad płaszczyzną sprzęgu (nad siodłem nic nie schodzi niżej),
+    // za nogami pełna wysokość
+    let neck = n.z_legs + 0.25;
     for sx in [1.0f64, -1.0] {
         let (a, b) = (0.42 * sx, 0.5 * sx);
-        mb.bx(MatKey::Frame, [a.min(b), deck - 0.45, zr + 0.3], [a.max(b), deck - 0.02, zf - 0.3]);
+        mb.bx(MatKey::Frame, [a.min(b), deck - 0.45, zr + 0.3], [a.max(b), deck - 0.02, neck]);
+        mb.bx(MatKey::Frame, [a.min(b), n.coupling, neck], [a.max(b), deck - 0.02, zf - 0.3]);
     }
     mb.bx(MatKey::Frame, [-0.6, n.coupling, -0.6], [0.6, deck - 0.02, zf - 0.05]);
     cyl(mb, MatKey::Metal, [0.0, n.coupling - 0.08, 0.0], [0.0, n.coupling, 0.0], 0.045, 8, true);
     let mut z = zf - 0.6;
     while z > zr + 0.5 {
-        mb.bx(MatKey::Frame, [-hw + 0.05, deck - 0.2, z - 0.04], [hw - 0.05, deck - 0.02, z + 0.04]);
+        let y0 = if z > neck { n.coupling.max(deck - 0.2) } else { deck - 0.2 };
+        mb.bx(MatKey::Frame, [-hw + 0.05, y0, z - 0.04], [hw - 0.05, deck - 0.02, z + 0.04]);
         z -= 1.2;
     }
     // zabudowa: podłoga, plandeka (Paint) z pasami, dach (RoofPaint), czoło, tylne drzwi

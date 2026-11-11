@@ -129,6 +129,8 @@ pub(crate) struct Ksztalt {
     pub extra_pillars: Vec<f64>,
     /// Przednia krawędź dachu (nad szybą; w wysokim vanie przed daszkiem).
     pub z_rf: f64,
+    /// Górna krawędź okien bocznych przy daszku (wysokie vany, kabiny ciężarówek); bez daszka ∞.
+    pub glass_top: f64,
     /// Kabina pojazdu ciężkiego (bez tylnych drzwi, zderzaków i tablic — te ma rama).
     pub cab_only: bool,
     pub x_inner: f64,
@@ -282,6 +284,8 @@ impl Ksztalt {
             z_c_pillar,
             extra_pillars,
             z_rf,
+            // przy daszku okna boczne kończą się na wysokości górnej krawędzi szyby, wyżej blacha
+            glass_top: if cap { y_wt } else { f64::INFINITY },
             cab_only: rama.is_some(),
             x_inner,
             nose,
@@ -349,7 +353,7 @@ impl Ksztalt {
         let cabin = {
             let y6 = belt;
             let y8 = top - cr - 0.025 * wsz;
-            let y7 = (y8 - lerp(0.055, 0.03, wsz)).max(y6);
+            let y7 = (y8 - lerp(0.055, 0.03, wsz)).min(self.glass_top).max(y6);
             let rear = smoothstep(self.z_wt - 0.3, self.z_rr, z); // szerszy słupek D niż A
             let x7 = (hw - 0.04) - (y7 - y6) * tan;
             let x8 = x7 - lerp(0.04, lerp(0.06, 0.09, rear), wsz);
@@ -617,25 +621,59 @@ pub(crate) fn livery(mb: &mut procedura_kit::mesh::MeshBuilder, p: &P, seed: u32
     let bar = crate::sluzba::apply(&mut tmp, p, seed, &hull);
     let mut m = tmp.build(vec![]);
     let rear = Rzutnik::limited(&w.powloka, CREASE, Widok::Tyl, -k.zr - 0.6);
-    for part in &mut m.parts {
-        let n = part.normals.clone();
-        for (v, nv) in part.positions.chunks_exact_mut(3).zip(n.chunks_exact(3)) {
-            let (x, y, z) = (v[0] as f64, v[1] as f64, v[2] as f64);
-            if nv[2] > -0.9 || z > k.zr + 0.001 || z < k.zr - 0.03 {
-                continue;
+    // punkt z płaszczyzny tyłu na powierzchnię (odstęp warstwy zachowany; poza powłoką — ku osi)
+    let drape = |p: V3| -> V3 {
+        let lift = p[2] - k.zr;
+        let mut x = p[0];
+        for _ in 0..40 {
+            if let Some(h) = rear.hit(x, p[1]) {
+                return [x, p[1], h.p[2] + lift];
             }
-            // odstęp warstwy (pas, wzór, napis) zachowany; poza powierzchnią — przesunięcie ku osi
-            let lift = z - k.zr;
-            let mut xx = x;
-            for _ in 0..40 {
-                if let Some(h) = rear.hit(xx, y) {
-                    v[0] = xx as f32;
-                    v[2] = (h.p[2] + lift) as f32;
-                    break;
+            x *= 0.97;
+        }
+        p
+    };
+    for part in &mut m.parts {
+        let pos: Vec<V3> = part.positions.chunks_exact(3).map(|v| [v[0] as f64, v[1] as f64, v[2] as f64]).collect();
+        let nrm: Vec<[f32; 3]> = part.normals.chunks_exact(3).map(|v| [v[0], v[1], v[2]]).collect();
+        let on_rear = |i: usize| nrm[i][2] < -0.9 && pos[i][2] <= k.zr + 0.001 && pos[i][2] >= k.zr - 0.03;
+        let (mut np, mut nn, mut nu, mut ni) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for t in part.indices.chunks_exact(3) {
+            let ids = [t[0] as usize, t[1] as usize, t[2] as usize];
+            let tri = ids.map(|i| pos[i]);
+            // trójkąt z tyłu dzielony na drobną siatkę (≤ 4 cm), żeby szedł za krzywizną klapy/drzwi
+            let n = if ids.iter().all(|&i| on_rear(i)) {
+                let e = (0..3).map(|j| procedura_kit::mesh::len(procedura_kit::mesh::sub(tri[(j + 1) % 3], tri[j]))).fold(0.0, f64::max);
+                (e / 0.04).ceil().max(1.0) as usize
+            } else {
+                1
+            };
+            let draped = n > 1 || ids.iter().all(|&i| on_rear(i));
+            let base = (np.len() / 3) as u32;
+            let mut idx_of = std::collections::HashMap::new();
+            for i in 0..=n {
+                for j in 0..=(n - i) {
+                    let (u, v) = (i as f64 / n as f64, j as f64 / n as f64);
+                    let wgt = [1.0 - u - v, u, v];
+                    let p: V3 = std::array::from_fn(|c| wgt[0] * tri[0][c] + wgt[1] * tri[1][c] + wgt[2] * tri[2][c]);
+                    let p = if draped { drape(p) } else { p };
+                    idx_of.insert((i, j), base + (np.len() / 3) as u32 - base);
+                    np.extend(p.map(|c| c as f32));
+                    nn.extend(nrm[ids[0]]);
+                    nu.extend([p[0] as f32, p[1] as f32]);
                 }
-                xx *= 0.97;
+            }
+            let id = |i: usize, j: usize| idx_of[&(i, j)];
+            for i in 0..n {
+                for j in 0..(n - i) {
+                    ni.extend([id(i, j), id(i + 1, j), id(i, j + 1)]);
+                    if j + 1 < n - i {
+                        ni.extend([id(i + 1, j), id(i + 1, j + 1), id(i, j + 1)]);
+                    }
+                }
             }
         }
+        (part.positions, part.normals, part.uvs, part.indices) = (np, nn, nu, ni);
     }
     mb.push(&m, &procedura_kit::mesh::Xform::identity());
     bar
@@ -692,6 +730,15 @@ mod tests {
             let t = (seed as f64 * 0.137).fract();
             let (w, bv) = shell(json!({ "weights": { a: t, b: 1.0 - t }, "seed": seed, "variation": 1.0 }));
             check(&format!("{a}/{b} {t:.2} seed {seed}"), &w, bv);
+        }
+        // kabiny ciężarówek: nad silnikiem (brygadowa) i z półmaską — jawny układ osi
+        for (top, ycb, len, nose) in [(3.0, 0.88, 3.27, 0.0), (2.45, 0.51, 2.2, 0.6)] {
+            let mut m = resolve(&serde_json::from_value::<TaborSpec>(json!({ "archetype": "van" })).expect("spec")).params;
+            for (key, v) in [("height", top), ("clearance", ycb), ("length", len), ("windshieldAngle", if nose > 0.0 { 60.0 } else { 82.0 }), ("windshieldTop", (top - 0.3) / top), ("hoodLength", (nose + 0.06) / len), ("cargoWindows", 1.0)] {
+                m.insert(key.into(), json!(v));
+            }
+            let w = build_with(&P(&m), MatKey::Paint, Gestosc::LOD0, Some(Rama { zaf: 1.2, zar: -1.0e3, zf: 2.6, zr: 2.6 - len }));
+            check(&format!("kabina {len} m"), &w, len * 2.4 * (top - ycb));
         }
         for o in [json!({ "wheelbase": 3.4, "length": 4.3 }), json!({ "height": 1.35, "windshieldAngle": 20 }), json!({ "rearGlassAngle": 90, "tailLean": 0.0 }), json!({ "hoodLength": 0.45, "length": 3.6, "wheelbase": 2.3 })] {
             let (w, bv) = shell(json!({ "archetype": "hatchback", "overrides": o }));

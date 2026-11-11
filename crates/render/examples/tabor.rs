@@ -10,7 +10,7 @@ fn main() {
     let mut items = vec![RenderItem { mesh: &m.body, offset: [0.0; 3] }];
     items.extend(m.wheels.iter().map(|(_, pos)| RenderItem { mesh: &m.wheel, offset: *pos }));
     items.extend(m.lightbar.iter().map(|(l, o)| RenderItem { mesh: l, offset: *o }));
-    let img = render_scene(&items, &RenderOptions { width: 1000, height: 600, view, ..Default::default() });
+    let img = render_scene(&items, &RenderOptions { width: 1000, height: 600, view, smooth: true, ..Default::default() });
     std::fs::write(&a[1], img.to_png()).expect("png");
     println!("{}", serde_json::to_string(&m.stats).unwrap());
 }
