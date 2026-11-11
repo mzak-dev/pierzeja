@@ -52,11 +52,15 @@ pub struct RenderOptions {
     pub transparent: bool,
     /// Kadr: prostopadłościan, do którego dopasowuje się kamera (zbliżenia); `None` = cała scena.
     pub focus: Option<Bounds>,
+    /// Gładkie cieniowanie: normalne wierzchołków interpolowane w trójkącie (siatki z `Powloka`).
+    pub smooth: bool,
+    /// Rzut prostokątny (sylwetki do porównań z wzorcem); bez terenu i perspektywy.
+    pub ortho: bool,
 }
 
 impl Default for RenderOptions {
     fn default() -> Self {
-        Self { width: 1200, height: 800, view: View::Iso, ssaa: 2, shadows: true, edges: true, night: false, ground: true, azimuth: None, elevation: None, transparent: false, focus: None }
+        Self { width: 1200, height: 800, view: View::Iso, ssaa: 2, shadows: true, edges: true, night: false, ground: true, azimuth: None, elevation: None, transparent: false, focus: None, smooth: false, ortho: false }
     }
 }
 
@@ -168,6 +172,22 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
             }
         }
     }
+    // rzut prostokątny: połowy kadru dopasowane do narożników (z marginesem jak w perspektywie)
+    let ortho = o.ortho;
+    let (mut ox, mut oy) = (1e-3f64, 1e-3f64);
+    for x in [b.min[0], b.max[0]] {
+        for y in [b.min[1], b.max[1]] {
+            for z in [b.min[2], b.max[2]] {
+                let r = [x - target[0], y - target[1], z - target[2]];
+                ox = ox.max(dot(r, right).abs() / 0.92);
+                oy = oy.max(dot(r, cam_up).abs() / 0.9);
+            }
+        }
+    }
+    let (ox, oy) = if ox / oy > wf / hf { (ox, ox * hf / wf) } else { (oy * wf / hf, oy) };
+    if ortho {
+        dist = dist.max(size[0].hypot(size[1]).hypot(size[2]) * 2.0 + 10.0);
+    }
     let eye = [target[0] + dir[0] * dist, target[1] + dir[1] * dist, target[2] + dir[2] * dist];
     let near = 0.5;
 
@@ -250,7 +270,7 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
     let hzc0 = (fwd[0] * fwd[0] + fwd[2] * fwd[2]) / hl0;
     let hy0 = (fwd[0] * cam_up[0] + fwd[2] * cam_up[2]) / hl0;
     let horizon_y = if hzc0 > 1e-6 { (1.0 - hy0 / (hzc0 * tan_y)) * 0.5 * hf } else { hf };
-    let with_ground = o.ground && !o.transparent;
+    let with_ground = o.ground && !o.transparent && !ortho;
     for y in 0..h {
         let t = if with_ground { (y as f64 / horizon_y.max(1.0)).min(1.0) } else { y as f64 / hf };
         for x in 0..w {
@@ -283,13 +303,26 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
     let project = |p: V3| -> [f64; 3] {
         let r = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
         let (xc, yc, zc) = (dot(r, right), dot(r, cam_up), dot(r, fwd));
+        if ortho {
+            return [(xc / ox + 1.0) * 0.5 * wf, (1.0 - yc / oy) * 0.5 * hf, zc];
+        }
         [(xc / (zc * tan_x) + 1.0) * 0.5 * wf, (1.0 - yc / (zc * tan_y)) * 0.5 * hf, zc]
+    };
+    // wagi punktu w trójkącie: (głębokość, wagi wierzchołków) — perspektywicznie poprawne albo liniowe
+    let weights = |tri: &[[f64; 3]; 3], l: (f64, f64, f64)| -> (f64, [f64; 3]) {
+        if ortho {
+            let z = l.0 * tri[0][2] + l.1 * tri[1][2] + l.2 * tri[2][2];
+            return (z, [l.0, l.1, l.2]);
+        }
+        let ws = [l.0 / tri[0][2], l.1 / tri[1][2], l.2 / tri[2][2]];
+        let z = 1.0 / (ws[0] + ws[1] + ws[2]);
+        (z, ws.map(|w| w * z))
     };
 
     let mut trans: Vec<TransTri> = Vec::new();
 
     // rysuje trójkąty części; (pr, wp) = rzut i pozycje w świecie
-    let mut draw_part = |col: &mut Vec<f32>, zb: &mut Vec<f64>, gmask: &mut Vec<u8>, pr: &[[f64; 3]], wp: &[V3], idx: &[u32], mat: MatKey, base: V3, double_sided: bool, opacity: f64, emissive: bool, ground_pass: bool| {
+    let mut draw_part = |col: &mut Vec<f32>, zb: &mut Vec<f64>, gmask: &mut Vec<u8>, pr: &[[f64; 3]], wp: &[V3], nv: Option<&[V3]>, idx: &[u32], mat: MatKey, base: V3, double_sided: bool, opacity: f64, emissive: bool, ground_pass: bool| {
         for t in idx.chunks_exact(3) {
             let (i0, i1, i2) = (t[0] as usize, t[1] as usize, t[2] as usize);
             let tri = [pr[i0], pr[i1], pr[i2]];
@@ -304,13 +337,17 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
                 continue;
             }
             n = [n[0] / nl, n[1] / nl, n[2] / nl];
-            let v = [eye[0] - wp[i0][0], eye[1] - wp[i0][1], eye[2] - wp[i0][2]];
+            let v = if ortho { dir } else { [eye[0] - wp[i0][0], eye[1] - wp[i0][1], eye[2] - wp[i0][2]] };
+            let mut flip = 1.0;
             if dot(n, v) < 0.0 {
                 if !double_sided {
                     continue;
                 }
                 n = [-n[0], -n[1], -n[2]];
+                flip = -1.0;
             }
+            // normalne wierzchołków do gładkiego cieniowania (szkło zostaje płaskie: odbicie nieba)
+            let vn = nv.filter(|_| o.smooth && !is_glass(mat)).map(|nv| [nv[i0], nv[i1], nv[i2]].map(|q| q.map(|c| c * flip)));
             let vl = v[0].hypot(v[1]).hypot(v[2]);
             let ndl = dot(n, l).max(0.0);
             let amb = (0.36 + 0.3 * (n[1] * 0.5 + 0.5)) * amb_k;
@@ -340,28 +377,34 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
             }
             let Some((x0, x1, y0, y1)) = bbox(&tri, w, h) else { continue };
             let inv = 1.0 / ar;
-            let ws = [1.0 / tri[0][2], 1.0 / tri[1][2], 1.0 / tri[2][2]];
             for py in y0..=y1 {
                 for px in x0..=x1 {
                     let (l0, l1, l2) = bary(&tri, inv, px as f64 + 0.5, py as f64 + 0.5);
                     if l0 < -1e-6 || l1 < -1e-6 || l2 < -1e-6 {
                         continue;
                     }
-                    let z = 1.0 / (l0 * ws[0] + l1 * ws[1] + l2 * ws[2]);
+                    let (z, wt) = weights(&tri, (l0, l1, l2));
                     let i = py * w + px;
                     if z >= zb[i] {
                         continue;
                     }
                     zb[i] = z;
                     gmask[i] = ground_pass as u8;
-                    let mut s = sun_part;
+                    let (mut s, mut am) = (sun_part, amb);
+                    if let Some(vn) = vn {
+                        let q = [0, 1, 2].map(|k| wt[0] * vn[0][k] + wt[1] * vn[1][k] + wt[2] * vn[2][k]);
+                        let ql = q[0].hypot(q[1]).hypot(q[2]).max(1e-12);
+                        let q = q.map(|c| c / ql);
+                        s = dot(q, l).max(0.0) * 0.95 * sun_i;
+                        am = (0.36 + 0.3 * (q[1] * 0.5 + 0.5)) * amb_k;
+                    }
                     if s > 0.0 && shadows {
-                        let wpt = [0, 1, 2].map(|k| (l0 * wp[i0][k] * ws[0] + l1 * wp[i1][k] * ws[1] + l2 * wp[i2][k] * ws[2]) * z);
+                        let wpt = [0, 1, 2].map(|k| wt[0] * wp[i0][k] + wt[1] * wp[i1][k] + wt[2] * wp[i2][k]);
                         if in_shadow(wpt[0], wpt[1], wpt[2]) {
                             s = 0.0;
                         }
                     }
-                    let lit = if glow { 1.0 } else { amb + s };
+                    let lit = if glow { 1.0 } else { am + s };
                     for k in 0..3 {
                         col[i * 3 + k] = (rgb[k] * lit) as f32;
                     }
@@ -387,7 +430,7 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
             }
         }
         let pr: Vec<[f64; 3]> = wp.iter().map(|&p| project(p)).collect();
-        draw_part(&mut col, &mut zb, &mut gmask, &pr, &wp, &idx, MatKey::Ground, gcol, true, 1.0, false, true);
+        draw_part(&mut col, &mut zb, &mut gmask, &pr, &wp, None, &idx, MatKey::Ground, gcol, true, 1.0, false, true);
     }
 
     // ---------------------------------------------------------- budynki
@@ -399,7 +442,9 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
             let wp: Vec<V3> = part.positions.chunks_exact(3).map(|p| [p[0] as f64 + it.offset[0], p[1] as f64 + it.offset[1], p[2] as f64 + it.offset[2]]).collect();
             let pr: Vec<[f64; 3]> = wp.iter().map(|&p| project(p)).collect();
             let opacity = if mat == MatKey::Railing { 0.62 } else { spec.map_or(1.0, |s| s.opacity) };
-            draw_part(&mut col, &mut zb, &mut gmask, &pr, &wp, &part.indices, mat, base, spec.is_some_and(|s| s.double_sided), opacity, mat == MatKey::GlassLit, false);
+            let nv: Vec<V3> = part.normals.chunks_exact(3).map(|n| [n[0] as f64, n[1] as f64, n[2] as f64]).collect();
+            let nv = (nv.len() == wp.len()).then_some(nv.as_slice());
+            draw_part(&mut col, &mut zb, &mut gmask, &pr, &wp, nv, &part.indices, mat, base, spec.is_some_and(|s| s.double_sided), opacity, mat == MatKey::GlassLit, false);
         }
     }
 
@@ -411,14 +456,13 @@ pub fn render_scene(items: &[RenderItem], o: &RenderOptions) -> Image {
             continue;
         }
         let Some((x0, x1, y0, y1)) = bbox(&t.p, w, h) else { continue };
-        let ws = [1.0 / t.p[0][2], 1.0 / t.p[1][2], 1.0 / t.p[2][2]];
         for py in y0..=y1 {
             for px in x0..=x1 {
                 let (l0, l1, l2) = bary(&t.p, 1.0 / ar, px as f64 + 0.5, py as f64 + 0.5);
                 if l0 < 0.0 || l1 < 0.0 || l2 < 0.0 {
                     continue;
                 }
-                let z = 1.0 / (l0 * ws[0] + l1 * ws[1] + l2 * ws[2]);
+                let (z, _) = weights(&t.p, (l0, l1, l2));
                 let i = py * w + px;
                 if z >= zb[i] {
                     continue;

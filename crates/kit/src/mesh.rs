@@ -377,6 +377,28 @@ impl MeshBuilder {
         self.poly(mat, &[a, b, c, d], want);
     }
 
+    /// Gotowa siatka indeksowana z normalnymi na wierzchołek (gładkie cieniowanie, `Powloka`).
+    /// UV jak w `poly`: planarne w metrach, płaszczyzna wg normalnej wierzchołka.
+    pub fn push_indexed(&mut self, mat: MatKey, pos: &[V3], nrm: &[V3], idx: &[u32]) {
+        if idx.is_empty() {
+            return;
+        }
+        let (mut lo, mut hi) = (self.min, self.max);
+        let b = self.buf(mat);
+        let base = (b.positions.len() / 3) as u32;
+        for (p, n) in pos.iter().zip(nrm) {
+            b.positions.extend(p.map(|x| x as f32));
+            b.normals.extend(n.map(|x| x as f32));
+            b.uvs.extend(uv_for(*p, *n).map(|x| x as f32));
+            for k in 0..3 {
+                lo[k] = lo[k].min(p[k]);
+                hi[k] = hi[k].max(p[k]);
+            }
+        }
+        b.indices.extend(idx.iter().map(|i| i + base));
+        (self.min, self.max) = (lo, hi);
+    }
+
 
     /// Pas między kolejnymi pierścieniami (zamkniętymi, tej samej długości) w „flat shading”.
     /// Pierścień to pętla CCW w płaszczyźnie XY patrząc z +Z, kolejne pierścienie rosną w +Z;
