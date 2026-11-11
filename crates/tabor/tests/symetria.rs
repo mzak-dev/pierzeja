@@ -54,7 +54,8 @@ fn dist(p: V, [a, b, c]: [V; 3]) -> f64 {
 
 fn tris(m: &procedura_kit::mesh::MeshData) -> Vec<([V; 3], String)> {
     let mut out = Vec::new();
-    for part in &m.parts {
+    // wnętrze (kierownica, deska, fotele) jest niesymetryczne z natury — materiał Detail pomijany
+    for part in m.parts.iter().filter(|p| p.material != Some(procedura_kit::mesh::MatKey::Detail)) {
         let v = |i: u32| -> V { std::array::from_fn(|k| part.positions[i as usize * 3 + k] as f64) };
         let mat = format!("{:?}", part.material);
         out.extend(part.indices.chunks_exact(3).map(|t| ([v(t[0]), v(t[1]), v(t[2])], mat.clone())));

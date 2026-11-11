@@ -378,3 +378,63 @@ fn mirrors(mb: &mut MeshBuilder, k: &Ksztalt, size: f64) {
         mb.quad(MatKey::Indicator, [xi, y0 - 0.012, z0 + rz * 0.92], [xo, y0 - 0.012, z0 + rz * 0.6], [xo, y0 + 0.008, z0 + rz * 0.6], [xi, y0 + 0.008, z0 + rz * 0.92], Some([0.0, 0.0, 1.0]));
     }
 }
+
+/// Proste wnętrze widoczne przez półprzezroczyste szyby: ciemna wykładzina kabiny (od środka),
+/// fotele z oparciami i zagłówkami w punktach H, deska rozdzielcza i kierownica (materiał
+/// `Detail` — niesymetryczne z natury).
+pub(crate) fn interior(mb: &mut MeshBuilder, k: &Ksztalt, seats: &[[f64; 3]]) {
+    use crate::karoseria::{R_BELT, R_GT, R_LOW, R_RAIL, R_SH, R_TOP};
+    // wykładzina: przekroje kabiny cofnięte o 3 cm do środka, normalne do wnętrza
+    let (z0, z1) = ((k.z_win_r - 0.1).max(k.zr + 0.15), k.z_c + 0.02);
+    let floor = k.clr + 0.12;
+    let n = ((z1 - z0) / 0.1).ceil().max(2.0) as usize;
+    let mut pw = Powloka::default();
+    let rows: Vec<Vec<u32>> = (0..=n)
+        .map(|i| {
+            let z = lerp(z0, z1, i as f64 / n as f64);
+            let q = k.key(z);
+            let inset = |p: [f64; 2]| [(p[0] - 0.03).max(0.0), p[1]];
+            let mut ring = vec![[0.0, floor], [inset(q[R_LOW])[0], floor]];
+            for j in [R_LOW, R_SH, R_BELT, R_GT, R_RAIL, R_TOP] {
+                let p = inset(q[j]);
+                ring.push([p[0], if j == R_TOP { p[1] - 0.03 } else { p[1] }]);
+            }
+            ring.iter().map(|p| pw.vert([p[0], p[1].max(floor), z])).collect()
+        })
+        .collect();
+    for i in 0..n {
+        for j in 0..rows[i].len() - 1 {
+            // odwrotna kolejność niż w powłoce: ściany zwrócone do środka kabiny
+            pw.quad(rows[i][j], rows[i + 1][j], rows[i + 1][j + 1], rows[i][j + 1], MatKey::Plastic);
+        }
+    }
+    pw.fan(&rows[n].iter().rev().copied().collect::<Vec<_>>(), MatKey::Plastic);
+    pw.fan(&rows[0], MatKey::Plastic);
+    pw.mirror_x();
+    pw.weld(1e-7);
+    pw.emit(mb, 40.0);
+    // fotele
+    for s in seats {
+        let (x, y, z) = (s[0], s[1], s[2]);
+        mb.bx(MatKey::Detail, [x - 0.24, y - 0.16, z - 0.05], [x + 0.24, y - 0.04, z + 0.42]);
+        mb.bx(MatKey::Detail, [x - 0.24, y - 0.1, z - 0.2], [x + 0.24, y + 0.55, z - 0.06]);
+        mb.bx(MatKey::Detail, [x - 0.12, y + 0.58, z - 0.17], [x + 0.12, y + 0.78, z - 0.09]);
+    }
+    // deska rozdzielcza przy podstawie szyby i kierownica przed kierowcą
+    let zd = k.z_c - 0.05;
+    let yd = k.belt(zd);
+    let hx = (k.key(zd)[R_BELT][0] - 0.05).max(0.3);
+    mb.bx(MatKey::Detail, [-hx, yd - 0.28, zd - 0.35], [hx, yd + 0.03, zd]);
+    if let Some(d) = seats.first() {
+        let (cx, cy, cz) = (d[0], d[1] + 0.33, d[2] + 0.5);
+        let ring: Vec<[f64; 3]> = (0..12).map(|i| {
+            let a = i as f64 / 12.0 * std::f64::consts::TAU;
+            [cx + 0.19 * a.cos(), cy + 0.19 * a.sin() * 0.85, cz + 0.19 * a.sin() * 0.5]
+        }).collect();
+        for i in 0..12 {
+            let (a, b) = (ring[i], ring[(i + 1) % 12]);
+            mb.quad(MatKey::Detail, a, b, [b[0], b[1], b[2] - 0.03], [a[0], a[1], a[2] - 0.03], Some([0.0, 0.3, -1.0]));
+        }
+        mb.bx(MatKey::Detail, [cx - 0.03, cy - 0.03, cz], [cx + 0.03, cy + 0.03, zd - 0.2]);
+    }
+}

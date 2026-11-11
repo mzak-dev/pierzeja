@@ -435,6 +435,7 @@ fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32) -> (usize, crate::sluzba::
     w.powloka.emit(mb, karoseria::CREASE);
     crate::detale::build(mb, &pc, seed, &w.ksztalt, &w.powloka, false);
     let k = &w.ksztalt;
+    crate::detale::interior(mb, k, &seat_points(p));
     // stopnie pod drzwiami
     for side in [1.0f64, -1.0] {
         let z0 = k.z_b + 0.05;
