@@ -82,7 +82,8 @@ fn glb_has_wheel_and_seat_nodes() {
 fn anchors_follow_conventions() {
     let m = make("sedan_liftback");
     let (wb, r) = (param(&m, "wheelbase"), param(&m, "wheelDiameter") / 2.0);
-    let [fl, fr, rl, rr] = m.wheels.map(|(_, p)| p);
+    let w = |n: &str| m.wheels.iter().find(|x| x.0 == n).unwrap_or_else(|| panic!("brak {n}")).1;
+    let [fl, fr, rl, rr] = ["Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR"].map(w);
     // origin = środek między osiami, przód +Z, lewa strona +X, piasta na wysokości promienia
     assert_eq!((fl[2], rl[2]), (wb / 2.0, -wb / 2.0));
     assert_eq!(fl[0], -fr[0]);
@@ -97,7 +98,7 @@ fn m1_wheelbases_are_applied() {
     // M1: sedan/kombi 2,8 m, van 3,7 m (RapidResponse/mods/core/data/pojazdy.toml)
     for (base, wb) in [("sedan_liftback", 2.8), ("kombi", 2.8), ("van", 3.7)] {
         let m = generate(&spec(json!({ "archetype": base, "overrides": { "wheelbase": wb } })));
-        let [fl, _, rl, _] = m.wheels.map(|(_, p)| p);
+        let (fl, rl) = (m.wheels[0].1, m.wheels[2].1);
         assert!((fl[2] - rl[2] - wb).abs() < 1e-9, "{base}: rozstaw kół {}", fl[2] - rl[2]);
         assert_eq!(m.stats.wheelbase, wb);
         let len = param(&m, "length");

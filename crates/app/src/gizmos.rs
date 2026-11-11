@@ -23,7 +23,7 @@ pub enum Snap {
 
 #[derive(Clone)]
 pub struct VehSnap {
-    pub wheels: Vec<(&'static str, [f64; 3])>,
+    pub wheels: Vec<(String, [f64; 3])>,
     pub seats: Vec<[f64; 3]>,
     /// Belka świetlna: środek i połowy rozmiarów (od przesunięcia węzła `Lightbar`).
     pub lightbar: Option<([f64; 3], [f64; 3])>,
@@ -46,7 +46,7 @@ impl Snap {
             (std::array::from_fn(|k| o[k] + (b.min[k] + b.max[k]) / 2.0), std::array::from_fn(|k| (b.max[k] - b.min[k]) / 2.0))
         });
         Snap::Vehicle(VehSnap {
-            wheels: m.wheels.to_vec(),
+            wheels: m.wheels.clone(),
             seats: m.seats.clone(),
             lightbar,
             body_type: m.stats.body_type.clone(),
@@ -399,7 +399,7 @@ fn vehicle(g: &G, doc: &mut Doc, der: &Derived, view: &View) {
                 g.p.line_segment([a - Vec2::new(10.0, 0.0), a + Vec2::new(10.0, 0.0)], Stroke::new(1.0, TEXT));
                 g.p.line_segment([a - Vec2::new(0.0, 10.0), a + Vec2::new(0.0, 10.0)], Stroke::new(1.0, TEXT));
                 let right = pos[0] < 0.0;
-                g.tag(a + Vec2::new(if right { -12.0 } else { 12.0 }, 0.0), if right { Align2::RIGHT_CENTER } else { Align2::LEFT_CENTER }, name, TEXT);
+                g.tag(a + Vec2::new(if right { -12.0 } else { 12.0 }, 0.0), if right { Align2::RIGHT_CENTER } else { Align2::LEFT_CENTER }, name.as_str(), TEXT);
             }
         }
         for (i, pos) in s.seats.iter().enumerate() {

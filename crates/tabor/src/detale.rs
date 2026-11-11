@@ -73,7 +73,7 @@ pub(crate) fn build(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, pw: &Po
     if k.kind == Rodzaj::Van {
         van(mb, p, seed, k, &front, &rear, &left, &right);
         wipers(mb);
-        mirrors(mb, k, 1.5);
+        mirrors(mb, k, if k.cab_only { 1.6 } else { 1.5 });
         return;
     }
 
@@ -223,8 +223,10 @@ fn van(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, front: &Rzutnik, rea
     };
     let (hw, clr, h) = (k.hw, k.clr, k.h);
     let bumper_top = clr + 0.34;
+    // kabina nad silnikiem: reflektory nisko, przy dolnej krawędzi czoła (nad zderzakiem ramy)
+    let cab_over = k.cab_only && k.zf - k.z_c < 0.3;
     // --- przód: lampy pod krawędzią maski, grill do zderzaka, czarny zderzak zawinięty na boki
-    let (ht, hb) = (k.y_he - 0.03, k.y_he - 0.21);
+    let (ht, hb) = if cab_over { (clr + 0.36, clr + 0.14) } else { (k.y_he - 0.03, k.y_he - 0.21) };
     let (xi, xo) = (0.45 * hw, hw - 0.08);
     let lamp = [[xi, hb + 0.03], [xo - 0.06, hb], [xo, hb + 0.05], [xo, ht], [xi + 0.02, ht]];
     both(mb, front, MatKey::Plastic, &grow(&lamp, 0.016), 0.003);
@@ -235,11 +237,32 @@ fn van(mb: &mut MeshBuilder, p: &P, seed: u32, k: &Ksztalt, front: &Rzutnik, rea
     sides(mb, MatKey::Plastic, &grow(&wrap, 0.012), 0.003);
     sides(mb, MatKey::Headlight, &wrap, 0.006);
     let grill = p.f("grill");
-    let gb = lerp(hb + 0.02, bumper_top + 0.02, grill);
-    both(mb, front, MatKey::Plastic, &[[0.0, gb], [xi - 0.04, gb], [xi - 0.03, ht - 0.02], [0.0, ht - 0.02]], 0.004);
-    for i in 1..4 {
-        let y = lerp(gb, ht - 0.02, i as f64 / 4.0);
-        both(mb, front, MatKey::Bumper, &[[0.0, y - 0.008], [xi - 0.05, y - 0.008], [xi - 0.05, y + 0.008], [0.0, y + 0.008]], 0.006);
+    // grill: w vanie między lampami do zderzaka, w kabinie nad silnikiem od lamp do szyby
+    let (gb, gt, gx) = if cab_over { (ht + 0.05, k.y_he - 0.08, 0.62 * hw) } else { (lerp(hb + 0.02, bumper_top + 0.02, grill), ht - 0.02, xi - 0.03) };
+    both(mb, front, MatKey::Plastic, &[[0.0, gb], [gx - 0.01, gb], [gx, gt], [0.0, gt]], 0.004);
+    let slats = if cab_over { 6 } else { 4 };
+    for i in 1..slats {
+        let y = lerp(gb, gt, i as f64 / slats as f64);
+        both(mb, front, MatKey::Bumper, &[[0.0, y - 0.008], [gx - 0.02, y - 0.008], [gx - 0.02, y + 0.008], [0.0, y + 0.008]], 0.006);
+    }
+    if k.cab_only {
+        // kabina ciężarówki: zderzak, tablica i tył ma rama; tu tylko drzwi i stopnie
+        let sill = k.bottom(0.0) + 0.06;
+        let w = 0.008;
+        let belt = |z: f64| k.belt(z) - 0.01;
+        let roof_seam = |z: f64| k.top(z) - k.crown - 0.08;
+        let z_fd = k.z_c - 0.12;
+        for s in [line([z_fd, sill], [z_fd, belt(z_fd)], w), line([k.z_b, sill], [k.z_b, roof_seam(k.z_b)], w), line([k.z_b, sill], [z_fd, sill], w)] {
+            sides(mb, MatKey::Plastic, &s, 0.0015);
+        }
+        let zh = k.z_b + 0.18;
+        let y = belt(zh) - 0.12;
+        sides(mb, MatKey::Plastic, &[[zh - 0.09, y - 0.025], [zh + 0.09, y - 0.025], [zh + 0.09, y + 0.025], [zh - 0.09, y + 0.025]], 0.004);
+        // kierunkowskaz boczny za nadkolem
+        let zi = k.zaf - k.ra - 0.12;
+        let yi = (k.r + k.ra * 0.4).max(clr + 0.1);
+        sides(mb, MatKey::Indicator, &[[zi - 0.1, yi], [zi, yi], [zi, yi + 0.05], [zi - 0.1, yi + 0.05]], 0.005);
+        return;
     }
     let fb = k.bottom(k.zf) - 0.03;
     both(mb, front, MatKey::Bumper, &[[0.0, fb], [hw, fb], [hw, bumper_top], [0.0, bumper_top]], 0.008);

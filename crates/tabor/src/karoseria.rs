@@ -76,6 +76,16 @@ enum Strefa {
     Pokrywa,
 }
 
+/// Jawny układ osi i końców powłoki (kabina ciężarówki).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Rama {
+    pub zaf: f64,
+    /// Tylna oś; daleko za powłoką, gdy kabina nie ma tylnego nadkola.
+    pub zar: f64,
+    pub zf: f64,
+    pub zr: f64,
+}
+
 /// Wymiary i linie nadwozia wyliczone z parametrów (wszystko w metrach, układ pojazdu).
 pub(crate) struct Ksztalt {
     pub kind: Rodzaj,
@@ -119,6 +129,8 @@ pub(crate) struct Ksztalt {
     pub extra_pillars: Vec<f64>,
     /// Przednia krawędź dachu (nad szybą; w wysokim vanie przed daszkiem).
     pub z_rf: f64,
+    /// Kabina pojazdu ciężkiego (bez tylnych drzwi, zderzaków i tablic — te ma rama).
+    pub cab_only: bool,
     pub x_inner: f64,
     nose: Krzywa,
     tail: Krzywa,
@@ -131,7 +143,9 @@ fn fo(p: &P, k: &str, d: f64) -> f64 {
 }
 
 impl Ksztalt {
-    pub fn new(p: &P) -> Ksztalt {
+    /// Jak `new`, ale z jawnym położeniem osi i końców (kabina pojazdu ciężkiego: przednie nadkole
+    /// w kabinie, tył kabiny ucięty przed ramą, bez tylnego nadkola).
+    pub fn with_frame(p: &P, rama: Option<Rama>) -> Ksztalt {
         let kind = Rodzaj::of(p.s("bodyType")).unwrap_or(Rodzaj::Hatch);
         let (l, w, h, wb) = (p.f("length"), p.f("width"), p.f("height"), p.f("wheelbase"));
         let hw = w / 2.0;
@@ -143,9 +157,14 @@ impl Ksztalt {
         let x_inner = track / 2.0 - tw / 2.0 - 0.035;
         let (fo_, ro_) = (p.f("frontOverhang"), p.f("rearOverhang"));
         let oh = (l - wb).max(0.8);
-        let (zaf, zar) = (wb / 2.0, -wb / 2.0);
-        let zf = zaf + oh * fo_ / (fo_ + ro_);
-        let zr = zar - oh * ro_ / (fo_ + ro_);
+        let (zaf, zar, zf, zr) = match rama {
+            Some(r) => (r.zaf, r.zar, r.zf, r.zr),
+            None => {
+                let (zaf, zar) = (wb / 2.0, -wb / 2.0);
+                (zaf, zar, zaf + oh * fo_ / (fo_ + ro_), zar - oh * ro_ / (fo_ + ro_))
+            }
+        };
+        let l = if rama.is_some() { zf - zr } else { l };
 
         // profil: krawędź maski, podstawa szyby, szyba, dach, tył
         let y_he = fo(p, "noseHeight", 0.52) * h;
@@ -263,6 +282,7 @@ impl Ksztalt {
             z_c_pillar,
             extra_pillars,
             z_rf,
+            cab_only: rama.is_some(),
             x_inner,
             nose,
             tail,
@@ -303,7 +323,8 @@ impl Ksztalt {
     pub fn bottom(&self, z: f64) -> f64 {
         // spód podnosi się za osiami (kąty natarcia i zejścia)
         let f = smoothstep(self.zaf + 0.1, self.zf, z);
-        let b = smoothstep(self.zar - 0.1, self.zr, z);
+        // kabina ciężarówki: tył ucięty przed tylną osią — spód płaski
+        let b = if self.zr > self.zar { 0.0 } else { smoothstep(self.zar - 0.1, self.zr, z) };
         self.clr + f * 0.08 + b * 0.12
     }
 
@@ -398,7 +419,12 @@ pub(crate) const CREASE: f64 = 34.0;
 
 /// Buduje powłokę nadwozia (bez wypuszczania do siatki: robi to wywołujący po detalach).
 pub(crate) fn build(p: &P, roof_mat: MatKey, gest: Gestosc) -> Wynik {
-    let k = Ksztalt::new(p);
+    build_with(p, roof_mat, gest, None)
+}
+
+/// Jak `build`, z jawnym układem osi (kabina pojazdu ciężkiego).
+pub(crate) fn build_with(p: &P, roof_mat: MatKey, gest: Gestosc, rama: Option<Rama>) -> Wynik {
+    let k = Ksztalt::with_frame(p, rama);
     let zs_front = k.zf - k.r_front - 0.02;
     let zs_rear = k.zr + k.r_rear + 0.06;
     // stacje środka: równy odstęp + linie cech + łuki nadkoli

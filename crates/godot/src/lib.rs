@@ -389,7 +389,7 @@ impl Tabor {
                 let mut wheels = VarArray::new();
                 for (name, pos) in &m.wheels {
                     let mut e = VarDictionary::new();
-                    e.set("name", &GString::from(*name));
+                    e.set("name", &GString::from(name.as_str()));
                     e.set("pos", v3(pos));
                     wheels.push(&e.to_variant());
                 }

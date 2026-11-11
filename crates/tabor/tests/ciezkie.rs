@@ -46,7 +46,8 @@ fn heavy_glb_is_deterministic() {
 fn heavy_triangle_budget() {
     for (n, s) in all() {
         let t = make(s).stats.triangles;
-        assert!((1000..=7000).contains(&t), "{n}: {t} trójkątów");
+        // bez górnego limitu (decyzja 2026-11-11: budżet bez limitu + LOD), tylko dolna granica
+        assert!(t >= 1000, "{n}: {t} trójkątów");
     }
 }
 
@@ -54,7 +55,8 @@ fn heavy_triangle_budget() {
 fn m1_wheelbases_are_exact() {
     for (n, s, wb) in [("PD", pd(), 4.8), ("SCRt", scrt(), 4.6)] {
         let m = make(s);
-        let [fl, fr, rl, rr] = m.wheels.map(|(_, p)| p);
+        let w = |n: &str| m.wheels.iter().find(|x| x.0 == n).unwrap_or_else(|| panic!("brak {n}")).1;
+        let [fl, fr, rl, rr] = ["Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR"].map(w);
         assert_eq!(fl[2] - rl[2], wb, "{n}");
         assert_eq!((fr[2], rr[2]), (fl[2], rl[2]));
         assert_eq!(m.stats.wheelbase, wb);
@@ -113,14 +115,18 @@ fn envelope_and_angles() {
         let lmax = if n == "ciezkie" { 10.0 } else { 9.5 };
         assert!(b.max[2] - b.min[2] <= lmax + 1e-9, "{n}: długość {}", b.max[2] - b.min[2]);
         assert!(b.max[1] <= 3.35 + 1e-9, "{n}: wysokość {}", b.max[1]);
-        assert!(b.max[0] - b.min[0] <= 2.55 + 0.24 + 1e-9, "{n}: szerokość (z lusterkami, które nie liczą się do 2,55) {}", b.max[0] - b.min[0]);
+        // lusterka ciężarówki wystają ok. 0,3 m na stronę i nie liczą się do 2,55 m
+        assert!(b.max[0] - b.min[0] <= 2.55 + 0.6 + 1e-9, "{n}: szerokość z lusterkami {}", b.max[0] - b.min[0]);
+        assert!(m.stats.width <= 2.55 + 1e-9, "{n}: szerokość nadwozia {}", m.stats.width);
         assert!(b.min[1].abs() < 1e-6, "{n}: koła na gruncie");
         let (wb, r) = (m.stats.wheelbase, m.stats.wheel_radius);
+        // zejście liczone od ostatniej osi tylnej (tandem / tridem)
+        let z_last = m.wheels.iter().map(|w| w.1[2]).fold(f64::MAX, f64::min);
         let mut worst = f64::MAX;
         for part in &m.body.parts {
             for v in part.positions.chunks_exact(3) {
                 let (y, z) = (v[1] as f64, v[2] as f64);
-                let line = if z < -wb / 2.0 { t * (-wb / 2.0 - z) - off * r } else if z > wb / 2.0 { t * (z - wb / 2.0) - off * r } else { continue };
+                let line = if z < z_last { t * (z_last - z) - off * r } else if z < -wb / 2.0 { continue } else if z > wb / 2.0 { t * (z - wb / 2.0) - off * r } else { continue };
                 worst = worst.min(y - line);
             }
         }
