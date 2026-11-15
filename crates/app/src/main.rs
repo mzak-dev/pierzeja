@@ -393,7 +393,7 @@ impl Doc {
         d
     }
     pub fn vehicle_spec(&self) -> tabor_core::TaborSpec {
-        tabor_core::TaborSpec { mix: self.spec().mix, version: None }
+        tabor_core::TaborSpec { mix: self.spec().mix, version: None, lod: None }
     }
     pub fn scene_spec(&self, kind: SceneKind) -> SceneSpec {
         SceneSpec { kind, seed: Some(self.scene_seed as f64), spacing: Some(self.spacing), rows: Some(self.rows), profile: Some(self.profile.clone()), arm: Some(self.arm), variation: None }
@@ -821,6 +821,10 @@ fn regenerate(
         let mut tris = spawn_mesh(b, c, m_, &m.body, Vec3::ZERO, night);
         for (_, h) in &m.wheels {
             tris += spawn_mesh(b, c, m_, &m.wheel, Vec3::new(h[0] as f32, h[1] as f32, h[2] as f32), night);
+        }
+        // belka świetlna służb to osobna siatka (węzeł `Lightbar` w GLB)
+        if let Some((bar, o)) = &m.lightbar {
+            tris += spawn_mesh(b, c, m_, bar, Vec3::new(o[0] as f32, o[1] as f32, o[2] as f32), night);
         }
         der.tris = tris;
         der.resolved = m.params.clone();

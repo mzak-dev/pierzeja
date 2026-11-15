@@ -162,7 +162,7 @@ fn write(dir: &str, shots: &[Shot], meshes: &[(&MeshData, [f64; 3])]) {
     for (k, sh) in shots.iter().enumerate() {
         let items: Vec<RenderItem> = sh.items.iter().map(|&i| RenderItem { mesh: meshes[i].0, offset: meshes[i].1 }).collect();
         let _ = scene_bounds(&items);
-        let mut img = render_scene(&items, &RenderOptions { width: TW, height: TH, view: View::Iso, azimuth: Some(sh.az), elevation: Some(sh.el), focus: sh.focus, ..Default::default() });
+        let mut img = render_scene(&items, &RenderOptions { width: TW, height: TH, view: View::Iso, azimuth: Some(sh.az), elevation: Some(sh.el), focus: sh.focus, smooth: true, ..Default::default() });
         label(&mut img, sh.label, 3);
         let slug: String = sh.label.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
         std::fs::write(format!("{dir}/{k:02}-{}.png", slug.split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-")), img.to_png()).expect("png");

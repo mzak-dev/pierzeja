@@ -3,8 +3,10 @@
 //! stacji + jedna siatka koła + kotwice). Konwencja: przód +Z, Y w górę, lewa strona +X,
 //! origin = środek między osiami na gruncie.
 
-mod body;
 mod ciezkie;
+mod detale;
+mod karoseria;
+mod naczepa;
 mod sluzba;
 mod tablice;
 mod wheel;
@@ -21,6 +23,23 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::OnceLock;
 
+/// Układ wyliczony przez budowniczego nadwozia (osobowe i vany: `karoseria`, ciężkie: `ciezkie`).
+pub(crate) struct Layout {
+    pub wheelbase: f64,
+    /// Rozstaw środków opon.
+    pub track: f64,
+    /// Liczba stacji powłoki albo lofta kabiny.
+    pub stations: usize,
+    /// Szerokość nadwozia bez lusterek (tak podają producenci i dyrektywa 96/53/WE).
+    pub body_width: f64,
+    /// Belka świetlna służby (siatka, przesunięcie od origin); `None` dla cywilnego.
+    pub lightbar: Option<(MeshData, V3)>,
+    /// Piasty kół (nazwa węzła, pozycja); `None` = zwykłe 4 koła z rozstawu osi i kół.
+    pub wheels: Option<Vec<(String, V3)>>,
+    /// Kotwice (sprzęg, nogi naczepy): nazwa węzła, pozycja.
+    pub anchors: Vec<(String, V3)>,
+}
+
 /// Dane Tabora: wektory, parametry, archetypy, mapa rok designu × klasa wielkości.
 pub fn data() -> &'static Dataset {
     static D: OnceLock<Dataset> = OnceLock::new();
@@ -35,6 +54,10 @@ pub struct TaborSpec {
     pub mix: MixSpec,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<u32>,
+    /// Poziom szczegółów: 0 (domyślnie) pełny, 1–3 coraz rzadsza powłoka, mniej boków koła,
+    /// bez drobnych detali i wnętrza. Wymiary, węzły i kotwice są na każdym poziomie te same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lod: Option<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -92,8 +115,13 @@ pub struct VehicleModel {
     pub body: MeshData,
     /// Jedna siatka koła (oś = lokalne X, symetryczna), współdzielona przez 4 węzły.
     pub wheel: MeshData,
-    /// Piasty: (nazwa węzła, pozycja) w kolejności FL, FR, RL, RR.
-    pub wheels: [(&'static str, V3); 4],
+    /// Piasty: (nazwa węzła, pozycja). Zawsze `Wheel_FL`, `Wheel_FR`, `Wheel_RL`, `Wheel_RR`
+    /// (pierwsza oś przednia i pierwsza tylna; przy bliźniakach — koło zewnętrzne), dalej kolejne
+    /// osie `Wheel_F2*`, `Wheel_R2*`, `Wheel_R3*` i wewnętrzne bliźniaki z sufiksem `i` (`Wheel_RLi`).
+    /// Naczepa nie ma kół `Wheel_F*`.
+    pub wheels: Vec<(String, V3)>,
+    /// Kotwice: `Anchor_FifthWheel` (siodło ciągnika), `Anchor_Kingpin` i `Anchor_LandingGear` (naczepa).
+    pub anchors: Vec<(String, V3)>,
     /// Punkty biodrowe Miejsc; 0 = kierowca (lewa strona, +X).
     pub seats: Vec<V3>,
     /// Belka świetlna służby w gnieździe na dachu: (siatka, przesunięcie od origin).
@@ -106,7 +134,8 @@ fn mat(key: MatKey, name: &'static str, color: &str, roughness: f64, metalness: 
     MaterialSpec { key, name, color: color.into(), roughness, metalness, opacity: 1.0, double_sided: false, texture: "none", texture_scale: 1.0, emissive: None }
 }
 
-fn materials(p: &P, seed: u32) -> Vec<MaterialSpec> {
+/// `lod` ≥ 1: szkło nieprzezroczyste (bez wnętrza przez szybę byłoby widać na wylot).
+fn materials(p: &P, seed: u32, lod: u8) -> Vec<MaterialSpec> {
     // ponytail: „weathering” tylko przygasza lakier; brud, rysy i rdza to osobny krok
     let age = p.f("weathering");
     let paint = |c: &str| adjust_hex(c, -0.06 * age, 1.0 - 0.2 * age, 0.0);
@@ -116,9 +145,11 @@ fn materials(p: &P, seed: u32) -> Vec<MaterialSpec> {
         mat(MatKey::RoofPaint, "Dach", &paint(p.s("roofColor")), 0.42, 0.25),
         mat(MatKey::Bumper, "Zderzaki", &paint(p.s("bumperColor")), 0.5, 0.15),
         mat(MatKey::Plastic, "Plastik", p.s("plasticColor"), 0.8, 0.0),
-        mat(MatKey::Glass, "Szyby", p.s("glassColor"), 0.08, 0.5),
+        // półprzezroczyste (przyciemnione) — przez szyby widać wnętrze i załogę
+        MaterialSpec { opacity: if lod == 0 { 0.55 } else { 1.0 }, ..mat(MatKey::Glass, "Szyby", p.s("glassColor"), 0.08, 0.5) },
+        mat(MatKey::Detail, "Wnętrze", "#2c2e31", 0.85, 0.0),
         mat(MatKey::Tyre, "Opony", "#17181a", 0.95, 0.0),
-        mat(MatKey::Rim, "Felgi", match (steel, p.s("bodyType") == "podwozie") { (true, true) => "#b4b9bd", (true, false) => "#5d6368", _ => "#bcc1c5" }, 0.4, if steel { 0.3 } else { 0.8 }),
+        mat(MatKey::Rim, "Felgi", match (steel, matches!(p.s("bodyType"), "podwozie" | "naczepa")) { (true, true) => "#b4b9bd", (true, false) => "#5d6368", _ => "#bcc1c5" }, 0.4, if steel { 0.3 } else { 0.8 }),
         MaterialSpec { emissive: Some("#fff3c4"), ..mat(MatKey::Headlight, "Reflektory", "#f2efe2", 0.2, 0.2) },
         MaterialSpec { emissive: Some("#ff2a1a"), ..mat(MatKey::Taillight, "Światła tylne", "#a31a1a", 0.3, 0.0) },
     ]
@@ -152,39 +183,59 @@ fn seat_points(p: &P) -> Vec<V3> {
 pub fn generate(spec: &TaborSpec) -> VehicleModel {
     let r = resolve(spec);
     let p = P(&r.params);
-    let heavy = p.s("bodyType") == "podwozie";
-    let mut mats = materials(&p, r.seed);
+    let lod = spec.lod.unwrap_or(0).min(3);
+    let gest = karoseria::Gestosc::lod(lod);
+    let trailer = p.s("bodyType") == "naczepa";
+    let heavy = p.s("bodyType") == "podwozie" || trailer;
+    let mut mats = materials(&p, r.seed, lod);
     if heavy {
         mats.extend(ciezkie::extra_materials(&p));
     }
 
     let mut mb = MeshBuilder::default();
-    let layout = if heavy { ciezkie::build(&p, r.seed, &mut mb) } else { body::build(&p, r.seed, &mut mb) };
+    let layout = if trailer {
+        naczepa::build(&p, r.seed, &mut mb)
+    } else if heavy {
+        ciezkie::build(&p, r.seed, &mut mb, lod)
+    } else {
+        let roof_mat = if roll(r.seed, 1.0, p.f("twoToneRoof")) { MatKey::RoofPaint } else { MatKey::Paint };
+        let w = karoseria::build(&p, roof_mat, gest);
+        w.powloka.emit(&mut mb, karoseria::CREASE);
+        detale::build(&mut mb, &p, r.seed, &w.ksztalt, &w.powloka, roll(r.seed, 2.0, p.f("claddingBlack")), lod);
+        if lod == 0 {
+            detale::interior(&mut mb, &w.ksztalt, &seat_points(&p));
+        }
+        let lightbar = karoseria::livery(&mut mb, &p, r.seed, &w);
+        Layout { wheelbase: p.f("wheelbase"), track: w.track, stations: w.stations, body_width: w.body_width, lightbar, wheels: None, anchors: Vec::new() }
+    };
     let mut body_mats = mats.clone();
     body_mats.extend(tablice::materials());
     body_mats.extend(sluzba::materials(&p));
     let body = mb.build(body_mats);
-    let wheel = wheel::build(&p, mats);
+    let wheel = wheel::build(&p, mats, [32, 20, 12, 8][lod as usize]);
 
     let (rad, hub_x) = (p.f("wheelDiameter") / 2.0, layout.track / 2.0);
-    let wheels = [
-        ("Wheel_FL", [hub_x, rad, layout.wheelbase / 2.0]),
-        ("Wheel_FR", [-hub_x, rad, layout.wheelbase / 2.0]),
-        ("Wheel_RL", [hub_x, rad, -layout.wheelbase / 2.0]),
-        ("Wheel_RR", [-hub_x, rad, -layout.wheelbase / 2.0]),
-    ];
-    let seats = if heavy { ciezkie::seat_points(&p) } else { seat_points(&p) };
+    let wheels = layout.wheels.unwrap_or_else(|| {
+        vec![
+            ("Wheel_FL".into(), [hub_x, rad, layout.wheelbase / 2.0]),
+            ("Wheel_FR".into(), [-hub_x, rad, layout.wheelbase / 2.0]),
+            ("Wheel_RL".into(), [hub_x, rad, -layout.wheelbase / 2.0]),
+            ("Wheel_RR".into(), [-hub_x, rad, -layout.wheelbase / 2.0]),
+        ]
+    });
+    let seats = if trailer { Vec::new() } else if heavy { ciezkie::seat_points(&p) } else { seat_points(&p) };
     let mut m = VehicleModel {
         body,
         wheel,
         wheels,
         seats,
         lightbar: layout.lightbar,
+        anchors: layout.anchors,
         stats: VehicleStats { body_type: p.s("bodyType").into(), triangles: 0, length: 0.0, width: layout.body_width, width_mirrors: 0.0, height: 0.0, wheelbase: layout.wheelbase, track: layout.track, wheel_radius: rad, seats: 0, stations: layout.stations },
         params: r.params.clone(),
     };
     let b = m.bounds();
-    m.stats.triangles = m.body.triangles() + 4 * m.wheel.triangles() + m.lightbar.as_ref().map_or(0, |l| l.0.triangles());
+    m.stats.triangles = m.body.triangles() + m.wheels.len() * m.wheel.triangles() + m.lightbar.as_ref().map_or(0, |l| l.0.triangles());
     m.stats.length = b.max[2] - b.min[2];
     m.stats.width_mirrors = b.max[0] - b.min[0];
     m.stats.height = b.max[1] - b.min[1];
@@ -222,10 +273,13 @@ pub fn to_glb(m: &VehicleModel) -> Vec<u8> {
     let empty = MeshData::empty();
     let mut nodes = vec![ExportNode { name: "Body".into(), mesh: &m.body, offset: None, parent: None, rotation: None, extras: Some(json!({ "stats": m.stats })) }];
     for (n, pos) in &m.wheels {
-        nodes.push(child((*n).into(), &m.wheel, *pos));
+        nodes.push(child(n.clone(), &m.wheel, *pos));
     }
     if let Some((mesh, o)) = &m.lightbar {
         nodes.push(child("Lightbar".into(), mesh, *o));
+    }
+    for (n, pos) in &m.anchors {
+        nodes.push(child(n.clone(), &empty, *pos));
     }
     for (i, s) in m.seats.iter().enumerate() {
         nodes.push(child(format!("Seat_{i}"), &empty, *s));

@@ -5,6 +5,9 @@
 pub mod color;
 pub mod data;
 pub mod export;
+pub mod krzywe;
 pub mod mesh;
 pub mod mix;
+pub mod powloka;
 pub mod random;
+pub mod rzutnik;
