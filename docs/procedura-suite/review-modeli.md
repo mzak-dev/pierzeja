@@ -13,8 +13,8 @@ każdym issue, które tworzy geometrię (09–11, 14, 16, 18).
 - Runda 1 (2026-11-09): 5 równoległych recenzentów (osobówki, vany, osobówki służb, ciężkie, ludzie),
   ocena wyłącznie z obrazów, porównanie z wymiarami wzorców i przepisami. Raporty źródłowe są w notatkach
   sesji; poniżej skrót z decyzjami.
-- Ograniczenie: sieć sesji nie miała dostępu do isap.sejm.gov.pl, eli.gov.pl, wikipedia.org i stron
-  producentów (scania.com, lectura-specs). Przepisy i wymiary z wyszukiwarki lub z wiedzy recenzentów
+- Ograniczenie: sieć sesji nie miała dostępu do isap.sejm.gov.pl, eli.gov.pl, wikipedia.org, stron
+  producentów i baz danych technicznych. Przepisy i wymiary z wyszukiwarki lub z wiedzy recenzentów
   oznaczone są jako *niezweryfikowane*.
 
 Priorytety: **P1** psuje realizm albo przepis i widać to z kamery gry; **P2** wyraźne, drugorzędne;
@@ -26,17 +26,17 @@ Priorytety: **P1** psuje realizm albo przepis i widać to z kamery gry; **P2** w
 |---|---|---|---|---|
 | Brak tablic rejestracyjnych z przodu i z tyłu | Tablica UE 520 × 114 mm, niebieski pasek „PL” po lewej patrzącego, z przodu i z tyłu | rozporządzenie w sprawie tablic rejestracyjnych (*niezweryfikowane online*) | P1 | ✅ `tablice.rs`: tło, pasek UE, 7 znaków (prostokąty); osobówki i van na zderzakach, ciężkie na zderzakach (z wyciągarką — po prawej) |
 | Brak pomarańczowych kierunkowskazów i powtarzaczy | Przód i tył pomarańczowe, boczne powtarzacze (Regulamin EKG ONZ nr 48) | UN ECE R48 (*niezweryfikowane online*) | P1 | ✅ `MatKey::Indicator`: w oprawie reflektora, w lampie tylnej, na obudowie lusterka; ciężkie — na czole kabiny, za nadkolem, boczne obrysówki co 2,5 m |
-| Lusterka 6 × 9 cm, nieczytelne | Osobówka ok. 0,14 m poza burtę, van ok. 0,2 m, na ramieniu | vehiclesizes.com (Octavia IV, szer. z lusterkami ~2,0 m) | P2 | ✅ ramię + obudowa; `stats.width` = szerokość bez lusterek, `widthMirrors` = z lusterkami |
+| Lusterka 6 × 9 cm, nieczytelne | Osobówka ok. 0,14 m poza burtę, van ok. 0,2 m, na ramieniu | vehiclesizes.com (kompakt klasy C, szer. z lusterkami ~2,0 m) | P2 | ✅ ramię + obudowa; `stats.width` = szerokość bez lusterek, `widthMirrors` = z lusterkami |
 | Brak wycieraczek | Dwa ramiona na dole szyby | — | P3 | ✅ osobówki, van, ciężkie |
 
 ## Osobówki (hatchback, liftback, sedan, kombi, SUV)
 
 | Usterka | Jak jest naprawdę | Źródło | P | Status |
 |---|---|---|---|---|
-| Sylwetka „lat 80.”: pionowa płyta czoła, duże kliny reflektorów, płaskie boki | Pochylone czoło, wąskie lampy zawinięte na błotnik, próg schowany pod bok | Octavia IV, Golf 8 (zdjęcia) | P2 | ✅ czoło pochylone ok. 30° od pionu (`zn`, `yf` w `body.rs`), lampy i grill na skosie, zawinięcie lamp przednich i tylnych, próg 0,93 szerokości |
-| Sedan nie różni się od liftbacka (dach jak w coupé) | Trzy bryły: bagażnik ok. 0,8–0,9 m, tylna szyba stromsza | Corolla sedan | P2 | ✅ bagażnik 0,17·L, tylna szyba ≥ 40°, szyba przednia 29° w archetypie |
-| Kombi: pionowy słupek D jak Volvo 240 | Octavia Combi: pochylony słupek D | cararac.com | P2 | ✅ `rearGlassAngle` 62° |
-| SUV: czarna płyta grilla, niewidoczne paski lamp | Duży grill, ale widoczne lampy | Tucson IV / Sportage | P2 | ✅ `grill` 0,75, wyższy pasek LED z zawinięciem |
+| Sylwetka „lat 80.”: pionowa płyta czoła, duże kliny reflektorów, płaskie boki | Pochylone czoło, wąskie lampy zawinięte na błotnik, próg schowany pod bok | zdjęcia aut klasy C (po 2018) | P2 | ✅ czoło pochylone ok. 30° od pionu (`zn`, `yf` w `body.rs`), lampy i grill na skosie, zawinięcie lamp przednich i tylnych, próg 0,93 szerokości |
+| Sedan nie różni się od liftbacka (dach jak w coupé) | Trzy bryły: bagażnik ok. 0,8–0,9 m, tylna szyba stromsza | zdjęcia sedanów klasy C | P2 | ✅ bagażnik 0,17·L, tylna szyba ≥ 40°, szyba przednia 29° w archetypie |
+| Kombi: pionowy słupek D jak w kombi z lat 80. | Współczesne kombi klasy C: pochylony słupek D | cararac.com | P2 | ✅ `rearGlassAngle` 62° |
+| SUV: czarna płyta grilla, niewidoczne paski lamp | Duży grill, ale widoczne lampy | zdjęcia SUV-ów klasy C | P2 | ✅ `grill` 0,75, wyższy pasek LED z zawinięciem |
 | Czerwona „warga” lakieru pod zderzakiem | Zderzak do spodu nadwozia | — | P2 | ✅ |
 | Załoga: stopy przebijają podłogę, poza „krzesło” | Punkt H ok. 0,5 m, pięty ok. 0,28 m pod punktem H, nogi wyciągnięte | CIOP, SAE J826 (*niezweryfikowane online*) | P1 | ⏳ nowa poza `drive`/`ride` w Tłumie |
 | Nadkola trapezowe | Łuk | — | P3 | ⏸ limit 12 stacji lofta (ADR 0023) |
@@ -45,8 +45,8 @@ Priorytety: **P1** psuje realizm albo przepis i widać to z kamery gry; **P2** w
 
 | Usterka | Jak jest naprawdę | Źródło | P | Status |
 |---|---|---|---|---|
-| Drzwi przesuwne na obu burtach | Seryjnie tylko po prawej (ruch prawostronny) | parkers.co.uk (Sprinter) | P1 | ✅ szwy, klamka, szyny tylko na −X; lewa burta gładka z listwą |
-| Kabina jak osobówka z doklejonym pudłem (długa maska, szyba 0,45 m za osią) | Sprinter/Crafter: maska ~1,0 m, podstawa szyby prawie nad osią, nad szybą daszek | carexpert.com.au, vandimensions.com | P1 | ✅ podstawa szyby 0,08 m za osią, szyba 52° do 0,3 m pod dachem, pas nad szybą, okna kabiny do górnej krawędzi szyby, słupek B 1,45 m za podstawą szyby |
+| Drzwi przesuwne na obu burtach | Seryjnie tylko po prawej (ruch prawostronny) | parkers.co.uk (furgon L2H2) | P1 | ✅ szwy, klamka, szyny tylko na −X; lewa burta gładka z listwą |
+| Kabina jak osobówka z doklejonym pudłem (długa maska, szyba 0,45 m za osią) | Duże furgony L2H2: maska ~1,0 m, podstawa szyby prawie nad osią, nad szybą daszek | carexpert.com.au, vandimensions.com | P1 | ✅ podstawa szyby 0,08 m za osią, szyba 52° do 0,3 m pod dachem, pas nad szybą, okna kabiny do górnej krawędzi szyby, słupek B 1,45 m za podstawą szyby |
 | 8 żeber dachu jak rolety | Gładki dach, 2–3 przetłoczenia | — | P3 | ✅ 3 przetłoczenia w kolorze lakieru |
 | Mały grill, białe zderzaki | Duży grill, czarne zderzaki | — | P3 | ✅ `grill` 0,85, `bumperColor` grafit (służby nadpisują) |
 | Koła 0,72 m | 225/75 R16 ≈ 0,74–0,76 m | vandimensions.com | P3 | ✅ 0,74 m |
@@ -62,7 +62,7 @@ Priorytety: **P1** psuje realizm albo przepis i widać to z kamery gry; **P2** w
 | Radiowóz bez oznakowania z przodu i z tyłu | POLICJA na klapie, z przodu niebieskie pole z białym napisem | Dz.U. 2022 poz. 122 | P1 | ✅ |
 | Pas zwęża się klinem na masce i tyle | Pas stałej szerokości od błotnika do tyłu | § 31 („z dostosowaniem do linii nadwozia”) | P2 | ✅ `band_range`: pas kończy się prosto, górna krawędź pod podstawą szyby |
 | Ż rysowane jako Ƶ | Z z kropką | — | P2 | ✅ |
-| Belki za krótkie i ciemne | Ok. 1,2–1,4 m, jasne klosze | Elektrometal/Haztec (katalogi) | P2–P3 | ✅ 0,9–1,4 m, 11 cm, jaśniejsze niebieskie i żółte |
+| Belki za krótkie i ciemne | Ok. 1,2–1,4 m, jasne klosze | katalogi producentów belek | P2–P3 | ✅ 0,9–1,4 m, 11 cm, jaśniejsze niebieskie i żółte |
 | Pojazd techniczny bez nazwy służby | Nazwa służby/organizacji na drzwiach | — | P2 | ⏸ nie wiadomo, jaka służba (pomoc drogowa, ZDM) — do danych służb |
 | Gwiazda policyjna, hasło | Opcjonalne wg § 31 | Dz.U. 2022 poz. 122 | P3 | ⏸ |
 | Budżet trójkątów | Napisy z fontu 5×7 z przodu, z boków i z tyłu | — | — | ❓ limit dla aut służb podniesiony z 1500 do 1800 (cywilne bez zmian ≤ 1500) |
@@ -71,7 +71,7 @@ Priorytety: **P1** psuje realizm albo przepis i widać to z kamery gry; **P2** w
 
 | Usterka | Jak jest naprawdę | Źródło | P | Status |
 |---|---|---|---|---|
-| Szyba przednia 1,48 m do samego dachu („smukła”, autobusowa kabina) | MAN TGM / Scania P: szyba ok. 1,0–1,2 m, nad nią pas blachy 0,25–0,35 m | truckscout24 (TGM 4x4 3200 mm), Rosenbauer AT na MAN | P1 | ✅ szyba do `top − 0,32`, pas blachy zaokrąglony do dachu, osłona przeciwsłoneczna; decyzja użytkownika: wymiary kabiny zostają |
+| Szyba przednia 1,48 m do samego dachu („smukła”, autobusowa kabina) | Kabiny średnich podwozi: szyba ok. 1,0–1,2 m, nad nią pas blachy 0,25–0,35 m | truckscout24 (podwozie 4x4, 3200 mm), zdjęcia wozów pożarniczych | P1 | ✅ szyba do `top − 0,32`, pas blachy zaokrąglony do dachu, osłona przeciwsłoneczna; decyzja użytkownika: wymiary kabiny zostają |
 | Okna boczne do dachu, dach jak pudło | Okno ~0,8–0,9 m, zaokrąglona krawędź dachu | j.w. | P2 | ✅ okna do górnej krawędzi szyby, fazka 0,2 m, `tumblehome` 0,05 |
 | GCBA: 2 skrytki po 2,9 m | Żaluzje ≤ 1,6 m | OPZ PSP (platformazakupowa.pl) | P1 | ✅ liczba kolumn rośnie z długością zabudowy |
 | Brak oznakowania PSP i belek | Belka na kabinie, STRAŻ z przodu, numer operacyjny | zarządzenie KG PSP nr 1/2020 (format numeru) | P1 | ✅ belka na dachu kabiny (PSP niebieska, PD żółta), STRAŻ na pasie nad szybą, numer na drzwiach; ⏸ pasy konturowe (R104), numer na dachu zabudowy |
@@ -81,7 +81,7 @@ Priorytety: **P1** psuje realizm albo przepis i widać to z kamery gry; **P2** w
 | PD: płaski pokład bez burt i rolek | Platforma z szynami bocznymi, rolkami | — | P2 | ⏸ issue 11 (zabudowy) |
 | 3 osie / 6x6, koła bliźniacze | — | — | P2 | ⏸ issue 10 (znane) |
 | Pionowe zespoły lamp tylnych, chlapacze, belka podjazdowa | R48/R58 | — | P2 | ⏸ issue 10–11 |
-| Siedzenia: biodra 1,55 m, 0,6 m nad głową | Biodra ok. 1,6–1,7 m | spec MAN TGM (*niezweryfikowane*) | P3 | ⏳ razem z pozą `drive` |
+| Siedzenia: biodra 1,55 m, 0,6 m nad głową | Biodra ok. 1,6–1,7 m | specyfikacja kabiny podwozia średniego (*niezweryfikowane*) | P3 | ⏳ razem z pozą `drive` |
 
 ## Ludzie (Tłum)
 
@@ -128,7 +128,7 @@ i butla strażaka wchodzą w oparcie w pozach siedzących, chód bez uniesienia 
 - przedział przelotowy zabudowy pożarniczej to zamknięta skrytka z żaluzjami (zamiast „wiszącego” mostu dachowego);
 - szyba lekkiej kabiny (PD) zaczyna się nad kołem (ok. 1,4 m), numer na drzwiach kabiny PSP pod klamką, wyższy nos vana.
 
-Zostały P2–P3 do kolejnych issue: nos vana bliżej Sprintera W907, okno w tylnych drzwiach furgonu Policji,
+Zostały P2–P3 do kolejnych issue: nos vana bliżej współczesnych furgonów L2H2, okno w tylnych drzwiach furgonu Policji,
 STRAŻ POŻARNA na vanie (do sprawdzenia w zarządzeniu KG PSP), żuraw HDS bez podpór i haka, lampy obrysowe
 na dachu kabiny, trzecie okno kabiny brygadowej wygląda jak drzwi, numer na dachu SUV-a PSP czytany od przodu.
 
@@ -155,16 +155,16 @@ Co jest teraz:
 | Detale | `detale.rs` + `kit::rzutnik`: lampy z oprawą (przód + zawinięcie na bok), grill, wloty, tablice, szczeliny drzwi, klamki, czarny słupek B, słupek C/D równoległy do tylnej szyby, okładziny nadkoli, wycieraczki, lusterka 3D; van: czarne zderzaki z narożnikami, drzwi przesuwne tylko po prawej, dwuskrzydłowe tylne z szybami |
 | Koła | opona z profilem (32 boki), felgi alu 5/10-ramienne, kołpak, ciężarowa z nakrętkami |
 | Szyby i wnętrze | szkło półprzezroczyste (0,55), wykładzina kabiny od środka, fotele, deska, kierownica |
-| Ciężarowe | kabina tą samą powłoką (nad silnikiem albo półmaska Daily), osie z `axles`/`axleGap`/`drive` (8x4: dwie przednie), bliźniaki, `cabType`/`cabLength`; zabudowy: kontener, plandeka, wywrotka, siodło (+ dotychczasowe) |
+| Ciężarowe | kabina tą samą powłoką (nad silnikiem albo z półmaską), osie z `axles`/`axleGap`/`drive` (8x4: dwie przednie), bliźniaki, `cabType`/`cabLength`; zabudowy: kontener, plandeka, wywrotka, siodło (+ dotychczasowe) |
 | Ciągnik + naczepa | osobne modele; `Anchor_FifthWheel` / `Anchor_Kingpin` / `Anchor_LandingGear`; naczepa 13,6 m, tridem co 1,31 m, origin pod sworzniem; test braku kolizji wokół siodła |
 | Kontrakt | `wheels: Vec<(String, V3)>` — `Wheel_FL/FR/RL/RR` zostają, dochodzą `Wheel_F2*`, `Wheel_R2*`, `Wheel_R3*`, bliźniaki `Wheel_*i`; kotwice jako puste węzły GLB; belka świetlna w aplikacji i Godocie |
 | LOD | `TaborSpec.lod` 0–3 (gęstość powłoki, boki koła, krok naklejek, bez drobnych detali i wnętrza); `bake_dir` zapisuje `_LOD1..3.glb`; obrys, węzły i kotwice identyczne |
 
-Archetypy wg wzorców (wymiary z en.wikipedia albo wyszukiwarki — flagi `verified` w danych):
-hatchback (Golf 8), hatch_miejski (Fabia IV), sedan_liftback i kombi (Octavia IV), coupe
-(BMW 4 G22), suv (Duster III), suv_duzy (RAV4), van_sredni (T5), van_polmaska (Lublin 3), van
-(Sprinter W907 L2H2), podwozie_lekkie (Daily 70C), podwozie_srednie (GBA), podwozie_ciezkie
-(GCBA 6x6), ciagnik_siodlowy (Scania R 4x2), wywrotka_8x4, naczepa_kurtynowa.
+Archetypy wg klas pojazdów — wymiary typowe dla klasy, bez nazw marek i modeli (źródła ogólne
+z flagami `verified` w danych): hatchback (klasa C), hatch_miejski (klasa B), sedan_liftback
+(klasa C/D), kombi (klasa C), coupe, suv (klasa B/C), suv_duzy (klasa D), van_sredni, van_polmaska
+(furgon z półmaską, lata 90.), van (furgon L2H2), podwozie_lekkie (klasa L), podwozie_srednie
+(GBA), podwozie_ciezkie (GCBA 6x6), ciagnik_siodlowy (4x2), wywrotka_8x4, naczepa_kurtynowa.
 
 Usterki znalezione w review (advisor) i naprawione: hatchback z trzecią szybą wyglądał jak kombi
 (`quarterWindow`), szyby boczne wysokich vanów i kabin sięgały dachu, pasy służb znikały z tylnych
@@ -197,6 +197,6 @@ na powłoce: dach/W 0,62–0,82, szyby boczne 16–30°, opona 8–25 mm w głę
 koło/H 0,38–0,50; zestaw bez kolizji; LOD), `bake_dir` po wszystkich 17 specyfikacjach gry
 (z LOD1–3), aplikacja `pierzeja-app` sprawdzona pod `wasm32` (rustc 1.97.1).
 
-Zostało (P2–P3): trzy vany mają podobne czoło (T5 / Lublin / Sprinter różnią się bryłą, nie
-detalem), kabina ciągnika bez owiewki dachowej, PD na podwoziu Daily (zmiana wyglądu lawety
-z gry), drobne ząbki naklejek przy narożnikach tylnych lamp T5.
+Zostało (P2–P3): trzy vany mają podobne czoło (van_sredni / van_polmaska / van różnią się bryłą,
+nie detalem), kabina ciągnika bez owiewki dachowej, PD na lekkim podwoziu z półmaską (zmiana
+wyglądu lawety z gry), drobne ząbki naklejek przy narożnikach tylnych lamp vana średniego.

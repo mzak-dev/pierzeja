@@ -18,7 +18,7 @@ pub(crate) enum Rodzaj {
     Kombi,
     Suv,
     Coupe,
-    /// Furgon / bus z krótką maską (T5, Sprinter) albo półmaską (Lublin).
+    /// Furgon / bus z krótką maską (`van_sredni`, `van`) albo półmaską (`van_polmaska`).
     Van,
 }
 
@@ -237,7 +237,7 @@ impl Ksztalt {
         let tail = Krzywa::new(&[g(clr, zr + 0.10), g(clr + 0.2, zr + 0.01), g(bumper_top, zr), g(y_te, z_te)]);
 
         // okna: tył kabiny (słupek C/D) i słupek B między drzwiami
-        // bez szyby za drzwiami (Golf) okna kończą się nad przodem tylnego koła, za nimi szeroki słupek C
+        // bez szyby za drzwiami (hatchback klasy C) okna kończą się nad przodem tylnego koła, za nimi szeroki słupek C
         let quarter = fo(p, "quarterWindow", 1.0) > 0.5;
         let cargo_windows = fo(p, "cargoWindows", 0.0) > 0.5;
         // van: drzwi kabiny ok. 0,95 m za podstawą szyby (słupek B), dalej ładownia

@@ -52,7 +52,7 @@ pub(crate) struct D {
     pub zb: f64,
     pub cab_top: f64,
     pub ycb: f64,
-    /// Półmaska przed kabiną (Daily); 0 = kabina nad silnikiem.
+    /// Półmaska przed kabiną (lekkie podwozie); 0 = kabina nad silnikiem.
     pub nose: f64,
     /// Osie przednie i tylne (z); pierwsza przednia = `zaf`, pierwsza tylna = `zar`.
     pub front_axles: Vec<f64>,
@@ -94,7 +94,7 @@ impl D {
             _ => Cab::Crew,
         };
         // długość kabiny: klasa z liczby Miejsc wygrywa; `cabLength` tylko, gdy pasuje do klasy
-        // (brygadowa > 2,5 m, dzienna/sypialna ≤ 2,5 m), sypialna 2,28 m (Scania R/S)
+        // (brygadowa > 2,5 m, dzienna/sypialna ≤ 2,5 m), sypialna 2,28 m (ciągnik dalekobieżny)
         let by_seats = match cab {
             Cab::Short => 1.6,
             Cab::Day => 1.83,
@@ -391,7 +391,7 @@ fn frame(mb: &mut MeshBuilder, d: &D) {
 }
 
 /// Kabina na powłoce `karoseria` (rodzaj Van z jawnym układem osi): nad silnikiem (czoło prawie
-/// pionowe, podłoga nad kołem) albo z półmaską (`cabNose` > 0, Daily). Przednie nadkole wycięte
+/// pionowe, podłoga nad kołem) albo z półmaską (`cabNose` > 0, lekkie podwozie). Przednie nadkole wycięte
 /// w kabinie, tył ucięty przed zabudową. Detale (lampy, grill, drzwi, lusterka) jak w vanie.
 fn cab(mb: &mut MeshBuilder, d: &D, p: &P, seed: u32, lod: u8) -> (usize, crate::sluzba::HeavyCab) {
     use crate::karoseria::{self, Rama};

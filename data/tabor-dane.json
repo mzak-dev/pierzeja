@@ -457,7 +457,7 @@
       "step": 1,
       "default": 1,
       "jitter": 0,
-      "hint": "1 = trzecia szyba boczna za tylnymi drzwiami (kombi, SUV, Fabia), 0 = szyby kończą się na drzwiach i szeroki słupek C (Golf)."
+      "hint": "1 = trzecia szyba boczna za tylnymi drzwiami (kombi, SUV, hatchback miejski), 0 = szyby kończą się na drzwiach i szeroki słupek C (hatchback klasy C)."
     },
     {
       "key": "windshieldTop",
@@ -828,7 +828,7 @@
       "default": 0,
       "jitter": 0.02,
       "unit": "m",
-      "hint": "Scania: dzienna 1,83, CP28 3,265, CP31 3,545."
+      "hint": "Typowo: dzienna 1,83, brygadowa 3,265 albo 3,545."
     },
     {
       "key": "cabHeight",
@@ -854,7 +854,7 @@
       "default": 0,
       "jitter": 0,
       "unit": "m",
-      "hint": "Długość krótkiej maski przed kabiną (Daily ok. 0,6 m); 0 = kabina nad silnikiem."
+      "hint": "Długość krótkiej maski przed kabiną (lekkie podwozie ok. 0,6 m); 0 = kabina nad silnikiem."
     },
     {
       "key": "couplingHeight",
@@ -1183,7 +1183,7 @@
   "archetypes": [
     {
       "id": "hatchback",
-      "name": "Hatchback klasy C (wzorzec: Golf 8)",
+      "name": "Hatchback klasy C",
       "short": "Hatchback",
       "years": [
         2000,
@@ -1193,29 +1193,14 @@
         "year": 2009,
         "scale": 0.1
       },
-      "description": "Najczęstsza osobówka na polskiej ulicy: kompakt klasy C (wzorzec Golf 8). Pięcioro drzwi, szyby kończą się na tylnych drzwiach, szeroki słupek C, pochylona klapa.",
+      "description": "Najczęstsza osobówka na polskiej ulicy: kompakt klasy C. Pięcioro drzwi, szyby kończą się na tylnych drzwiach, szeroki słupek C, pochylona klapa.",
       "features": [
-        "4284 × 1789 × 1456 mm, rozstaw 2636 mm (Golf 8)",
+        "4284 × 1789 × 1456 mm, rozstaw 2636 mm",
         "koło 205/55 R16 ≈ 0,63 m (0,43 H)",
         "maska ≈ 0,30 L do podstawy szyby, szyba tylna ≈ 42°",
         "linia okien ≈ 0,65 H, szyby boczne pochylone ≈ 20°"
       ],
       "sources": [
-        {
-          "title": "Wikipedia — Volkswagen Golf Mk8 (wymiary)",
-          "url": "https://en.wikipedia.org/wiki/Volkswagen_Golf_Mk8",
-          "verified": true
-        },
-        {
-          "title": "Wikimedia Commons — 2020 Volkswagen Golf Style 1.5 Side (widok z boku)",
-          "url": "https://commons.wikimedia.org/wiki/File:2020_Volkswagen_Golf_Style_1.5_Side.jpg",
-          "verified": false
-        },
-        {
-          "title": "autotijd — Volkswagen Golf 8 (4284×1789×1483 mm)",
-          "url": "https://autotijd.be/en/dimensions/volkswagen/golf",
-          "verified": true
-        },
         {
           "title": "Raport PZPM 2025/2026 — struktura parku i rynek nowych aut",
           "url": "https://www.pzpm.org.pl/en/content/download/19611/243421/file/Raport_PZPM_2025-26_caly_lekki.pdf",
@@ -1265,7 +1250,7 @@
     },
     {
       "id": "hatch_miejski",
-      "name": "Hatchback miejski klasy B (wzorzec: Fabia IV)",
+      "name": "Hatchback miejski klasy B",
       "short": "Miejski",
       "years": [
         2007,
@@ -1277,19 +1262,14 @@
       },
       "description": "Mały pięciodrzwiowy hatchback: krótka maska, krótki zwis tylny, koła 15–16″. Częsty w miastach i flotach.",
       "features": [
-        "4108 × 1780 × 1459 mm, rozstaw 2564 mm (Fabia IV)",
+        "4108 × 1780 × 1459 mm, rozstaw 2564 mm",
         "zwisy 809 / 735 mm",
         "koło 185/65 R15 ≈ 0,62 m"
       ],
       "sources": [
         {
-          "title": "Wikipedia — Škoda Fabia (IV: 4107 × 1780 × 1460, rozstaw 2564)",
-          "url": "https://en.wikipedia.org/wiki/%C5%A0koda_Fabia",
-          "verified": true
-        },
-        {
-          "title": "auto-data — Fabia IV zwisy 809/735 mm",
-          "url": "https://www.auto-data.net/en/compare&carId1=44473&carId2=&carId3=",
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
           "verified": false
         }
       ],
@@ -1327,7 +1307,7 @@
     },
     {
       "id": "sedan_liftback",
-      "name": "Liftback klasy C/D (wzorzec: Octavia IV)",
+      "name": "Liftback klasy C/D",
       "short": "Sedan",
       "years": [
         2000,
@@ -1345,16 +1325,6 @@
         "linia okien wyższa niż w latach 2000"
       ],
       "sources": [
-        {
-          "title": "Škoda — Octavia IV dane techniczne (4689 × 1829 × 1470, rozstaw 2686) [wyszukiwarka, PDF nieotwarty]",
-          "url": "https://cdn.skoda-storyboard.com/2020/07/TD-OCTAVIA-COMBI-petrol-en.pdf",
-          "verified": false
-        },
-        {
-          "title": "autotijd — Škoda Octavia Combi IV (4689×1829×1468 mm, rozstaw 2686 mm)",
-          "url": "https://autotijd.be/en/dimensions/skoda/octavia-combi-2020-2024",
-          "verified": true
-        },
         {
           "title": "Daytime running lamp — obowiązek DRL od 7.02.2011",
           "url": "https://en.wikipedia.org/wiki/Daytime_running_lamp",
@@ -1408,7 +1378,7 @@
     },
     {
       "id": "coupe",
-      "name": "Coupé (wzorzec: BMW serii 4 G22)",
+      "name": "Coupé",
       "short": "Coupé",
       "years": [
         2005,
@@ -1420,15 +1390,15 @@
       },
       "description": "Dwudrzwiowe coupé: długa maska, nisko, kabina cofnięta, mocno pochylona szyba tylna i duży tumblehome.",
       "features": [
-        "4768 × 1852 × 1387 mm, rozstaw 2851 mm (G22)",
+        "4768 × 1852 × 1387 mm, rozstaw 2851 mm",
         "koło 225/45 R18 ≈ 0,66 m (0,48 H)",
         "maska ≈ 0,36 L, szyby boczne pochylone ≈ 25°"
       ],
       "sources": [
         {
-          "title": "Wikipedia — BMW 4 Series (G22: 4768 × 1852 × 1387, rozstaw 2851)",
-          "url": "https://en.wikipedia.org/wiki/BMW_4_Series_(G22)",
-          "verified": true
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
         }
       ],
       "overrides": {
@@ -1474,7 +1444,7 @@
     },
     {
       "id": "kombi",
-      "name": "Kombi klasy C (wzorzec: Octavia IV Combi)",
+      "name": "Kombi klasy C",
       "short": "Kombi",
       "years": [
         2000,
@@ -1484,23 +1454,13 @@
         "year": 2013,
         "scale": 0.3
       },
-      "description": "Kombi z długim dachem i pionowym tyłem: podstawa taksówek, flot i rodzin; Octavia Combi jako wzorzec proporcji.",
+      "description": "Kombi z długim dachem i pionowym tyłem: podstawa taksówek, flot i rodzin.",
       "features": [
         "rozstaw/długość ≈ 0,58, zwis tylny ≈ 0,23",
         "dach ciągnie się do pionowego tyłu",
         "szersze słupki C niż w liftbacku"
       ],
       "sources": [
-        {
-          "title": "Škoda — Octavia IV Combi dane techniczne (4689 × 1829 × 1468, rozstaw 2686) [wyszukiwarka, PDF nieotwarty]",
-          "url": "https://cdn.skoda-storyboard.com/2020/07/TD-OCTAVIA-COMBI-petrol-en.pdf",
-          "verified": false
-        },
-        {
-          "title": "autotijd — Škoda Octavia Combi IV (4689×1829×1468 mm, rozstaw 2686 mm)",
-          "url": "https://autotijd.be/en/dimensions/skoda/octavia-combi-2020-2024",
-          "verified": true
-        },
         {
           "title": "Raport PZPM 2025/2026 — struktura parku i rynek nowych aut",
           "url": "https://www.pzpm.org.pl/en/content/download/19611/243421/file/Raport_PZPM_2025-26_caly_lekki.pdf",
@@ -1547,7 +1507,7 @@
     },
     {
       "id": "suv",
-      "name": "SUV klasy B/C (wzorzec: Duster III)",
+      "name": "SUV klasy B/C",
       "short": "SUV",
       "years": [
         2008,
@@ -1559,21 +1519,11 @@
       },
       "description": "SUV to 57–60% rejestracji nowych aut: wysoka linia okien, wąskie paski LED, ogromny grill, czarne nadkola i czasem czarny dach.",
       "features": [
-        "4343 × 1829 × 1660 mm, rozstaw 2657 mm (Duster III, Wikipedia)",
+        "4343 × 1829 × 1660 mm, rozstaw 2657 mm",
         "prześwit ok. 0,21 m (wyszukiwarka)",
         "czarne nakładki nadkoli i progi"
       ],
       "sources": [
-        {
-          "title": "Wikipedia — Dacia Duster (III: długość 4343, szerokość 1829, wysokość 1660, rozstaw 2657)",
-          "url": "https://en.wikipedia.org/wiki/Dacia_Duster",
-          "verified": true
-        },
-        {
-          "title": "autotijd — Hyundai Tucson IV (4510×1865×1650 mm)",
-          "url": "https://autotijd.be/en/dimensions/hyundai/tucson",
-          "verified": true
-        },
         {
           "title": "Auto Świat — udział SUV-ów w rejestracjach (57% w 2024)",
           "url": "https://www.auto-swiat.pl/wiadomosci/aktualnosci/ten-typ-samochodu-polacy-pokochali-bez-reszty-niezwykla-sytuacja-w-top-10/qsgd21w",
@@ -1631,7 +1581,7 @@
     },
     {
       "id": "suv_duzy",
-      "name": "SUV klasy D (wzorzec: RAV4)",
+      "name": "SUV klasy D",
       "short": "SUV duży",
       "years": [
         2013,
@@ -1643,14 +1593,14 @@
       },
       "description": "Większy SUV z napędem hybrydowym: długa maska, wysoka linia okien, czarne nadkola.",
       "features": [
-        "4600 × 1855 × 1660 mm, rozstaw 2690 mm (RAV4 XA50, Wikipedia)",
+        "4600 × 1855 × 1660 mm, rozstaw 2690 mm",
         "koło 225/60 R18 ≈ 0,73 m"
       ],
       "sources": [
         {
-          "title": "Wikipedia — Toyota RAV4 (XA50: 4570–4600 × 1855 × 1660, rozstaw 2690)",
-          "url": "https://en.wikipedia.org/wiki/Toyota_RAV4",
-          "verified": true
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
+          "verified": false
         }
       ],
       "overrides": {
@@ -1694,8 +1644,8 @@
     },
     {
       "id": "van_sredni",
-      "name": "Van średni (wzorzec: VW Transporter T5)",
-      "short": "Van T5",
+      "name": "Van średni",
+      "short": "Van średni",
       "years": [
         2003,
         2026
@@ -1704,20 +1654,15 @@
         "year": 2009,
         "scale": 0.3
       },
-      "description": "Najczęstszy dostawczy i bus średniej wielkości: krótka pochyła maska, niski dach, szyby w kabinie (furgon) albo wzdłuż boku (Caravelle — cargoWindows 1).",
+      "description": "Najczęstszy dostawczy i bus średniej wielkości: krótka pochyła maska, niski dach, szyby w kabinie (furgon) albo wzdłuż boku (wersja osobowa — cargoWindows 1).",
       "features": [
-        "4892 × 1904 × 1990 mm, rozstaw 3000 mm (T5 krótki)",
+        "4892 × 1904 × 1990 mm, rozstaw 3000 mm (wersja krótka)",
         "koło 205/65 R16C ≈ 0,67 m"
       ],
       "sources": [
         {
-          "title": "Wikipedia — Volkswagen Transporter (T5): 4892 × 1904 × 1990, rozstaw 3000",
-          "url": "https://en.wikipedia.org/wiki/Volkswagen_Transporter_(T5)",
-          "verified": true
-        },
-        {
-          "title": "Wikimedia Commons — VW T5 Seitenansicht (widok z boku)",
-          "url": "https://commons.wikimedia.org/wiki/File:VW_T5_Doppelkabine-Pritsche-Plane_Seitenansicht-links_LWS3143.JPG",
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
           "verified": false
         }
       ],
@@ -1771,8 +1716,8 @@
     },
     {
       "id": "van_polmaska",
-      "name": "Furgon z półmaską (wzorzec: FSC / Intrall Lublin 3)",
-      "short": "Lublin",
+      "name": "Furgon z półmaską",
+      "short": "Półmaska",
       "years": [
         1993,
         2007
@@ -1783,23 +1728,13 @@
       },
       "description": "Polski dostawczak lat 90. i 2000.: krótka, pochyła półmaska przed wysoką kwadratową kabiną, ładownia wyższa niż przód, stalowe felgi.",
       "features": [
-        "4797 × 1940 × 2320 mm, rozstaw 2900 mm (Lublin 3, wyszukiwarka; Wikipedia: 4770 / 2320 / 2900)",
+        "4797 × 1940 × 2320 mm, rozstaw 2900 mm",
         "maska ≈ 1,05 m, szyba stroma ≈ 58° od poziomu"
       ],
       "sources": [
         {
-          "title": "Wikipedia — FSC Lublin (długość 4770–4870, wysokość 2250–2320, rozstaw 2900 / 3433 / 3750)",
-          "url": "https://en.wikipedia.org/wiki/FSC_Lublin",
-          "verified": true
-        },
-        {
-          "title": "autokatalog — Lublin 3 dane techniczne [wyszukiwarka]",
-          "url": "https://autokatalog.pl/intrall/lublin/3-ciezarowy/dane-techniczne",
-          "verified": false
-        },
-        {
-          "title": "Wikimedia Commons — Lublin 3Mi",
-          "url": "https://commons.wikimedia.org/wiki/File:Lublin3mi.JPG",
+          "title": "Raport „Generatory ludzi i pojazdów low poly” — szacunki [S] (kształt, era, kolory)",
+          "url": "reports/Generatory ludzi i pojazdów low poly.md",
           "verified": false
         }
       ],
@@ -1853,7 +1788,7 @@
     },
     {
       "id": "van",
-      "name": "Furgon duży L2H2 (wzorzec: Sprinter W907)",
+      "name": "Furgon duży L2H2",
       "short": "Van",
       "years": [
         2006,
@@ -1863,33 +1798,13 @@
         "year": 2019,
         "scale": 0.58
       },
-      "description": "Duży dostawczak z napędem na tył, wzorzec: Sprinter L2H2 (5,93 m, 2,62 m). Ta sama bryła i podwozie dla karetki, furgonu policji i serwisu.",
+      "description": "Duży dostawczak z napędem na tył, wersja L2H2 (5,93 m długości, 2,62 m wysokości). Ta sama bryła i podwozie dla karetki, furgonu policji i serwisu.",
       "features": [
-        "5932 × 1993 × 2616 mm, rozstaw 3665 mm (Sprinter L2H2)",
+        "5932 × 1993 × 2616 mm, rozstaw 3665 mm (L2H2)",
         "krótka maska ≈ 1 m, szyba ok. 52° od poziomu, daszek nad szybą",
         "drzwi przesuwne tylko po prawej, dwuskrzydłowe tylne"
       ],
       "sources": [
-        {
-          "title": "Wikipedia — Mercedes-Benz Sprinter (W906/W907, długości i wysokości wersji)",
-          "url": "https://en.wikipedia.org/wiki/Mercedes-Benz_Sprinter",
-          "verified": true
-        },
-        {
-          "title": "parkers — Sprinter 2018 L2H2 5932 × 2616 mm [wyszukiwarka]",
-          "url": "https://www.parkers.co.uk/vans-pickups/mercedes-benz/sprinter/2018-dimensions",
-          "verified": false
-        },
-        {
-          "title": "Vanreviewer — wymiary Sprintera L1–L4, H1–H3",
-          "url": "https://vanreviewer.co.uk/mercedes-benz/sprinter/dimensions/2827/",
-          "verified": true
-        },
-        {
-          "title": "Superauto — rejestracje dostawczych 2025 (Master, Ducato)",
-          "url": "https://www.superauto.pl/artykuly/historyczny-rekord-rejestracji-i-nowa-hierarchia-modeli-samochodow-dostawczych-toyota-krolem-2025-roku-analiza-rynku",
-          "verified": true
-        },
         {
           "title": "NFZ — typy ambulansów wg PN-EN 1789 (ZRM-P = typ B)",
           "url": "https://www.nfz.gov.pl/aktualnosci/aktualnosci-centrali/komunikat,3628.html",
@@ -1951,7 +1866,7 @@
     },
     {
       "id": "podwozie_lekkie",
-      "name": "Podwozie lekkie z kabiną (wzorzec: Iveco Daily 70C)",
+      "name": "Podwozie lekkie z kabiną",
       "short": "Lekkie",
       "years": [
         2000,
@@ -1963,21 +1878,11 @@
       },
       "description": "Klasa L (EN 1846): 3,5–7,5 t, kabina dzienna cab-over, skrzynia lub zabudowa; baza lekkich wozów (np. pomoc drogowa) i dostawczych ciężarówek.",
       "features": [
-        "6999 mm przy rozstawie 4100 mm (Daily 70C, podwozie z kabiną)",
+        "6999 mm przy rozstawie 4100 mm (podwozie z kabiną)",
         "półmaska ok. 0,6 m przed kabiną, kabina 2,05 m szerokości",
         "koła bliźniacze 195/75 R16C ≈ 0,70 m"
       ],
       "sources": [
-        {
-          "title": "Wikipedia — Iveco Daily (długości 5040–7674, rozstawy 3000–4750)",
-          "url": "https://en.wikipedia.org/wiki/Iveco_Daily",
-          "verified": true
-        },
-        {
-          "title": "PK Trucks — Iveco Daily 70C15 karta (5989 / 6999 mm przy 3450 / 4100) [wyszukiwarka]",
-          "url": "https://cdn.pktrucks.com/specsheets/iv5305-iveco-daily-70c15-4x2-chassis-cabin-datasheet.pdf",
-          "verified": false
-        },
         {
           "title": "BiTP 2013, CNBOP — klasy masy EN 1846 (L ≤ 7,5 t, M ≤ 16 t, S > 16 t)",
           "url": "https://sft.cnbop.pl/en/bi-tp-vol-32-issue-4-2013-firefighting-vehicles-classification-labelling-and-division",
@@ -2057,7 +1962,7 @@
       "features": [
         "klasa M: ≤ 16 t, ≤ 3,2–3,4 m wysokości, ≤ 8,0–8,4 m długości",
         "prześwit ≥ 0,30 m",
-        "kabina CP28 3,265 m, 1+1+4",
+        "kabina brygadowa 3,265 m, 1+1+4",
         "3+3 skrytki, przedział przelotowy ≥ 0,4 m"
       ],
       "sources": [
@@ -2074,11 +1979,6 @@
         {
           "title": "OSP 2024 — OPZ średni samochód (≤ 3400 mm, ≤ 8400 mm)",
           "url": "https://platformazakupowa.pl/file/get_new/0f3aac7159dc9a8cc39946d71feeb4e9.pdf",
-          "verified": true
-        },
-        {
-          "title": "Scania — pojazdy ratownicze 09-25 (długości kabin)",
-          "url": "https://www.scania.com/content/dam/www/market/pl/ulotki/pdfy/pojazdy-ratownicze-scania-09-25.pdf",
           "verified": true
         },
         {
@@ -2158,7 +2058,7 @@
       "features": [
         "klasa S: > 16 t, wysokość ≤ 3,35 m, szerokość 2,55 m",
         "6x6, pojedyncze koła, prześwit ≥ 0,30 m",
-        "kabina CP28, zabudowa dwumodułowa",
+        "kabina brygadowa, zabudowa dwumodułowa",
         "rozstaw osi 5,0 m + zespół tylny 1,4 m"
       ],
       "sources": [
@@ -2175,21 +2075,6 @@
         {
           "title": "Dyrektywa 96/53/WE, zał. I — limity długości, szerokości, wysokości",
           "url": "https://www.legislation.gov.uk/eudr/1996/53/annex/I",
-          "verified": true
-        },
-        {
-          "title": "Scania — pojazdy ratownicze 09-25 (długości kabin)",
-          "url": "https://www.scania.com/content/dam/www/market/pl/ulotki/pdfy/pojazdy-ratownicze-scania-09-25.pdf",
-          "verified": true
-        },
-        {
-          "title": "TruckScout24 — Volvo FH 4x2: rozstaw osi 3800 mm, opony 385/65 R22.5",
-          "url": "https://www.truckscout24.com/tsp/ts-227-84-660",
-          "verified": true
-        },
-        {
-          "title": "Magirus M32L-AS — rozstaw osi 4815 mm, 16 t",
-          "url": "https://www.magirusgroup.com/de/en/serving-heroes/deliveries/detail/delivery/m32l-as-for-sdis-43-haute-loire-12-2024/",
           "verified": true
         },
         {
@@ -2246,7 +2131,7 @@
     },
     {
       "id": "ciagnik_siodlowy",
-      "name": "Ciągnik siodłowy 4x2 (wzorzec: Scania R)",
+      "name": "Ciągnik siodłowy 4x2",
       "short": "Ciągnik",
       "years": [
         2004,
@@ -2264,14 +2149,9 @@
       ],
       "sources": [
         {
-          "title": "Scania — R-series specifications (wysokość kabin) [wyszukiwarka]",
-          "url": "https://www.scania.com/hk/en/home/products/trucks/r-series/r-series-specifications.html",
-          "verified": false
-        },
-        {
-          "title": "Wikimedia Commons — Scania R440 Stobart (widok z boku)",
-          "url": "https://commons.wikimedia.org/wiki/File:Stobart_H6662_%22Olivia_Jacqueline%22_(PO13_KZT)_2013_Scania_R440,_10_October_2013.jpg",
-          "verified": false
+          "title": "Dyrektywa 96/53/WE, zał. I — limity długości, szerokości, wysokości",
+          "url": "https://www.legislation.gov.uk/eudr/1996/53/annex/I",
+          "verified": true
         }
       ],
       "overrides": {
@@ -2341,9 +2221,9 @@
       ],
       "sources": [
         {
-          "title": "Scania — karta wywrotki 8x4 (9,2–9,5 m, rozstaw ok. 4,3 m) [wyszukiwarka]",
-          "url": "https://www.scania.com/content/dam/scanianoe/market/in/products-and-services/trucks/SpecSheet_Heavy_Tipper_A4.pdf",
-          "verified": false
+          "title": "Dyrektywa 96/53/WE, zał. I — limity długości, szerokości, wysokości",
+          "url": "https://www.legislation.gov.uk/eudr/1996/53/annex/I",
+          "verified": true
         }
       ],
       "overrides": {
@@ -2413,14 +2293,9 @@
       ],
       "sources": [
         {
-          "title": "Schmitz Cargobull SCS — karta naczepy (13,6 m, osie 1310 + 1310) [wyszukiwarka]",
-          "url": "https://cdn.pktrucks.com/specsheets/vdv1232-schmitz-cargobull-scs-24-l-3-axle-closed-cargo-trailer-specification.pdf",
-          "verified": false
-        },
-        {
-          "title": "Wikimedia Commons — Wielton curtain sider",
-          "url": "https://commons.wikimedia.org/wiki/File:WieltonCurtainSider.jpg",
-          "verified": false
+          "title": "Dyrektywa 96/53/WE, zał. I — limity długości, szerokości, wysokości",
+          "url": "https://www.legislation.gov.uk/eudr/1996/53/annex/I",
+          "verified": true
         }
       ],
       "overrides": {

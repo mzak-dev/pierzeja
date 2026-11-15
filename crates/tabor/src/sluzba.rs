@@ -429,7 +429,7 @@ pub(crate) fn apply(mb: &mut MeshBuilder, p: &P, seed: u32, g: &Hull) -> Option<
 
     // --- pasy boczne
     let mut stack: Vec<(f64, MatKey)> = match s {
-        // decyzja użytkownika 2026-11-10 (zdjęcie ZRM na Sprinterze): niebieski nad czerwonym i czerwony
+        // decyzja użytkownika 2026-11-10 (zdjęcie karetki ZRM): niebieski nad czerwonym i czerwony
         // pas pod dachem, zamiast czerwony–niebieski–czerwony (Dz.U. 2026/227)
         Svc::Medycy => vec![(0.16, b), (0.20, a)],
         Svc::Straz => vec![(0.15, a)],

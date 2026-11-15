@@ -21,11 +21,11 @@
   "hatch-miejski": { "archetype": "hatch_miejski", "seed": 3 },
   "coupe": { "archetype": "coupe", "seed": 3 },
   "suv-duzy": { "archetype": "suv_duzy", "seed": 3 },
-  "van-sredni-T5": { "archetype": "van_sredni", "seed": 3 },
-  "bus-T5-okna": { "archetype": "van_sredni", "seed": 4, "overrides": { "cargoWindows": 1 } },
-  "van-polmaska-Lublin": { "archetype": "van_polmaska", "seed": 3 },
+  "van-sredni": { "archetype": "van_sredni", "seed": 3 },
+  "bus-sredni-okna": { "archetype": "van_sredni", "seed": 4, "overrides": { "cargoWindows": 1 } },
+  "van-polmaska": { "archetype": "van_polmaska", "seed": 3 },
   "ciagnik-siodlowy": { "archetype": "ciagnik_siodlowy", "seed": 3 },
   "wywrotka-8x4": { "archetype": "wywrotka_8x4", "seed": 3 },
   "naczepa-kurtynowa": { "archetype": "naczepa_kurtynowa", "seed": 3 },
-  "daily-kontener": { "archetype": "podwozie_lekkie", "seed": 3, "overrides": { "service": "cywilny", "module": "kontener" } }
+  "podwozie-lekkie-kontener": { "archetype": "podwozie_lekkie", "seed": 3, "overrides": { "service": "cywilny", "module": "kontener" } }
 }
